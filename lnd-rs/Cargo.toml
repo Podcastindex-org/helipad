@@ -1,0 +1,20 @@
+[package]
+name = "lnd-rs"
+version = "0.1.0"
+authors = ["lsunsi <sunsi.lucas@gmail.com>", "Luiz Parreira <luizfilipester@gmail.com.br>"]
+edition = "2018"
+
+[lib]
+name = "lnd"
+
+[dependencies]
+tonic = "0.5"
+prost = "0.8"
+openssl = "0.10"
+hyper = "0.14"
+hyper-openssl = "0.9"
+hex = "0.4"
+thiserror = "1.0"
+
+[build-dependencies]
+tonic-build = "0.5"
