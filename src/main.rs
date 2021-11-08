@@ -7,9 +7,6 @@ use route_recognizer::Params;
 use router::Router;
 use std::sync::Arc;
 use hyper::server::conn::AddrStream;
-use std::thread;
-//use std::time;
-//use tokio::task;
 use std::fs;
 use std::env;
 use drop_root::set_user_group;
@@ -79,7 +76,10 @@ async fn main() {
     let arg_port = &args[1];
 
     //Create a new database if needed
-    dbif::create_database();
+    match dbif::create_database() {
+        Ok(_) => println!("Database created."),
+        Err(e) => eprintln!("Error creating database: {:#?}", e)
+    }
 
     //LND polling thread
     tokio::spawn(lnd_poller());
@@ -256,7 +256,10 @@ async fn lnd_poller() {
                     println!("Boost: {:#?}", boost);
 
                     //Store in the database
-                    dbif::add_invoice_to_db(boost);
+                    match dbif::add_invoice_to_db(boost) {
+                        Ok(_) => println!("New invoice added."),
+                        Err(e) => eprintln!("Error adding invoice: {:#?}", e)
+                    }
                 }
             }
             Err(e) => {

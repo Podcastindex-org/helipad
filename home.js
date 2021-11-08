@@ -9,13 +9,19 @@ $(document).ready(function () {
     var intvlChatPolling = null;
     var connection = null;
 
+    setInterval(function() {
+        getBoosts();
+    }, 5000);
 
     function getBoosts() {
         //Find newest index
-
+        let lastIndex = $('div.outgoing_msg:last').data('msgid');
+        if (typeof lastIndex === "undefined") {
+            lastIndex = "";
+        }
 
         $.ajax({
-            url: '/boosts',
+            url: '/boosts?index='+lastIndex,
             type: "GET",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
@@ -24,6 +30,7 @@ $(document).ready(function () {
                     console.log(element);
                     let boostMessage = element.message || "";
                     let boostSats = Math.trunc(element.value_msat_total / 1000) || Math.trunc(element.value_msat / 1000);
+                    let boostIndex = element.index;
 
                     //Icon
                     var appIconUrl = "";
@@ -42,9 +49,13 @@ $(document).ready(function () {
                             break;
                     }
 
-                    inbox.append('<div class="incoming_msg"><div class="incoming_msg_img"><img src="'+appIconUrl+'"></div>' +
-                        '<div class="received_msg"><div class="received_withd_msg"><h5 class="total_sats">'+boostSats+' sats</h5><p>' + boostMessage + '</p>'+
-                        '<span class="time_date">' + prettyDate(element.time) + '</span></div></div></div>');
+                    let dateTime = new Date(element.time * 1000).toISOString();
+                    inbox.append('<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
+                        '<div class="outgoing_msg_img"><img src=""></div>' +
+                        '<div class="sent_msg"><div class="sent_withd_msg"><h5>' + boostSats + '</h5>' +
+                        '<span class="time_date" data-timestamp="'+dateTime+'">' + prettyDate(dateTime) + '</span><p>' + boostMessage + '</p>' +
+                        '</div></div></div>');
+                    inbox.animate({scrollTop: 999999999});
                 });
             }
         });

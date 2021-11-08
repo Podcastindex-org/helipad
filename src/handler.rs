@@ -78,23 +78,26 @@ pub async fn boosts(_ctx: Context) -> Response {
 
     println!("Params: {:#?}", params);
 
+    //Get the last known invoice index from the database
+    let mut last_index = match dbif::get_last_boost_index_from_db() {
+        Ok(index) => index,
+        Err(_) => 0
+    };
+    if last_index > 20 {
+        last_index -= 20;
+    }
+
     //Get the index url parameter if one was given and convert to an integer
-    let mut index: u64 = 0;
-    let supplied_index = match params.get("index") {
+    let index: u64;
+    match params.get("index") {
         Some(supplied_index) => {
             index = match supplied_index.parse::<u64>() {
                 Ok(index) => index,
-                Err(_) => 0
+                Err(_) => last_index
             };
         },
         None => {
-            index = match dbif::get_last_boost_index_from_db() {
-                Ok(index) => index,
-                Err(_) => 0
-            };
-            if index > 20 {
-                index -= 20;
-            }
+            index = last_index;
         }
     };
 
