@@ -1,19 +1,10 @@
 use crate::{Context, Response};
 use hyper::StatusCode;
 use std::collections::HashMap;
-//use rusqlite::{params, Connection};
 use std::error::Error;
 use std::fmt;
-//use std::time::{SystemTime};
-//use percent_encoding::percent_decode;
 use std::fs;
-//use serde::{Deserialize, Serialize};
-//use serde_json::Result;
-
-//Globals ----------------------------------------------------------------------------------------------------
-// const SQLITE_FILE_AUTH: &str = "auth.db";
-// const SQLITE_FILE_QUEUE: &str = "queue.db";
-// const SQLITE_FILE_COMMENTS: &str = "comments.db";
+use voca_rs::*;
 
 
 //Structs ----------------------------------------------------------------------------------------------------
@@ -88,6 +79,7 @@ pub async fn boosts(_ctx: Context) -> Response {
     }
 
     //Get the index url parameter if one was given and convert to an integer
+    //If one wasn't given, just use what we calculated above
     let index: u64;
     match params.get("index") {
         Some(supplied_index) => {
@@ -102,11 +94,11 @@ pub async fn boosts(_ctx: Context) -> Response {
     };
 
 
-    //If zero was given or no value supplied
-
+    //Get the boosts from db for returning
     match dbif::get_boosts_from_db(index, 20) {
         Ok(boosts) => {
-            let json_doc = serde_json::to_string(&boosts).unwrap();
+            let json_doc_raw = serde_json::to_string(&boosts).unwrap();
+            let json_doc: String = strip::strip_tags(&json_doc_raw);
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)

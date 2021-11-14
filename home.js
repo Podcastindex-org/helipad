@@ -9,13 +9,15 @@ $(document).ready(function () {
     var intvlChatPolling = null;
     var connection = null;
 
+    getBoosts();
+
     setInterval(function() {
         getBoosts();
-    }, 5000);
+    }, 7000);
 
     function getBoosts() {
         //Find newest index
-        let lastIndex = $('div.outgoing_msg:last').data('msgid');
+        let lastIndex = $('div.outgoing_msg:first').data('msgid');
         if (typeof lastIndex === "undefined") {
             lastIndex = "";
         }
@@ -31,10 +33,15 @@ $(document).ready(function () {
                     let boostMessage = element.message || "";
                     let boostSats = Math.trunc(element.value_msat_total / 1000) || Math.trunc(element.value_msat / 1000);
                     let boostIndex = element.index;
+                    let boostAction = element.action;
+                    let boostSender = element.sender;
+                    let boostApp = element.app;
+                    let boostPodcast = element.podcast;
+                    let boostEpisode = element.episode;
 
                     //Icon
                     var appIconUrl = "";
-                    switch (element.app_name) {
+                    switch (boostApp) {
                         case 'Fountain':
                             appIconUrl = appIconUrlBase + 'fountain.png';
                             break;
@@ -49,13 +56,25 @@ $(document).ready(function () {
                             break;
                     }
 
-                    let dateTime = new Date(element.time * 1000).toISOString();
-                    inbox.append('<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
-                        '<div class="outgoing_msg_img"><img src=""></div>' +
-                        '<div class="sent_msg"><div class="sent_withd_msg"><h5>' + boostSats + '</h5>' +
-                        '<span class="time_date" data-timestamp="'+dateTime+'">' + prettyDate(dateTime) + '</span><p>' + boostMessage + '</p>' +
-                        '</div></div></div>');
-                    inbox.animate({scrollTop: 999999999});
+                    if(boostIndex > lastIndex && element.action == 2) {
+                        let dateTime = new Date(element.time * 1000).toISOString();
+                        inbox.prepend('' +
+                            '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
+                            '  <div class="sent_msg">' +
+                            '    <div class="sent_withd_msg">' +
+                            '      <span class="app"><img src="'+appIconUrl+'"></span>' +
+                            '      <h5>' + boostSats + ' sats <small>from '+boostSender+'</small></h5>' +
+                            '      <span class="time_date" data-timestamp="'+dateTime+'">' + prettyDate(dateTime) + '</span>' +
+                            '      <small class="podcast_episode">'+boostPodcast+' - '+boostEpisode+'</small>' +
+                            '      <br>' +
+                            '      <hr>' +
+                            '      <p>' + boostMessage + '</p>' +
+                            '    </div>' +
+                            '  </div>' +
+                            '</div>');
+                        inbox.animate({scrollTop: 0});
+                        pewAudio.play();
+                    }
                 });
             }
         });

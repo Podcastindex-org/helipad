@@ -10,7 +10,12 @@ pub struct BoostRecord {
     pub index: u64,
     pub time: i64,
     pub value_msat: i64,
+    pub action: u8,
+    pub sender: String,
+    pub app: String,
     pub message: String,
+    pub podcast: String,
+    pub episode: String,
     pub tlv: String,
 }
 
@@ -34,7 +39,12 @@ pub fn create_database() -> Result<bool, Box<dyn Error>> {
              idx integer primary key,
              time integer,
              value_msat integer,
+             action integer,
+             sender text,
+             app text,
              message text,
+             podcast text,
+             episode text,
              tlv text
          )",
         [],
@@ -54,8 +64,19 @@ pub fn create_database() -> Result<bool, Box<dyn Error>> {
 pub fn add_invoice_to_db(boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = Connection::open(SQLITE_FILE)?;
 
-    match conn.execute("INSERT INTO boosts (idx, time, value_msat, message, tlv) VALUES (?1, ?2, ?3, ?4, ?5)",
-                       params![boost.index, boost.time, boost.value_msat, boost.message, boost.tlv]) {
+    match conn.execute("INSERT INTO boosts (idx, time, value_msat, action, sender, app, message, podcast, episode, tlv) \
+                                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                       params![boost.index,
+                                       boost.time,
+                                       boost.value_msat,
+                                       boost.action,
+                                       boost.sender,
+                                       boost.app,
+                                       boost.message,
+                                       boost.podcast,
+                                       boost.episode,
+                                       boost.tlv]
+    ) {
         Ok(_) => {
             Ok(true)
         }
@@ -73,7 +94,7 @@ pub fn get_boosts_from_db(index: u64, max: u64) -> Result<Vec<BoostRecord>, Box<
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
     //Prepare and execute the query
-    let mut stmt = conn.prepare("SELECT idx, time, value_msat, message, tlv \
+    let mut stmt = conn.prepare("SELECT idx, time, value_msat, action, sender, app, message, podcast, episode, tlv \
                                  FROM boosts \
                                  WHERE idx >= :index \
                                  ORDER BY idx ASC LIMIT :max")?;
@@ -82,8 +103,13 @@ pub fn get_boosts_from_db(index: u64, max: u64) -> Result<Vec<BoostRecord>, Box<
             index: row.get(0)?,
             time: row.get(1)?,
             value_msat: row.get(2)?,
-            message: row.get(3)?,
-            tlv: row.get(4)?,
+            action: row.get(3)?,
+            sender: row.get(4)?,
+            app: row.get(5)?,
+            message: row.get(6)?,
+            podcast: row.get(7)?,
+            episode: row.get(8)?,
+            tlv: row.get(9)?,
         })
     }).unwrap();
 
@@ -104,7 +130,7 @@ pub fn get_last_boost_index_from_db() -> Result<u64, Box<dyn Error>> {
     let max = 1;
 
     //Prepare and execute the query
-    let mut stmt = conn.prepare("SELECT idx, time, value_msat, message, tlv \
+    let mut stmt = conn.prepare("SELECT idx, time, value_msat, action, sender, app, message, podcast, episode, tlv \
                                  FROM boosts \
                                  ORDER BY idx DESC LIMIT :max")?;
     let rows = stmt.query_map(&[(":max", max.to_string().as_str())], |row| {
@@ -112,8 +138,13 @@ pub fn get_last_boost_index_from_db() -> Result<u64, Box<dyn Error>> {
             index: row.get(0)?,
             time: row.get(1)?,
             value_msat: row.get(2)?,
-            message: row.get(3)?,
-            tlv: row.get(4)?,
+            action: row.get(3)?,
+            sender: row.get(4)?,
+            app: row.get(5)?,
+            message: row.get(6)?,
+            podcast: row.get(7)?,
+            episode: row.get(8)?,
+            tlv: row.get(9)?,
         })
     }).unwrap();
 

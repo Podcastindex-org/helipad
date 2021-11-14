@@ -11,7 +11,10 @@ use std::fs;
 use std::env;
 use drop_root::set_user_group;
 use lnd;
-use serde::{Deserialize, Serialize};
+//use serde::{Deserialize, Serialize};
+use serde_aux::prelude::*;
+//use std::str::FromStr;
+//use std::num::{ParseIntError, ParseFloatError};
 
 //Globals ----------------------------------------------------------------------------------------------------
 
@@ -37,7 +40,7 @@ pub struct Context {
     body_bytes: Option<hyper::body::Bytes>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[allow(non_snake_case)]
 struct RawBoost {
     action: Option<String>,
@@ -66,6 +69,7 @@ struct RawBoost {
     value_msat: Option<u64>,
     value_msat_total: Option<u64>,
 }
+
 
 //Functions --------------------------------------------------------------------------------------------------
 #[tokio::main]
@@ -184,7 +188,7 @@ async fn lnd_poller() {
         }
         Err(e) => {
             println!("Could not create database file: {}", dbif::SQLITE_FILE);
-            eprintln!("{}", e);
+            eprintln!("{:#?}", e);
             std::process::exit(1);
         }
     }
@@ -206,7 +210,7 @@ async fn lnd_poller() {
         }
         Err(e) => {
             println!("Could not connect to: {} using tls and macaroon", node_address);
-            eprintln!("{}", e);
+            eprintln!("{:#?}", e);
             std::process::exit(1);
         }
     }
@@ -216,7 +220,7 @@ async fn lnd_poller() {
     loop {
 
         //Get a list of invoices
-        match lnd::Lnd::list_invoices(&mut lightning, false, current_index.clone(), 100, false).await {
+        match lnd::Lnd::list_invoices(&mut lightning, false, current_index.clone(), 500, false).await {
             Ok(response) => {
                 for invoice in response.invoices {
 
@@ -224,8 +228,13 @@ async fn lnd_poller() {
                     let mut boost = dbif::BoostRecord {
                         index: invoice.add_index,
                         time: invoice.settle_date,
-                        value_msat: invoice.amt_paid_sat,
+                        value_msat: invoice.amt_paid_sat * 1000,
+                        action: 0,
+                        sender: "".to_string(),
+                        app: "".to_string(),
                         message: "".to_string(),
+                        podcast: "".to_string(),
+                        episode: "".to_string(),
                         tlv: "".to_string(),
                     };
 
@@ -240,8 +249,37 @@ async fn lnd_poller() {
                                 match json_result {
                                     Ok(rawboost) => {
                                         println!("{:#?}", rawboost);
+                                        //If there was a sat value in the tlv, override the invoice
+                                        if rawboost.value_msat.is_some() {
+                                            boost.value_msat = rawboost.value_msat.unwrap() as i64;
+                                        }
+                                        //Determine an action type for later filtering ability
+                                        if rawboost.action.is_some() {
+                                            boost.action = match rawboost.action.unwrap().as_str() {
+                                                "stream" => 1, //This indicates a per-minute podcast payment
+                                                "boost" => 2,  //This is a manual boost or boost-a-gram
+                                                _ => 3,
+                                            }
+                                        }
+                                        //Was a sender name given in the tlv?
+                                        if rawboost.sender_name.is_some() && !rawboost.sender_name.clone().unwrap().is_empty() {
+                                            boost.sender = rawboost.sender_name.unwrap();
+                                        }
+                                        //Was there a message in this tlv?
                                         if rawboost.message.is_some() {
                                             boost.message = rawboost.message.unwrap();
+                                        }
+                                        //Was an app name given?
+                                        if rawboost.app_name.is_some() {
+                                            boost.app = rawboost.app_name.unwrap();
+                                        }
+                                        //Was a podcast name given?
+                                        if rawboost.podcast.is_some() {
+                                            boost.podcast = rawboost.podcast.unwrap();
+                                        }
+                                        //Episode name?
+                                        if rawboost.episode.is_some() {
+                                            boost.episode = rawboost.episode.unwrap();
                                         }
                                     }
                                     Err(e) => {
