@@ -107,7 +107,12 @@ fn d_zero() -> Option<u64> {
 
 fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<u64>, D::Error> {
     Ok(match Value::deserialize(deserializer)? {
-        Value::String(s) => Some(s.parse().unwrap()),
+        Value::String(s) => {
+            if s.is_empty() {
+                return Ok(None)
+            }
+            Some(s.parse().unwrap())
+        },
         Value::Number(num) => Some(num.as_u64().unwrap()),
         _ => return Err(de::Error::custom("wrong type"))
     })
