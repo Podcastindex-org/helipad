@@ -11,8 +11,8 @@ use std::fs;
 use std::env;
 use drop_root::set_user_group;
 use lnd;
-//use serde::{Deserialize, Serialize};
-use serde_aux::prelude::*;
+use serde::{Deserialize, Deserializer, de};
+use serde_json::Value;
 //use std::str::FromStr;
 //use std::num::{ParseIntError, ParseFloatError};
 
@@ -40,36 +40,78 @@ pub struct Context {
     body_bytes: Option<hyper::body::Bytes>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 struct RawBoost {
+    #[serde(default="d_action")]
     action: Option<String>,
+    #[serde(default="d_blank")]
     app_name: Option<String>,
+    #[serde(default="d_blank")]
     app_version: Option<String>,
+    #[serde(default="d_blank")]
     boost_link: Option<String>,
+    #[serde(default="d_blank")]
     message: Option<String>,
+    #[serde(default="d_blank")]
     name: Option<String>,
+    #[serde(default="d_blank")]
     pubkey: Option<String>,
+    #[serde(default="d_blank")]
     sender_key: Option<String>,
+    #[serde(default="d_blank")]
     sender_name: Option<String>,
+    #[serde(default="d_blank")]
     sender_id: Option<String>,
+    #[serde(default="d_blank")]
     sig_fields: Option<String>,
+    #[serde(default="d_blank")]
     signature: Option<String>,
+    #[serde(default="d_blank")]
     speed: Option<String>,
+    #[serde(default="d_blank")]
     uuid: Option<String>,
+    #[serde(default="d_blank")]
     podcast: Option<String>,
+    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
     feedID: Option<u64>,
+    #[serde(default="d_blank")]
     guid: Option<String>,
+    #[serde(default="d_blank")]
     url: Option<String>,
+    #[serde(default="d_blank")]
     episode: Option<String>,
+    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
     itemID: Option<u64>,
+    #[serde(default="d_blank")]
     episode_guid: Option<String>,
+    #[serde(default="d_blank")]
     time: Option<String>,
+    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
     ts: Option<u64>,
+    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
     value_msat: Option<u64>,
+    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
     value_msat_total: Option<u64>,
 }
 
+fn d_action() -> Option<String> {
+    Some("stream".to_string())
+}
+fn d_blank() -> Option<String> {
+    None
+}
+fn d_zero() -> Option<u64> {
+    None
+}
+
+fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<u64>, D::Error> {
+    Ok(match Value::deserialize(deserializer)? {
+        Value::String(s) => Some(s.parse().unwrap()),
+        Value::Number(num) => Some(num.as_u64().unwrap()),
+        _ => return Err(de::Error::custom("wrong type"))
+    })
+}
 
 //Functions --------------------------------------------------------------------------------------------------
 #[tokio::main]
