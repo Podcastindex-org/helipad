@@ -41,18 +41,21 @@ $(document).ready(function () {
 
                     //Icon
                     var appIconUrl = "";
-                    switch (boostApp) {
-                        case 'Fountain':
+                    switch (boostApp.toLowerCase()) {
+                        case 'fountain':
                             appIconUrl = appIconUrlBase + 'fountain.png';
                             break;
-                        case 'Podfriend':
+                        case 'podfriend':
                             appIconUrl = appIconUrlBase + 'podfriend.jpg';
                             break;
-                        case 'Castamatic':
+                        case 'castamatic':
                             appIconUrl = appIconUrlBase + 'castamatic.png';
                             break;
-                        case 'Curiocaster':
+                        case 'curiocaster':
                             appIconUrl = appIconUrlBase + 'curiocaster.png';
+                            break;
+                        case 'breez':
+                            appIconUrl = appIconUrlBase + 'breez.png';
                             break;
                     }
 
