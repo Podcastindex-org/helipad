@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt;
 use serde::{Deserialize, Serialize};
 
-pub const SQLITE_FILE: &str = "database.db";
+pub const SQLITE_FILE: &str = "/data/sqlite/database.db";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BoostRecord {

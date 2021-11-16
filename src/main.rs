@@ -225,8 +225,8 @@ impl Context {
 async fn lnd_poller() {
 
     //Get the macaroon and cert files
-    let macaroon = fs::read("admin.macaroon").unwrap();
-    let cert = fs::read("tls.cert").unwrap();
+    let macaroon = fs::read("/lnd/data/chain/bitcoin/mainnet/admin.macaroon").unwrap();
+    let cert = fs::read("/lnd/tls.cert").unwrap();
 
     //Create the database if needed
     match dbif::create_database() {
