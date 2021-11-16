@@ -14,3 +14,7 @@ in your browser.
 
 It can take a few minutes to populate any existing boostagrams you have received since it has to build the invoice database in the background
 when it first starts up.
+
+The app will not show up in your Umbrel dashboard when installed this way.  This is only for testing.
+
+If you want to remove the app just run this command: `sudo scripts/app uninstall podcasting20-boosts`
