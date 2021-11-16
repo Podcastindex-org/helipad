@@ -123,13 +123,17 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
 async fn main() {
 
     //Get command line args
+    let mut listen_port = &String::from("2112");
     let args: Vec<String> = env::args().collect();
-    let arg_port = &args[1];
+    if let Some(arg_port) = args.get(1) {
+        listen_port = arg_port;
+        println!("Will use port: [{}]...", arg_port);
+    }
 
     //Create a new database if needed
     match dbif::create_database() {
-        Ok(_) => println!("Database created."),
-        Err(e) => eprintln!("Error creating database: {:#?}", e)
+        Ok(_) => println!("Database opened."),
+        Err(e) => eprintln!("Error opening/creating database: {:#?}", e)
     }
 
     //LND polling thread
@@ -159,7 +163,7 @@ async fn main() {
         }
     });
 
-    let binding = format!("0.0.0.0:{}", arg_port);
+    let binding = format!("0.0.0.0:{}", listen_port);
     let addr = binding.parse().expect("address creation works");
     let server = Server::bind(&addr).serve(new_service);
     println!("Listening on http://{}", addr);
@@ -224,30 +228,65 @@ impl Context {
 //The LND poller runs in a thread and pulls new invoices
 async fn lnd_poller() {
 
-    //Get the macaroon and cert files
-    let macaroon = fs::read("/lnd/data/chain/bitcoin/mainnet/admin.macaroon").unwrap();
-    let cert = fs::read("/lnd/tls.cert").unwrap();
+    //Get the macaroon and cert files.  Look in the local directory first as an override.
+    //If the files are not found in the currect working directory, look for them at their
+    //normal LND directory locations
+    let macaroon: Vec<u8>;
+    match fs::read("admin.macaroon") {
+        Ok(macaroon_content) => {
+            macaroon = macaroon_content;
+        }
+        Err(_) => {
+            match fs::read("/lnd/data/chain/bitcoin/mainnet/admin.macaroon") {
+                Ok(macaroon_content) => {
+                    macaroon = macaroon_content;
+                }
+                Err(_) => {
+                    eprintln!("Cannot find admin.macaroon file");
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+    let cert: Vec<u8>;
+    match fs::read("tls.cert") {
+        Ok(cert_content) => {
+            cert = cert_content;
+        }
+        Err(_) => {
+            match fs::read("/lnd/tls.cert") {
+                Ok(cert_content) => {
+                    cert = cert_content;
+                }
+                Err(_) => {
+                    eprintln!("Cannot find tls.cert file");
+                    std::process::exit(2);
+                }
+            }
+        }
+    }
 
     //Create the database if needed
     match dbif::create_database() {
         Ok(_) => {
-            println!("Created new database.");
+            println!("Database file is ready...");
         }
         Err(e) => {
-            println!("Could not create database file: {}", dbif::SQLITE_FILE);
+            println!("Could not create or open the database file: {}", dbif::SQLITE_FILE);
             eprintln!("{:#?}", e);
-            std::process::exit(1);
+            std::process::exit(3);
         }
     }
 
 
     //Get the url connection string of the lnd node
+    let mut node_address = String::from("https://127.0.0.1:10009");
     let env_lnd_url = std::env::var("LND_URL");
     if env_lnd_url.is_err() {
-        println!("The $LND_URL environment variable could not be found.\n");
-        std::process::exit(1);
+        println!("$LND_URL not set.  Falling back to: [{}].", node_address);
+    } else {
+        node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
     }
-    let node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
 
     //Make the connection to LND
     let mut lightning;
