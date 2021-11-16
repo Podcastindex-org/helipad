@@ -11,3 +11,6 @@ If you have an Umbrel device and want to test this app on it, do the following:
 
 If the results of running that command look good, you should now be able to get to the boost-a-gram app by going to `http://<yourumbrel>:2112`
 in your browser.
+
+It can take a few minutes to populate any existing boostagrams you have received since it has to build the invoice database in the background
+when it first starts up.
