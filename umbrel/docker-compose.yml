@@ -1,0 +1,19 @@
+version: "3.7"
+
+services:
+  web:
+    image: podcastindexorg/podcasting20-boosts:latest
+    restart: on-failure
+    stop_grace_period: 1m
+    ports:
+      - 2112:2112
+    volumes:
+      - ${APP_DATA_DIR}/data/sqlite:/data
+      - ${LND_DATA_DIR}:/lnd:ro
+    environment:
+      LND_URL: "$LND_IP:$LND_GRPC_PORT"
+  # If your app has more services, like a database container, you can define those
+  # services below:
+  # db:
+  #   image: <docker-image>:<tag>
+  #   ...
