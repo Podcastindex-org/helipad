@@ -1,21 +1,18 @@
-FROM node:12-buster-slim AS builder
+FROM rust:latest AS builder
 
-RUN apt-get update \
-    && apt-get -y upgrade \
-    && apt-get -y install --no-install-recommends sqlite3 openssl
+RUN apt-get update
+RUN apt-get upgrade -y
+RUN apt-get install -y sqlite3
+RUN apt-get install -y openssl
 
-WORKDIR /root/helipad
+WORKDIR /opt
 USER root
 
-# git clone https://github.com/Podcastindex-org/helipad.git
-# curl https://sh.rustup.rs -sSf | sh -s -- -y
-# cd helipad && cargo build --release
-
-COPY helipad/target/release/helipad helipadbin
-COPY helipad/*.html .
-COPY helipad/*.js .
-COPY helipad/*.mp3 .
+RUN git clone https://github.com/Podcastindex-org/helipad.git
+WORKDIR /opt/helipad
+RUN cargo build --release
+RUN cp target/release/helipad .
 
 EXPOSE 2112/tcp
 
-ENTRYPOINT ["/root/helipad/helipadbin","2112"]
+ENTRYPOINT ["/opt/helipad/helipad"]
