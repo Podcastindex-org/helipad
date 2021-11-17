@@ -57,6 +57,15 @@ $(document).ready(function () {
                         case 'breez':
                             appIconUrl = appIconUrlBase + 'breez.png';
                             break;
+                        case 'podstation':
+                            appIconUrl = appIconUrlBase + 'podstation.jpg';
+                            break;
+                        case 'sphinx':
+                            appIconUrl = appIconUrlBase + 'sphinxchat.png';
+                            break;
+                        case 'podverse':
+                            appIconUrl = appIconUrlBase + 'podverse.jpg';
+                            break;
                     }
 
                     if(boostIndex > lastIndex && element.action == 2) {
