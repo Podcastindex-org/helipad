@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt;
 use serde::{Deserialize, Serialize};
 
-pub const SQLITE_FILE: &str = "/data/sqlite/database.db";
+pub const SQLITE_FILE: &str = "/data/database.db";
 pub const SQLITE_FILE_ALTERNATE: &str = "database.db";
 
 #[derive(Serialize, Deserialize, Debug)]
