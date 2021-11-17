@@ -123,17 +123,29 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
 async fn main() {
 
     //Get command line args
-    let mut listen_port = &String::from("2112");
+    let mut listen_port = String::from("2112");
     let args: Vec<String> = env::args().collect();
-    if let Some(arg_port) = args.get(1) {
-        listen_port = arg_port;
-        println!("Will use port: [{}]...", arg_port);
+    let env_listen_port = std::env::var("HELIPAD_LISTEN_PORT");
+    if env_listen_port.is_ok() {
+        listen_port = env_listen_port.unwrap();
+        println!("Using port: [{}] from environment...", listen_port);
+    } else if let Some(arg_port) = args.get(1) {
+        listen_port = arg_port.to_owned();
+        println!("Using port: [{}] from command line...", listen_port);
+    } else {
+        println!("Using default port: [{}]...", listen_port);
     }
 
     //Create a new database if needed
+    //Create the database if needed
     match dbif::create_database() {
-        Ok(_) => println!("Database opened."),
-        Err(e) => eprintln!("Error opening/creating database: {:#?}", e)
+        Ok(_) => {
+            println!("Database file is ready...");
+        }
+        Err(e) => {
+            eprintln!("Database error: {:#?}", e);
+            std::process::exit(3);
+        }
     }
 
     //LND polling thread
@@ -163,7 +175,7 @@ async fn main() {
         }
     });
 
-    let binding = format!("0.0.0.0:{}", listen_port);
+    let binding = format!("0.0.0.0:{}", &listen_port);
     let addr = binding.parse().expect("address creation works");
     let server = Server::bind(&addr).serve(new_service);
     println!("Listening on http://{}", addr);
@@ -265,19 +277,6 @@ async fn lnd_poller() {
             }
         }
     }
-
-    //Create the database if needed
-    match dbif::create_database() {
-        Ok(_) => {
-            println!("Database file is ready...");
-        }
-        Err(e) => {
-            println!("Could not create or open the database file: {}", dbif::SQLITE_FILE);
-            eprintln!("{:#?}", e);
-            std::process::exit(3);
-        }
-    }
-
 
     //Get the url connection string of the lnd node
     let mut node_address = String::from("https://127.0.0.1:10009");

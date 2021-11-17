@@ -31,11 +31,17 @@ impl fmt::Display for HydraError {
 impl Error for HydraError {}
 
 
-fn connect_to_database() -> Result<Connection, Box<dyn Error>> {
+fn connect_to_database(init: bool) -> Result<Connection, Box<dyn Error>> {
     if let Ok(conn) = Connection::open(SQLITE_FILE) {
+        if init {
+            println!("Using database file: [{}]", SQLITE_FILE);
+        }
         return Ok(conn)
     }
     if let Ok(conn) = Connection::open(SQLITE_FILE_ALTERNATE) {
+        if init {
+            println!("Using database file: [{}]", SQLITE_FILE_ALTERNATE);
+        }
         return Ok(conn)
     } else {
         return Err(Box::new(HydraError(format!("Could not open a database file: [{}] or [{}].", SQLITE_FILE, SQLITE_FILE_ALTERNATE).into())))
@@ -43,9 +49,9 @@ fn connect_to_database() -> Result<Connection, Box<dyn Error>> {
 }
 
 
-//Create a new database file
+//Create a new database file if needed
 pub fn create_database() -> Result<bool, Box<dyn Error>> {
-    let conn = connect_to_database()?;
+    let conn = connect_to_database(true)?;
 
     match conn.execute(
         "CREATE TABLE IF NOT EXISTS boosts (
@@ -75,7 +81,7 @@ pub fn create_database() -> Result<bool, Box<dyn Error>> {
 
 //Add an invoice to the database
 pub fn add_invoice_to_db(boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
-    let conn = connect_to_database()?;
+    let conn = connect_to_database(false)?;
 
     match conn.execute("INSERT INTO boosts (idx, time, value_msat, action, sender, app, message, podcast, episode, tlv) \
                                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
@@ -103,7 +109,7 @@ pub fn add_invoice_to_db(boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
 
 //Get all of the boosts from the database
 pub fn get_boosts_from_db(index: u64, max: u64) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
-    let conn = connect_to_database()?;
+    let conn = connect_to_database(false)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
     //Prepare and execute the query
@@ -138,7 +144,7 @@ pub fn get_boosts_from_db(index: u64, max: u64) -> Result<Vec<BoostRecord>, Box<
 
 //Get the last boost index number from the database
 pub fn get_last_boost_index_from_db() -> Result<u64, Box<dyn Error>> {
-    let conn = connect_to_database()?;
+    let conn = connect_to_database(false)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
     let max = 1;
 
