@@ -314,6 +314,7 @@ async fn lnd_poller() {
                         index: invoice.add_index,
                         time: invoice.settle_date,
                         value_msat: invoice.amt_paid_sat * 1000,
+                        value_msat_total: invoice.amt_paid_sat * 1000,
                         action: 0,
                         sender: "".to_string(),
                         app: "".to_string(),
@@ -333,7 +334,6 @@ async fn lnd_poller() {
                                 let json_result = serde_json::from_str::<RawBoost>(tlv);
                                 match json_result {
                                     Ok(rawboost) => {
-                                        println!("{:#?}", rawboost);
                                         //If there was a sat value in the tlv, override the invoice
                                         if rawboost.value_msat.is_some() {
                                             boost.value_msat = rawboost.value_msat.unwrap() as i64;
@@ -366,6 +366,10 @@ async fn lnd_poller() {
                                         if rawboost.episode.is_some() {
                                             boost.episode = rawboost.episode.unwrap();
                                         }
+                                        //Look for an original sat value in the tlv
+                                        if rawboost.value_msat_total.is_some() {
+                                            boost.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
+                                        }
                                     }
                                     Err(e) => {
                                         eprintln!("{}", e);
@@ -379,6 +383,7 @@ async fn lnd_poller() {
                     println!("Boost: {:#?}", boost);
 
                     //Store in the database
+                    println!("{:#?}", boost);
                     match dbif::add_invoice_to_db(boost) {
                         Ok(_) => println!("New invoice added."),
                         Err(e) => eprintln!("Error adding invoice: {:#?}", e)

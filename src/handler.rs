@@ -22,11 +22,11 @@ impl Error for HydraError {}
 pub async fn home(ctx: Context) -> Response {
 
     //Get query parameters
-    let params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
+    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
     }).unwrap_or_else(HashMap::new);
 
-    println!("Params: {:#?}", params);
+    //println!("** Params: {:#?}", _params);
 
     let doc = fs::read_to_string("home.html").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
@@ -67,15 +67,18 @@ pub async fn boosts(_ctx: Context) -> Response {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
     }).unwrap_or_else(HashMap::new);
 
-    println!("Params: {:#?}", params);
+    //println!("Params: {:#?}", params);
 
     //Get the last known invoice index from the database
     let mut last_index = match dbif::get_last_boost_index_from_db() {
-        Ok(index) => index,
+        Ok(index) => {
+            println!("** get_last_boost_index_from_db() -> [{}]", index);
+            index
+        },
         Err(_) => 0
     };
-    if last_index > 20 {
-        last_index -= 20;
+    if last_index > 50 {
+        last_index -= 50;
     }
 
     //Get the index url parameter if one was given and convert to an integer
@@ -84,18 +87,21 @@ pub async fn boosts(_ctx: Context) -> Response {
     match params.get("index") {
         Some(supplied_index) => {
             index = match supplied_index.parse::<u64>() {
-                Ok(index) => index,
+                Ok(index) => {
+                    println!("** Supplied index from call: [{}]", index);
+                    index
+                },
                 Err(_) => last_index
             };
         },
         None => {
+            println!("** No index given.  Using: [{}]", last_index);
             index = last_index;
         }
     };
 
-
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(index, 20) {
+    match dbif::get_boosts_from_db(index, 50) {
         Ok(boosts) => {
             let json_doc_raw = serde_json::to_string(&boosts).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
@@ -106,10 +112,10 @@ pub async fn boosts(_ctx: Context) -> Response {
                 .unwrap();
         }
         Err(e) => {
-            eprintln!("Error getting boosts: {}.\n", e);
+            eprintln!("** Error getting boosts: {}.\n", e);
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("Error getting boosts.").into())
+                .body(format!("** Error getting boosts.").into())
                 .unwrap();
         }
     }
