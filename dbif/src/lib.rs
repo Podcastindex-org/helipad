@@ -62,6 +62,7 @@ fn connect_to_database(init: bool) -> Result<Connection, Box<dyn Error>> {
     }
 }
 
+
 //Set permissions on the database file
 fn set_database_file_permissions(filepath: &str) -> Result<bool, Box<dyn Error>> {
 

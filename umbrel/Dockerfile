@@ -42,4 +42,4 @@ COPY --from=builder /opt/helipad/*.mp3 .
 
 EXPOSE 2112/tcp
 
-ENTRYPOINT ["/opt/helipad/helipad"]
+ENTRYPOINT ["/data/launch.sh"]
