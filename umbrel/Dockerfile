@@ -19,6 +19,7 @@ RUN cp target/release/helipad .
 FROM rust:latest AS runner
 RUN apt-get update && apt-get upgrade -y && apt-get install -y sqlite3 && apt-get install -y openssl
 
+USER root
 RUN useradd -ms /bin/bash heliuser
 
 WORKDIR /opt
@@ -29,5 +30,7 @@ RUN chown -R heliuser /opt
 ENV HELIPAD_RUNAS_USER="heliuser"
 
 EXPOSE 2112/tcp
+
+USER heliuser
 
 ENTRYPOINT ["/opt/helipad/helipad"]
