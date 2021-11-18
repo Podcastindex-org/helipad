@@ -28,7 +28,10 @@ RUN apt-get install -y apt-utils
 RUN apt-get install -y sqlite3
 RUN apt-get install -y openssl
 
-RUN useradd -ms /bin/bash heliuser
+RUN chown -R 1000:1000 /opt
+RUN mkdir /data && chown -R 1000:1000 /data
+
+USER 1000
 RUN mkdir /opt/helipad
 
 WORKDIR /opt/helipad
@@ -37,11 +40,6 @@ COPY --from=builder /opt/helipad/*.html .
 COPY --from=builder /opt/helipad/*.js .
 COPY --from=builder /opt/helipad/*.mp3 .
 
-RUN chown -R heliuser /opt
-
-ENV HELIPAD_RUNAS_USER="heliuser"
-
 EXPOSE 2112/tcp
 
 ENTRYPOINT ["/opt/helipad/helipad"]
-
