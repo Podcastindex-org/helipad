@@ -148,6 +148,7 @@ async fn main() {
         }
     }
 
+
     //LND polling thread
     tokio::spawn(lnd_poller());
 

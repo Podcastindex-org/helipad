@@ -2,6 +2,7 @@ use rusqlite::{params, Connection};
 use std::error::Error;
 use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::os::unix::fs::PermissionsExt;
 
 pub const SQLITE_FILE: &str = "/data/database.db";
 pub const SQLITE_FILE_ALTERNATE: &str = "database.db";
@@ -35,18 +36,54 @@ impl Error for HydraError {}
 fn connect_to_database(init: bool) -> Result<Connection, Box<dyn Error>> {
     if let Ok(conn) = Connection::open(SQLITE_FILE) {
         if init {
+            match set_database_file_permissions(SQLITE_FILE) {
+                Ok(_) => {},
+                Err(e) => {
+                    eprintln!("{:#?}", e);
+                }
+            }
             println!("Using database file: [{}]", SQLITE_FILE);
         }
         return Ok(conn)
     }
     if let Ok(conn) = Connection::open(SQLITE_FILE_ALTERNATE) {
         if init {
+            match set_database_file_permissions(SQLITE_FILE_ALTERNATE) {
+                Ok(_) => {},
+                Err(e) => {
+                    eprintln!("{:#?}", e);
+                }
+            }
             println!("Using database file: [{}]", SQLITE_FILE_ALTERNATE);
         }
         return Ok(conn)
     } else {
         return Err(Box::new(HydraError(format!("Could not open a database file: [{}] or [{}].", SQLITE_FILE, SQLITE_FILE_ALTERNATE).into())))
     }
+}
+
+//Set permissions on the database file
+fn set_database_file_permissions(filepath: &str) -> Result<bool, Box<dyn Error>> {
+
+    match std::fs::File::open(filepath) {
+        Ok(fh) => {
+            match fh.metadata() {
+                Ok(metadata) => {
+                    let mut perms = metadata.permissions();
+                    perms.set_mode(0o666);
+                    println!("Set file permission to: [666] on database file: [{}]", filepath);
+                    Ok(true)
+                },
+                Err(e) => {
+                    return Err(Box::new(HydraError(format!("Error getting metadata from database file handle: [{}].  Error: {:#?}.", filepath, e).into())))
+                }
+            }
+        },
+        Err(e) => {
+            return Err(Box::new(HydraError(format!("Error opening database file handle: [{}] for permissions setting.  Error: {:#?}.", filepath, e).into())))
+        }
+    }
+
 }
 
 
