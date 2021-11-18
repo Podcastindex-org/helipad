@@ -57,10 +57,20 @@ $(document).ready(function () {
                         case 'breez':
                             appIconUrl = appIconUrlBase + 'breez.png';
                             break;
+                        case 'podstation':
+                            appIconUrl = appIconUrlBase + 'podstation.jpg';
+                            break;
+                        case 'sphinx':
+                            appIconUrl = appIconUrlBase + 'sphinxchat.png';
+                            break;
+                        case 'podverse':
+                            appIconUrl = appIconUrlBase + 'podverse.jpg';
+                            break;
                     }
 
                     if(boostIndex > lastIndex && element.action == 2) {
                         let dateTime = new Date(element.time * 1000).toISOString();
+                        $('div.nodata').remove();
                         inbox.prepend('' +
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
@@ -81,6 +91,12 @@ $(document).ready(function () {
                 });
             }
         });
+
+        //Show a message if still building
+        if( $('div.outgoing_msg').length == 0 && $('div.nodata').length == 0 ) {
+            inbox.prepend('<div class="nodata">No data to show yet. Building the initial database may take some time...</div>');
+        }
+
     }
 
 });

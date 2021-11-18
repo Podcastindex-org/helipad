@@ -123,17 +123,29 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
 async fn main() {
 
     //Get command line args
-    let mut listen_port = &String::from("2112");
+    let mut listen_port = String::from("2112");
     let args: Vec<String> = env::args().collect();
-    if let Some(arg_port) = args.get(1) {
-        listen_port = arg_port;
-        println!("Will use port: [{}]...", arg_port);
+    let env_listen_port = std::env::var("HELIPAD_LISTEN_PORT");
+    if env_listen_port.is_ok() {
+        listen_port = env_listen_port.unwrap();
+        println!("Using port: [{}] from environment...", listen_port);
+    } else if let Some(arg_port) = args.get(1) {
+        listen_port = arg_port.to_owned();
+        println!("Using port: [{}] from command line...", listen_port);
+    } else {
+        println!("Using default port: [{}]...", listen_port);
     }
 
     //Create a new database if needed
+    //Create the database if needed
     match dbif::create_database() {
-        Ok(_) => println!("Database opened."),
-        Err(e) => eprintln!("Error opening/creating database: {:#?}", e)
+        Ok(_) => {
+            println!("Database file is ready...");
+        }
+        Err(e) => {
+            eprintln!("Database error: {:#?}", e);
+            std::process::exit(3);
+        }
     }
 
     //LND polling thread
@@ -163,7 +175,7 @@ async fn main() {
         }
     });
 
-    let binding = format!("0.0.0.0:{}", listen_port);
+    let binding = format!("0.0.0.0:{}", &listen_port);
     let addr = binding.parse().expect("address creation works");
     let server = Server::bind(&addr).serve(new_service);
     println!("Listening on http://{}", addr);
@@ -266,19 +278,6 @@ async fn lnd_poller() {
         }
     }
 
-    //Create the database if needed
-    match dbif::create_database() {
-        Ok(_) => {
-            println!("Database file is ready...");
-        }
-        Err(e) => {
-            println!("Could not create or open the database file: {}", dbif::SQLITE_FILE);
-            eprintln!("{:#?}", e);
-            std::process::exit(3);
-        }
-    }
-
-
     //Get the url connection string of the lnd node
     let mut node_address = String::from("https://127.0.0.1:10009");
     let env_lnd_url = std::env::var("LND_URL");
@@ -315,6 +314,7 @@ async fn lnd_poller() {
                         index: invoice.add_index,
                         time: invoice.settle_date,
                         value_msat: invoice.amt_paid_sat * 1000,
+                        value_msat_total: invoice.amt_paid_sat * 1000,
                         action: 0,
                         sender: "".to_string(),
                         app: "".to_string(),
@@ -334,7 +334,6 @@ async fn lnd_poller() {
                                 let json_result = serde_json::from_str::<RawBoost>(tlv);
                                 match json_result {
                                     Ok(rawboost) => {
-                                        println!("{:#?}", rawboost);
                                         //If there was a sat value in the tlv, override the invoice
                                         if rawboost.value_msat.is_some() {
                                             boost.value_msat = rawboost.value_msat.unwrap() as i64;
@@ -367,6 +366,10 @@ async fn lnd_poller() {
                                         if rawboost.episode.is_some() {
                                             boost.episode = rawboost.episode.unwrap();
                                         }
+                                        //Look for an original sat value in the tlv
+                                        if rawboost.value_msat_total.is_some() {
+                                            boost.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
+                                        }
                                     }
                                     Err(e) => {
                                         eprintln!("{}", e);
@@ -380,6 +383,7 @@ async fn lnd_poller() {
                     println!("Boost: {:#?}", boost);
 
                     //Store in the database
+                    println!("{:#?}", boost);
                     match dbif::add_invoice_to_db(boost) {
                         Ok(_) => println!("New invoice added."),
                         Err(e) => eprintln!("Error adding invoice: {:#?}", e)
