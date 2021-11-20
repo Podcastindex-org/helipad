@@ -3,11 +3,9 @@
 
 If you have an Umbrel device and want to test this app on it, do the following:
 
-1. Go to the root folder of your Umbrel system (where the "apps", "app-data", "lnd", etc. folders are) via SSH. Perhaps `cd ~/umbrel`?
-2. Create a new subfolder within the "apps" folder called "podcasting20-boosts": `mkdir apps/podcasting20-boosts`
-3. Create a "docker-compose.yml" file in that new folder: `pico apps/podcasting20-boosts/docker-compose.yml`
-4. Paste into that file, the contents found [here](docker-compose.yml) and save the file.
-5. You should still be in the root folder of your Umbrel system.  Run this command: `sudo scripts/app install podcasting20-boosts`.
+1. Clone this repo to your Umbrel somewhere:  `git https://github.com/Podcastindex-org/helipad.git`
+2. Change to the `umbrel` sub-directory of the helipad repo:  `cd helipad/umbrel`
+3. Run the install script with the root folder of your Umbrel install as the only argument:  `./install.sh ~/umbrel` or `./install.sh /opt/umbrel`
 
 If the results of running that command look good, you should now be able to get to the boost-a-gram app by going to `http://<yourumbrel>:2112`
 in your browser.
@@ -17,4 +15,4 @@ when it first starts up.
 
 The app will not show up in your Umbrel dashboard when installed this way.  This is only for testing.
 
-If you want to remove the app just run this command: `sudo scripts/app uninstall podcasting20-boosts`
+If you want to remove the app just run this command: `sudo scripts/app uninstall podcasting20-boosts` from your Umbrel's root directory.
