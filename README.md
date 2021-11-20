@@ -7,6 +7,28 @@ Helipad is intended to run as a dockerized Umbrel app, but can also be run stand
 Helipad runs as a single process web server with the LND poller running as a separate thread.  Invoices are checked for every
 9 seconds, parsed and stored locally in a Sqlite database.  The main webserver thread then serves them to clients over HTTP(S).
 
+## To Compile
+
+You need Rust installed: [instructions here](https://www.rust-lang.org/tools/install).
+
+`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+Once you have Rust you can compile in the root folder of this repo:
+
+`cargo run`
+
+If you get an error like:
+
+`  = note: /usr/bin/ld: cannot find -lsqlite3`
+
+You may need to install SQLite3:
+
+`sudo apt-get install sqlite3`
+`sudo apt-get install -y libsqlite3-dev`
+
+
+## After compiling
+
 After compiling, you start the binary like this:
 
 ```./helipad 8080```

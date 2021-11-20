@@ -8,6 +8,7 @@ RUN apt-get upgrade -y
 RUN apt-get install -y apt-utils
 RUN apt-get install -y sqlite3
 RUN apt-get install -y openssl
+RUN apt-get install -y libsqlite3-dev
 
 WORKDIR /opt
 
@@ -37,7 +38,7 @@ RUN mkdir /opt/helipad
 WORKDIR /opt/helipad
 COPY --from=builder /opt/helipad/target/release/helipad .
 COPY --from=builder /opt/helipad/*.html .
-COPY --from=builder /opt/helipad/*.js .
+COPY --from=builder /opt/helipad/*.js ./
 COPY --from=builder /opt/helipad/*.mp3 .
 
 EXPOSE 2112/tcp
