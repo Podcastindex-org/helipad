@@ -20,8 +20,6 @@ umbrel@umbrel:~/podcastindex-org/helipad/umbrel $ ./install.sh ~/umbrel
 Setting up data dir for app podcasting20-boosts...
 sending incremental file list
 docker-compose.yml
-.vscode/
-.vscode/settings.json
 data/
 
 sent 899 bytes  received 66 bytes  1,930.00 bytes/sec
