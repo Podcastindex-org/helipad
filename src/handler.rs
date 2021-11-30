@@ -44,6 +44,15 @@ pub async fn pewmp3(_ctx: Context) -> Response {
         .unwrap();
 }
 
+pub async fn favicon(_ctx: Context) -> Response {
+    let file = fs::read("favicon.ico").expect("Something went wrong reading the file.");
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-type", "image/x-icon")
+        .body(hyper::Body::from(file))
+        .unwrap();
+}
+
 pub async fn homejs(_ctx: Context) -> Response {
     let doc = fs::read_to_string("home.js").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
@@ -61,6 +70,7 @@ pub async fn utilsjs(_ctx: Context) -> Response {
 }
 
 pub async fn boosts(_ctx: Context) -> Response {
+    let default_boostcount: u64 = 50;
 
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -68,6 +78,33 @@ pub async fn boosts(_ctx: Context) -> Response {
     }).unwrap_or_else(HashMap::new);
 
     //println!("Params: {:#?}", params);
+    println!("");
+
+    //Get the count parameter if one was given and convert to an integer
+    let boostcount: u64;
+    match params.get("count") {
+        Some(bcount) => {
+            boostcount = match bcount.parse::<u64>() {
+                Ok(boostcount) => {
+                    println!("** Supplied boostcount from call: [{}]", boostcount);
+                    boostcount
+                },
+                Err(_) => default_boostcount
+            };
+        },
+        None => {
+            println!("** No boostcount given.  Using: [{}]", default_boostcount);
+            boostcount = default_boostcount;
+        }
+    };
+
+    //Was the "old" flag used?
+    let mut old = false;
+    match params.get("old") {
+        Some(_) => old = true,
+        None => { }
+    };
+
 
     //Get the last known invoice index from the database
     let mut last_index = match dbif::get_last_boost_index_from_db() {
@@ -77,8 +114,8 @@ pub async fn boosts(_ctx: Context) -> Response {
         },
         Err(_) => 0
     };
-    if last_index > 50 {
-        last_index -= 50;
+    if last_index > boostcount {
+        last_index -= boostcount;
     }
 
     //Get the index url parameter if one was given and convert to an integer
@@ -100,8 +137,9 @@ pub async fn boosts(_ctx: Context) -> Response {
         }
     };
 
+
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(index, 50) {
+    match dbif::get_boosts_from_db(index, boostcount, old) {
         Ok(boosts) => {
             let json_doc_raw = serde_json::to_string(&boosts).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);

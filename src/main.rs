@@ -121,6 +121,10 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
 //Functions --------------------------------------------------------------------------------------------------
 #[tokio::main]
 async fn main() {
+    //Get what version we are
+    let version = env!("CARGO_PKG_VERSION");
+    println!("Version: {}", version);
+    println!("--------------------");
 
     //Get command line args
     let mut listen_port = String::from("2112");
@@ -158,6 +162,7 @@ async fn main() {
     router.get("/", Box::new(handler::home));
     router.get("/home.js", Box::new(handler::homejs));
     router.get("/pew.mp3", Box::new(handler::pewmp3));
+    router.get("/favicon.ico", Box::new(handler::favicon));
     router.get("/utils.js", Box::new(handler::utilsjs));
     router.get("/boosts", Box::new(handler::boosts));
 

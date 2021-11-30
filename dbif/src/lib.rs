@@ -149,15 +149,34 @@ pub fn add_invoice_to_db(boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
 
 
 //Get all of the boosts from the database
-pub fn get_boosts_from_db(index: u64, max: u64) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_boosts_from_db(index: u64, max: u64, direction: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
-    //Prepare and execute the query
-    let mut stmt = conn.prepare("SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv \
+    let mut ltgt = ">=";
+    if direction {
+        ltgt = "<=";
+    }
+
+    let sqltxt = format!("SELECT idx, \
+                                       time, \
+                                       value_msat, \
+                                       value_msat_total, \
+                                       action, \
+                                       sender, \
+                                       app, \
+                                       message, \
+                                       podcast, \
+                                       episode, \
+                                       tlv \
                                  FROM boosts \
-                                 WHERE action = 2 AND idx >= :index \
-                                 ORDER BY idx ASC LIMIT :max")?;
+                                 WHERE action = 2 \
+                                   AND idx {} :index \
+                                 ORDER BY idx ASC \
+                                 LIMIT :max", ltgt);
+
+    //Prepare and execute the query
+    let mut stmt = conn.prepare(sqltxt.as_str())?;
     let rows = stmt.query_map(&[(":index", index.to_string().as_str()), (":max", max.to_string().as_str())], |row| {
         Ok(BoostRecord {
             index: row.get(0)?,
