@@ -43,6 +43,9 @@ $(document).ready(function () {
         if(typeof boostIndex !== "number") {
             noIndex = true;
         }
+        if(startIndex === null) {
+            boostIndex = "";
+        }
         if (typeof max !== "number") {
             max = 0;
         }
@@ -195,7 +198,7 @@ $(document).ready(function () {
 
     //Set a periodic checker for new boosts
     setInterval(function () {
-        getBoosts();
+        getBoosts(null, 20, true);
     }, 7000);
 
 });
