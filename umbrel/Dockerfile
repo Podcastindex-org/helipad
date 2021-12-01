@@ -39,7 +39,8 @@ COPY --from=builder /opt/helipad/target/release/helipad .
 COPY --from=builder /opt/helipad/*.html .
 COPY --from=builder /opt/helipad/*.js .
 COPY --from=builder /opt/helipad/*.mp3 .
+COPY --from=builder /opt/helipad/*.ico .
 
 EXPOSE 2112/tcp
 
-ENTRYPOINT ["/data/launch.sh"]
+ENTRYPOINT ["/opt/helipad/helipad"]
