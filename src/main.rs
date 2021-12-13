@@ -249,41 +249,52 @@ async fn lnd_poller() {
     //Get the macaroon and cert files.  Look in the local directory first as an override.
     //If the files are not found in the currect working directory, look for them at their
     //normal LND directory locations
-    let macaroon: Vec<u8>;
-    match fs::read("admin.macaroon") {
-        Ok(macaroon_content) => {
-            macaroon = macaroon_content;
-        }
-        Err(_) => {
-            match fs::read("/lnd/data/chain/bitcoin/mainnet/admin.macaroon") {
-                Ok(macaroon_content) => {
-                    macaroon = macaroon_content;
-                }
-                Err(_) => {
-                    eprintln!("Cannot find admin.macaroon file");
-                    std::process::exit(1);
-                }
-            }
-        }
+    let macaroon_option: Option<Vec<u8> = None;
+    let mut admin_macaroon_file_paths = vec![];
+    let admin_macaroon_file_path = std::env::var("LND_ADMINMACAROON");
+    if admin_macaroon_file_path.is_ok() {
+        admin_macaroon_file_paths.push(tls_cert_path)
     }
-    let cert: Vec<u8>;
-    match fs::read("tls.cert") {
-        Ok(cert_content) => {
-            cert = cert_content;
-        }
-        Err(_) => {
-            match fs::read("/lnd/tls.cert") {
-                Ok(cert_content) => {
-                    cert = cert_content;
-                }
-                Err(_) => {
-                    eprintln!("Cannot find tls.cert file");
-                    std::process::exit(2);
-                }
-            }
-        }
-    }
+    admin_macaroon_file_paths.push("tls.cert");
+    admin_macaroon_file_paths.push("/lnd/tls.cert");
 
+    for admin_macaroon_file_path in admin_macaroon_file_paths.iter() {
+        match fs::read(admin_macaroon_file_path) {
+            Ok(macaroon_content) => {
+                macaroon_option = macaroon_content;
+                break;
+            }
+        } 
+    }
+    if(macaroon_option.is_none()){
+        eprintln!("Cannot find admin.macaroon file");
+        std::process::exit(1);
+    }
+    let macaroon = macaroon_option.unwrap();
+    
+    let cert_option: Option<Vec<u8> = None;
+    let mut tls_cert_locations = vec![];
+    let tls_cert_path = std::env::var("LND_TLSCERT");
+    if tls_cert_path.is_ok() {
+        tls_cert_locations.push(tls_cert_path)
+    }
+    tls_cert_locations.push("tls.cert");
+    tls_cert_locations.push("/lnd/tls.cert");
+
+    for tls_cert_location in tls_cert_location.iter() {
+        match fs::read(tls_cert_location) {
+            Ok(cert_content) => {
+                cert_option = Some(cert_content);
+                break;
+            }
+        } 
+    }
+    if(cert_option.is_none()){
+        eprintln!("Cannot find tls.cert file");
+        std::process::exit(2);
+    }
+    let cert = cert_option.unwrap();
+    
     //Get the url connection string of the lnd node
     let mut node_address = String::from("https://127.0.0.1:10009");
     let env_lnd_url = std::env::var("LND_URL");
