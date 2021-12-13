@@ -10,8 +10,9 @@ RUN apt-get install -y sqlite3
 RUN apt-get install -y openssl
 
 WORKDIR /opt
-
-RUN git clone https://github.com/Podcastindex-org/helipad.git
+ARG GIT_REPO=https://github.com/Podcastindex-org/helipad.git
+ARG GIT_BRANCH=main
+RUN git clone -b ${GIT_BRANCH} ${GIT_REPO}
 WORKDIR /opt/helipad
 RUN cargo build --release
 RUN cp target/release/helipad .
