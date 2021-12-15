@@ -79,6 +79,7 @@ $(document).ready(function () {
                     let boostApp = element.app;
                     let boostPodcast = element.podcast;
                     let boostEpisode = element.episode;
+                    let boostTlv = element.tlv;
 
                     //Icon
                     var appIconUrl = "";
@@ -118,13 +119,13 @@ $(document).ready(function () {
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
-                            '      <span class="app"><img src="' + appIconUrl + '"></span>' +
+                            '      <span class="app"><img alt="' + boostApp +'" src="' + appIconUrl + '"></span>' +
                             '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
                             '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
                             '      <br>' +
                             '      <hr>' +
-                            '      <p>' + boostMessage + '</p>' +
+                            '      <details><summary><small>' + boostMessage + '</small></summary><small>TLV data: ' + boostTlv + '</small></details>' +
                             '    </div>' +
                             '  </div>' +
                             '</div>';
