@@ -1,0 +1,19 @@
+[[param]]
+name = "database_dir"
+type = "String"
+doc = "The location of the database file."
+
+[[param]]
+name = "macaroon"
+type = "String"
+doc = "The location of the macaroon file."
+
+[[param]]
+name = "cert"
+type = "String"
+doc = "The location of the tls certificate file."
+
+[[param]]
+name = "listen_port"
+type = "u16"
+doc = "The port to listen on."

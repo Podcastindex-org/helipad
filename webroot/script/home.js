@@ -1,7 +1,7 @@
 $(document).ready(function () {
     let messages = $('div.mesgs');
     let inbox = messages.find('div.msg_history');
-    let appIconUrlBase = 'https://podcastindex.org/api/images/';
+    let appIconUrlBase = '/image?name=';
     let pewAudioFile = '/pew.mp3';
     let pewAudio = new Audio(pewAudioFile);
     const urlParams = new URLSearchParams(window.location.search);
@@ -84,29 +84,33 @@ $(document).ready(function () {
                     var appIconUrl = "";
                     switch (boostApp.toLowerCase()) {
                         case 'fountain':
-                            appIconUrl = appIconUrlBase + 'fountain.png';
+                            appIconUrl = appIconUrlBase + 'fountain';
                             break;
                         case 'podfriend':
-                            appIconUrl = appIconUrlBase + 'podfriend.jpg';
+                            appIconUrl = appIconUrlBase + 'podfriend';
                             break;
                         case 'castamatic':
-                            appIconUrl = appIconUrlBase + 'castamatic.png';
+                            appIconUrl = appIconUrlBase + 'castamatic';
                             break;
                         case 'curiocaster':
-                            appIconUrl = appIconUrlBase + 'curiocaster.png';
+                            appIconUrl = appIconUrlBase + 'curiocaster';
                             break;
                         case 'breez':
-                            appIconUrl = appIconUrlBase + 'breez.png';
+                            appIconUrl = appIconUrlBase + 'breez';
                             break;
                         case 'podstation':
-                            appIconUrl = appIconUrlBase + 'podstation.jpg';
+                            appIconUrl = appIconUrlBase + 'podstation';
                             break;
                         case 'sphinx':
-                            appIconUrl = appIconUrlBase + 'sphinxchat.png';
+                            appIconUrl = appIconUrlBase + 'sphinxchat';
                             break;
                         case 'podverse':
-                            appIconUrl = appIconUrlBase + 'podverse.jpg';
+                            appIconUrl = appIconUrlBase + 'podverse';
                             break;
+                        case 'zion':
+                            appIconUrl = appIconUrlBase + 'zion';
+                            break;
+
                     }
 
                     if (!messageIds.includes(boostIndex) && element.action == 2) {

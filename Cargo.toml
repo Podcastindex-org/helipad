@@ -1,9 +1,11 @@
 [package]
 name = "helipad"
-version = "0.1.4"
-edition = "2021"
+version = "0.1.5"
+edition = "2018"
+build = "build.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.configure_me]
+spec = "config_spec.toml"
 
 [dependencies]
 futures = { version = "0.3.6", default-features = false, features = ["async-await"] }
@@ -24,3 +26,7 @@ websocket = "0.24.0"
 dbif = { path = 'dbif'}
 lnd-rs = { path = "lnd-rs" }
 voca_rs = "1.14.0"
+configure_me = "0.4.0"
+
+[build-dependencies]
+configure_me_codegen = "0.4.0"

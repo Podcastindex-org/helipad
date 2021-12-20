@@ -1,3 +1,5 @@
+//Modules ----------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------
 use hyper::{
     body::to_bytes,
     service::{make_service_fn, service_fn},
@@ -13,19 +15,26 @@ use drop_root::set_user_group;
 use lnd;
 use serde::{Deserialize, Deserializer, de};
 use serde_json::Value;
-//use std::str::FromStr;
-//use std::num::{ParseIntError, ParseFloatError};
+// use hyper::http::Request;
+
+#[macro_use]
+extern crate configure_me;
+
+
 
 //Globals ----------------------------------------------------------------------------------------------------
-
+//------------------------------------------------------------------------------------------------------------
 mod handler;
 mod router;
 
 type Response = hyper::Response<hyper::Body>;
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
+const HELIPAD_CONFIG_FILE: &str = "helipad.conf";
+
 
 //Structs ----------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub state_thing: String,
@@ -36,10 +45,12 @@ pub struct AppState {
 pub struct Context {
     pub state: AppState,
     pub req: Request<Body>,
+    pub path: String,
     pub params: Params,
     body_bytes: Option<hyper::body::Bytes>,
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 struct RawBoost {
@@ -95,6 +106,10 @@ struct RawBoost {
     value_msat_total: Option<u64>,
 }
 
+
+
+//Traits------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------
 fn d_action() -> Option<String> {
     Some("stream".to_string())
 }
@@ -118,13 +133,27 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
     })
 }
 
-//Functions --------------------------------------------------------------------------------------------------
+//Configure_me
+include_config!();
+
+
+
+//Main -------------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------------------
 #[tokio::main]
 async fn main() {
     //Get what version we are
     let version = env!("CARGO_PKG_VERSION");
     println!("Version: {}", version);
     println!("--------------------");
+
+    //Bring in the configuration info
+    let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
+
+    println!("Config file(database_dir): {:#?}", server_config.database_dir);
+    println!("Config file(listen_port): {:#?}", server_config.listen_port);
+    println!("Config file(macaroon): {:#?}", server_config.macaroon);
+    println!("Config file(cert): {:#?}", server_config.cert);
 
     //Get command line args
     let mut listen_port = String::from("2112");
@@ -140,6 +169,11 @@ async fn main() {
         println!("Using default port: [{}]...", listen_port);
     }
 
+    //Check for config file overrides
+    if server_config.listen_port.is_some() {
+        listen_port = server_config.listen_port.unwrap().to_string();
+    }
+
     //Create a new database if needed
     //Create the database if needed
     match dbif::create_database() {
@@ -152,19 +186,26 @@ async fn main() {
         }
     }
 
-
     //LND polling thread
-    tokio::spawn(lnd_poller());
+    tokio::spawn(lnd_poller(server_config));
 
     //Router
     let some_state = "state".to_string();
     let mut router: Router = Router::new();
+
+    //Base
     router.get("/", Box::new(handler::home));
-    router.get("/home.js", Box::new(handler::homejs));
     router.get("/pew.mp3", Box::new(handler::pewmp3));
     router.get("/favicon.ico", Box::new(handler::favicon));
-    router.get("/utils.js", Box::new(handler::utilsjs));
+    //Assets
+    router.get("/image", Box::new(handler::asset));
+    router.get("/html", Box::new(handler::asset));
+    router.get("/style", Box::new(handler::asset));
+    router.get("/script", Box::new(handler::asset));
+    router.get("/extra", Box::new(handler::asset));
+    //Api
     router.get("/boosts", Box::new(handler::boosts));
+    //router.get("/streams", Box::new(handler::streams));
 
     let shared_router = Arc::new(router);
     let new_service = make_service_fn(move |conn: &AddrStream| {
@@ -213,19 +254,21 @@ async fn route(
     app_state: AppState,
 ) -> Result<Response, Error> {
     let found_handler = router.route(req.uri().path(), req.method());
+    let path = req.uri().path().to_owned();
     let resp = found_handler
         .handler
-        .invoke(Context::new(app_state, req, found_handler.params))
+        .invoke(Context::new(app_state, req, &path, found_handler.params))
         .await;
     Ok(resp)
 }
 
 impl Context {
-    pub fn new(state: AppState, req: Request<Body>, params: Params) -> Context {
+    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params) -> Context {
         Context {
-            state,
-            req,
-            params,
+            state: state,
+            req: reqbody,
+            path: path.to_string(),
+            params: params,
             body_bytes: None,
         }
     }
@@ -244,13 +287,19 @@ impl Context {
 }
 
 //The LND poller runs in a thread and pulls new invoices
-async fn lnd_poller() {
+async fn lnd_poller(server_config: Config) {
 
     //Get the macaroon and cert files.  Look in the local directory first as an override.
     //If the files are not found in the currect working directory, look for them at their
     //normal LND directory locations
+    let macaroon_path;
+    if server_config.macaroon.is_some() {
+        macaroon_path = server_config.macaroon.unwrap();
+    } else {
+        macaroon_path = "admin.macaroon".to_string();
+    }
     let macaroon: Vec<u8>;
-    match fs::read("admin.macaroon") {
+    match fs::read(macaroon_path) {
         Ok(macaroon_content) => {
             macaroon = macaroon_content;
         }
@@ -266,8 +315,15 @@ async fn lnd_poller() {
             }
         }
     }
+
+    let cert_path;
+    if server_config.cert.is_some() {
+        cert_path = server_config.cert.unwrap();
+    } else {
+        cert_path = "tls.cert".to_string();
+    }
     let cert: Vec<u8>;
-    match fs::read("tls.cert") {
+    match fs::read(cert_path) {
         Ok(cert_content) => {
             cert = cert_content;
         }

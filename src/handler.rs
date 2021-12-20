@@ -7,7 +7,14 @@ use std::fs;
 use voca_rs::*;
 
 
-//Structs ----------------------------------------------------------------------------------------------------
+//Constants --------------------------------------------------------------------------------------------------
+const WEBROOT_PATH_HTML: &str = "webroot/html";
+const WEBROOT_PATH_IMAGE: &str = "webroot/image";
+const WEBROOT_PATH_STYLE: &str = "webroot/style";
+const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
+
+
+//Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug)]
 struct HydraError(String);
 impl fmt::Display for HydraError {
@@ -28,7 +35,7 @@ pub async fn home(ctx: Context) -> Response {
 
     //println!("** Params: {:#?}", _params);
 
-    let doc = fs::read_to_string("home.html").expect("Something went wrong reading the file.");
+    let doc = fs::read_to_string("webroot/html/home.html").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
         .status(StatusCode::OK)
         .body(format!("{}", doc).into())
@@ -36,7 +43,7 @@ pub async fn home(ctx: Context) -> Response {
 }
 
 pub async fn pewmp3(_ctx: Context) -> Response {
-    let file = fs::read("pew.mp3").expect("Something went wrong reading the file.");
+    let file = fs::read("webroot/extra/pew.mp3").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
         .status(StatusCode::OK)
         .header("Content-type", "audio/mpeg")
@@ -45,7 +52,7 @@ pub async fn pewmp3(_ctx: Context) -> Response {
 }
 
 pub async fn favicon(_ctx: Context) -> Response {
-    let file = fs::read("favicon.ico").expect("Something went wrong reading the file.");
+    let file = fs::read("webroot/extra/favicon.ico").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
         .status(StatusCode::OK)
         .header("Content-type", "image/x-icon")
@@ -53,20 +60,65 @@ pub async fn favicon(_ctx: Context) -> Response {
         .unwrap();
 }
 
-pub async fn homejs(_ctx: Context) -> Response {
-    let doc = fs::read_to_string("home.js").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .body(format!("{}", doc).into())
-        .unwrap();
-}
+//Serve a web asset by name from webroot subfolder according to it's requested type
+pub async fn asset(ctx: Context) -> Response {
+    //Get query parameters
+    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
 
-pub async fn utilsjs(_ctx: Context) -> Response {
-    let doc = fs::read_to_string("utils.js").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .body(format!("{}", doc).into())
-        .unwrap();
+    println!("** Context: {:#?}", ctx);
+    println!("** Params: {:#?}", _params);
+
+    //Set up the response framework
+    let file_path;
+    let content_type;
+    let file_extension;
+    match ctx.path.as_str() {
+        "/html" => {
+            file_path = WEBROOT_PATH_HTML;
+            content_type = "text/html";
+            file_extension = "html";
+        },
+        "/image" => {
+            file_path = WEBROOT_PATH_IMAGE;
+            content_type = "image/png";
+            file_extension = "png";
+        },
+        "/style" => {
+            file_path = WEBROOT_PATH_STYLE;
+            content_type = "text/css";
+            file_extension = "css";
+        },
+        "/script" => {
+            file_path = WEBROOT_PATH_SCRIPT;
+            content_type = "text/javascript";
+            file_extension = "js";
+        },
+        _ => {
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** Invalid asset type requested (ex. /images?name=filename.").into())
+                .unwrap();
+        },
+    };
+
+    //Attempt to serve the file
+    if let Some(filename) = _params.get("name") {
+        let file_to_serve = format!("{}/{}.{}", file_path, filename, file_extension);
+        println!("** Serving file: [{}]", file_to_serve);
+        let file = fs::read(file_to_serve.as_str()).expect("Something went wrong reading the file.");
+        return hyper::Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-type", content_type)
+            .body(hyper::Body::from(file))
+            .unwrap();
+    } else {
+        return hyper::Response::builder()
+            .status(StatusCode::from_u16(500).unwrap())
+            .body(format!("** No file specified.").into())
+            .unwrap();
+    }
 }
 
 pub async fn boosts(_ctx: Context) -> Response {
@@ -159,5 +211,3 @@ pub async fn boosts(_ctx: Context) -> Response {
     }
 
 }
-
-
