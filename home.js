@@ -122,7 +122,6 @@ $(document).ready(function () {
                             '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
                             '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
-                            '      <br>' +
                             '      <hr>' +
                             '      <p>' + boostMessage + '</p>' +
                             '    </div>' +
