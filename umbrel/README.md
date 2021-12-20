@@ -29,4 +29,6 @@ when it first starts up.
 
 The app will not show up in your Umbrel dashboard when installed this way.  This is only for testing.
 
-If you want to remove the app just run this command: `sudo scripts/app uninstall podcasting20-boosts` from your Umbrel's root directory.
+## Removing the app
+
+If you want to remove the app just run this command: `sudo ~/umbrel/scripts/app uninstall podcasting20-boosts`
