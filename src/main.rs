@@ -13,7 +13,7 @@ use std::fs;
 use std::env;
 use drop_root::set_user_group;
 use lnd;
-use serde::{Deserialize, Deserializer, de};
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 // use hyper::http::Request;
 
@@ -30,8 +30,10 @@ mod router;
 type Response = hyper::Response<hyper::Body>;
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
-const HELIPAD_CONFIG_FILE: &str = "helipad.conf";
-
+const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
+const HELIPAD_DATABASE_DIR: &str = "database.db";
+const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
+const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 //Structs ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
@@ -41,12 +43,21 @@ pub struct AppState {
     pub remote_ip: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct HelipadConfig {
+    pub database_file_path: String,
+    pub listen_port: String,
+    pub macaroon_path: String,
+    pub cert_path: String,
+}
+
 #[derive(Debug)]
 pub struct Context {
     pub state: AppState,
     pub req: Request<Body>,
     pub path: String,
     pub params: Params,
+    pub database_file_path: String,
     body_bytes: Option<hyper::body::Bytes>,
 }
 
@@ -129,7 +140,7 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
             Some(s.parse().unwrap())
         },
         Value::Number(num) => Some(num.as_u64().unwrap()),
-        _ => return Err(de::Error::custom("wrong type"))
+        _ => Some(0)
     })
 }
 
@@ -147,36 +158,66 @@ async fn main() {
     println!("Version: {}", version);
     println!("--------------------");
 
+    //Configuration
+    let mut helipad_config = HelipadConfig {
+        database_file_path: "".to_string(),
+        listen_port: "".to_string(),
+        macaroon_path: "".to_string(),
+        cert_path: "".to_string(),
+    };
+
     //Bring in the configuration info
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
 
+    //Debugging
     println!("Config file(database_dir): {:#?}", server_config.database_dir);
     println!("Config file(listen_port): {:#?}", server_config.listen_port);
     println!("Config file(macaroon): {:#?}", server_config.macaroon);
     println!("Config file(cert): {:#?}", server_config.cert);
 
-    //Get command line args
+    //LISTEN PORT -----
+    println!("\nDiscovering listen port...");
     let mut listen_port = String::from("2112");
     let args: Vec<String> = env::args().collect();
     let env_listen_port = std::env::var("HELIPAD_LISTEN_PORT");
+    //First try from the environment
     if env_listen_port.is_ok() {
         listen_port = env_listen_port.unwrap();
-        println!("Using port: [{}] from environment...", listen_port);
-    } else if let Some(arg_port) = args.get(1) {
-        listen_port = arg_port.to_owned();
-        println!("Using port: [{}] from command line...", listen_port);
-    } else {
-        println!("Using default port: [{}]...", listen_port);
-    }
-
-    //Check for config file overrides
-    if server_config.listen_port.is_some() {
+        println!(" - Using environment var(HELIPAD_LISTEN_PORT): [{}]", listen_port);
+    } else if server_config.listen_port.is_some() {
+        //If that fails, try from the config file
         listen_port = server_config.listen_port.unwrap().to_string();
+        println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, listen_port);
+    } else if let Some(arg_port) = args.get(1) {
+        //If that fails, try from the command line
+        listen_port = arg_port.to_owned();
+        println!(" - Using arg from command line: [{}]", listen_port);
+    } else {
+        //If everything fails, then just use the default port
+        println!(" - Nothing else found. Using default: [{}]...", listen_port);
     }
+    helipad_config.listen_port = listen_port.clone();
 
-    //Create a new database if needed
-    //Create the database if needed
-    match dbif::create_database() {
+    //DATABASE FILE -----
+    //First try to get the database file location from the environment
+    println!("\nDiscovering database location...");
+    let env_database_file_path = std::env::var("HELIPAD_DATABASE_DIR");
+    if env_database_file_path.is_ok() {
+        helipad_config.database_file_path = env_database_file_path.unwrap();
+        println!(" - Using environment var(HELIPAD_DATABASE_DIR): [{}]", helipad_config.database_file_path);
+    } else {
+        //If that fails, try to get it from the config file
+        if server_config.database_dir.is_some() {
+            helipad_config.database_file_path = server_config.database_dir.clone().unwrap().to_string();
+            println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.database_file_path);
+        } else {
+            //If that fails just fall back to the local directory
+            helipad_config.database_file_path = HELIPAD_DATABASE_DIR.to_string();
+            println!(" - Nothing else found. Using default: [{}]", helipad_config.database_file_path);
+        }
+    }
+    //Create the database file
+    match dbif::create_database(&helipad_config.database_file_path) {
         Ok(_) => {
             println!("Database file is ready...");
         }
@@ -186,8 +227,9 @@ async fn main() {
         }
     }
 
-    //LND polling thread
-    tokio::spawn(lnd_poller(server_config));
+    //Start the LND polling thread.  This thread will poll LND every few seconds to
+    //get the latest invoices and store them in the database.
+    tokio::spawn(lnd_poller(server_config, helipad_config.database_file_path.clone()));
 
     //Router
     let some_state = "state".to_string();
@@ -208,16 +250,19 @@ async fn main() {
     //router.get("/streams", Box::new(handler::streams));
 
     let shared_router = Arc::new(router);
+    let db_filepath: String = helipad_config.database_file_path.clone();
     let new_service = make_service_fn(move |conn: &AddrStream| {
         let app_state = AppState {
             state_thing: some_state.clone(),
             remote_ip: conn.remote_addr().to_string().clone(),
         };
 
+        let database_file_path = db_filepath.clone();
+
         let router_capture = shared_router.clone();
         async {
             Ok::<_, Error>(service_fn(move |req| {
-                route(router_capture.clone(), req, app_state.clone())
+                route(router_capture.clone(), req, app_state.clone(), database_file_path.clone())
             }))
         }
     });
@@ -252,23 +297,25 @@ async fn route(
     router: Arc<Router>,
     req: Request<hyper::Body>,
     app_state: AppState,
+    database_file_path: String,
 ) -> Result<Response, Error> {
     let found_handler = router.route(req.uri().path(), req.method());
     let path = req.uri().path().to_owned();
     let resp = found_handler
         .handler
-        .invoke(Context::new(app_state, req, &path, found_handler.params))
+        .invoke(Context::new(app_state, req, &path, found_handler.params, database_file_path))
         .await;
     Ok(resp)
 }
 
 impl Context {
-    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params) -> Context {
+    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params, database_file_path: String) -> Context {
         Context {
             state: state,
             req: reqbody,
             path: path.to_string(),
             params: params,
+            database_file_path: database_file_path,
             body_bytes: None,
         }
     }
@@ -287,53 +334,76 @@ impl Context {
 }
 
 //The LND poller runs in a thread and pulls new invoices
-async fn lnd_poller(server_config: Config) {
+async fn lnd_poller(server_config: Config, database_file_path: String) {
+
+    let db_filepath = database_file_path;
 
     //Get the macaroon and cert files.  Look in the local directory first as an override.
     //If the files are not found in the currect working directory, look for them at their
     //normal LND directory locations
+    println!("\nDiscovering macaroon file path...");
     let macaroon_path;
-    if server_config.macaroon.is_some() {
+    let env_macaroon_path = std::env::var("LND_ADMINMACAROON");
+    //First try from the environment
+    if env_macaroon_path.is_ok() {
+        macaroon_path = env_macaroon_path.unwrap();
+        println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", macaroon_path);
+    } else if server_config.macaroon.is_some() {
         macaroon_path = server_config.macaroon.unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, macaroon_path);
     } else {
         macaroon_path = "admin.macaroon".to_string();
+        println!(" - Trying current directory: [{}]", macaroon_path);
     }
     let macaroon: Vec<u8>;
-    match fs::read(macaroon_path) {
+    match fs::read(macaroon_path.clone()) {
         Ok(macaroon_content) => {
+            println!(" - Success.");
             macaroon = macaroon_content;
         }
         Err(_) => {
-            match fs::read("/lnd/data/chain/bitcoin/mainnet/admin.macaroon") {
+            println!(" - Error reading macaroon from: [{}]", macaroon_path);
+            println!(" - Last fallback attempt: [{}]", LND_STANDARD_MACAROON_LOCATION);
+            match fs::read(LND_STANDARD_MACAROON_LOCATION) {
                 Ok(macaroon_content) => {
                     macaroon = macaroon_content;
                 }
                 Err(_) => {
-                    eprintln!("Cannot find admin.macaroon file");
+                    eprintln!("Cannot find a valid admin.macaroon file");
                     std::process::exit(1);
                 }
             }
         }
     }
 
+    println!("\nDiscovering certificate file path...");
     let cert_path;
-    if server_config.cert.is_some() {
+    let env_cert_path = std::env::var("LND_TLSCERT");
+    if env_cert_path.is_ok() {
+        cert_path = env_cert_path.unwrap();
+        println!(" - Trying environment var(LND_TLSCERT): [{}]", cert_path);
+    } else if server_config.cert.is_some() {
         cert_path = server_config.cert.unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cert_path);
     } else {
         cert_path = "tls.cert".to_string();
+        println!(" - Trying current directory: [{}]", cert_path);
     }
     let cert: Vec<u8>;
-    match fs::read(cert_path) {
+    match fs::read(cert_path.clone()) {
         Ok(cert_content) => {
+            println!(" - Success.");
             cert = cert_content;
         }
         Err(_) => {
-            match fs::read("/lnd/tls.cert") {
+            println!(" - Error reading certificate from: [{}]", cert_path);
+            println!(" - Last fallback attempt: [{}]", LND_STANDARD_TLSCERT_LOCATION);
+            match fs::read(LND_STANDARD_TLSCERT_LOCATION) {
                 Ok(cert_content) => {
                     cert = cert_content;
                 }
                 Err(_) => {
-                    eprintln!("Cannot find tls.cert file");
+                    eprintln!("Cannot find a valid tls.cert file");
                     std::process::exit(2);
                 }
             }
@@ -363,7 +433,7 @@ async fn lnd_poller(server_config: Config) {
     }
 
     //The main loop
-    let mut current_index = dbif::get_last_boost_index_from_db().unwrap();
+    let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
     loop {
 
         //Get a list of invoices
@@ -393,9 +463,11 @@ async fn lnd_poller(server_config: Config) {
                             if idx == 7629169 {
                                 boost.tlv = std::str::from_utf8(&val).unwrap().to_string();
                                 let tlv = std::str::from_utf8(&val).unwrap();
+                                println!("TLV: {:#?}", tlv);
                                 let json_result = serde_json::from_str::<RawBoost>(tlv);
                                 match json_result {
                                     Ok(rawboost) => {
+                                        println!("{:#?}", rawboost);
                                         //If there was a sat value in the tlv, override the invoice
                                         if rawboost.value_msat.is_some() {
                                             boost.value_msat = rawboost.value_msat.unwrap() as i64;
@@ -446,7 +518,7 @@ async fn lnd_poller(server_config: Config) {
 
                     //Store in the database
                     println!("{:#?}", boost);
-                    match dbif::add_invoice_to_db(boost) {
+                    match dbif::add_invoice_to_db(&db_filepath, boost) {
                         Ok(_) => println!("New invoice added."),
                         Err(e) => eprintln!("Error adding invoice: {:#?}", e)
                     }
@@ -458,7 +530,7 @@ async fn lnd_poller(server_config: Config) {
         }
 
         //Make sure we are tracking our position properly
-        current_index = dbif::get_last_boost_index_from_db().unwrap();
+        current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
         println!("Current index: {}", current_index);
 
         std::thread::sleep(std::time::Duration::from_millis(9000));

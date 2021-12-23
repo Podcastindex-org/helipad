@@ -159,7 +159,7 @@ pub async fn boosts(_ctx: Context) -> Response {
 
 
     //Get the last known invoice index from the database
-    let mut last_index = match dbif::get_last_boost_index_from_db() {
+    let mut last_index = match dbif::get_last_boost_index_from_db(&_ctx.database_file_path) {
         Ok(index) => {
             println!("** get_last_boost_index_from_db() -> [{}]", index);
             index
@@ -191,7 +191,7 @@ pub async fn boosts(_ctx: Context) -> Response {
 
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(index, boostcount, old) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
         Ok(boosts) => {
             let json_doc_raw = serde_json::to_string(&boosts).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);

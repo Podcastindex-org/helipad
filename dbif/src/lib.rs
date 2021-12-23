@@ -4,8 +4,6 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use std::os::unix::fs::PermissionsExt;
 
-pub const SQLITE_FILE: &str = "/data/database.db";
-pub const SQLITE_FILE_ALTERNATE: &str = "database.db";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BoostRecord {
@@ -33,32 +31,20 @@ impl fmt::Display for HydraError {
 impl Error for HydraError {}
 
 
-fn connect_to_database(init: bool) -> Result<Connection, Box<dyn Error>> {
-    if let Ok(conn) = Connection::open(SQLITE_FILE) {
+fn connect_to_database(init: bool, filepath: &String) -> Result<Connection, Box<dyn Error>> {
+    if let Ok(conn) = Connection::open(filepath.as_str()) {
         if init {
-            match set_database_file_permissions(SQLITE_FILE) {
+            match set_database_file_permissions(filepath.as_str()) {
                 Ok(_) => {},
                 Err(e) => {
                     eprintln!("{:#?}", e);
                 }
             }
-            println!("Using database file: [{}]", SQLITE_FILE);
+            println!("Using database file: [{}]", filepath.as_str());
         }
-        return Ok(conn)
-    }
-    if let Ok(conn) = Connection::open(SQLITE_FILE_ALTERNATE) {
-        if init {
-            match set_database_file_permissions(SQLITE_FILE_ALTERNATE) {
-                Ok(_) => {},
-                Err(e) => {
-                    eprintln!("{:#?}", e);
-                }
-            }
-            println!("Using database file: [{}]", SQLITE_FILE_ALTERNATE);
-        }
-        return Ok(conn)
+        Ok(conn)
     } else {
-        return Err(Box::new(HydraError(format!("Could not open a database file: [{}] or [{}].", SQLITE_FILE, SQLITE_FILE_ALTERNATE).into())))
+        return Err(Box::new(HydraError(format!("Could not open a database file at: [{}].", filepath).into())))
     }
 }
 
@@ -84,13 +70,12 @@ fn set_database_file_permissions(filepath: &str) -> Result<bool, Box<dyn Error>>
             return Err(Box::new(HydraError(format!("Error opening database file handle: [{}] for permissions setting.  Error: {:#?}.", filepath, e).into())))
         }
     }
-
 }
 
 
 //Create a new database file if needed
-pub fn create_database() -> Result<bool, Box<dyn Error>> {
-    let conn = connect_to_database(true)?;
+pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(true, filepath)?;
 
     match conn.execute(
         "CREATE TABLE IF NOT EXISTS boosts (
@@ -113,15 +98,15 @@ pub fn create_database() -> Result<bool, Box<dyn Error>> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to create database: [{}].", SQLITE_FILE).into())))
+            return Err(Box::new(HydraError(format!("Failed to create database: [{}].", filepath).into())))
         }
     }
 }
 
 
 //Add an invoice to the database
-pub fn add_invoice_to_db(boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
-    let conn = connect_to_database(false)?;
+pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
 
     match conn.execute("INSERT INTO boosts (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv) \
                                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
@@ -149,8 +134,8 @@ pub fn add_invoice_to_db(boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
 
 
 //Get all of the boosts from the database
-pub fn get_boosts_from_db(index: u64, max: u64, direction: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
-    let conn = connect_to_database(false)?;
+pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
     let mut ltgt = ">=";
@@ -204,8 +189,8 @@ pub fn get_boosts_from_db(index: u64, max: u64, direction: bool) -> Result<Vec<B
 
 
 //Get the last boost index number from the database
-pub fn get_last_boost_index_from_db() -> Result<u64, Box<dyn Error>> {
-    let conn = connect_to_database(false)?;
+pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
     let max = 1;
 
