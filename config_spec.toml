@@ -17,3 +17,8 @@ doc = "The location of the tls certificate file."
 name = "listen_port"
 type = "u16"
 doc = "The port to listen on."
+
+[[param]]
+name = "lnd_url"
+type = "String"
+doc = "The url and port of the LND grpc api."

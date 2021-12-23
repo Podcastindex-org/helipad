@@ -32,6 +32,8 @@ type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
+const HELIPAD_STANDARD_PORT: &str = "2112";
+const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
 const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
@@ -177,7 +179,7 @@ async fn main() {
 
     //LISTEN PORT -----
     println!("\nDiscovering listen port...");
-    let mut listen_port = String::from("2112");
+    let mut listen_port = String::from(HELIPAD_STANDARD_PORT);
     let args: Vec<String> = env::args().collect();
     let env_listen_port = std::env::var("HELIPAD_LISTEN_PORT");
     //First try from the environment
@@ -270,7 +272,7 @@ async fn main() {
     let binding = format!("0.0.0.0:{}", &listen_port);
     let addr = binding.parse().expect("address creation works");
     let server = Server::bind(&addr).serve(new_service);
-    println!("Listening on http://{}", addr);
+    println!("\nHelipad is listening on http://{}", addr);
 
     //If a "run as" user is set in the "HELIPAD_RUN_AS" environment variable, then switch to that user
     //and drop root privileges after we've bound to the low range socket
@@ -411,22 +413,29 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
     }
 
     //Get the url connection string of the lnd node
-    let mut node_address = String::from("https://127.0.0.1:10009");
+    println!("\nDiscovering LND node address...");
+    let node_address;
     let env_lnd_url = std::env::var("LND_URL");
-    if env_lnd_url.is_err() {
-        println!("$LND_URL not set.  Falling back to: [{}].", node_address);
-    } else {
+    if env_lnd_url.is_ok() {
         node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
+        println!(" - Trying environment var(LND_URL): [{}]", node_address);
+    } else if server_config.lnd_url.is_some() {
+        node_address = server_config.lnd_url.unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, node_address);
+    } else {
+        node_address = String::from(LND_STANDARD_GRPC_URL);
+        println!(" - Trying localhost default: [{}].", node_address);
     }
 
     //Make the connection to LND
     let mut lightning;
     match lnd::Lnd::connect_with_macaroon(node_address.clone(), &cert, &macaroon).await {
         Ok(lndconn) => {
+            println!(" - Success.");
             lightning = lndconn;
         }
         Err(e) => {
-            println!("Could not connect to: {} using tls and macaroon", node_address);
+            println!("Could not connect to: [{}] using tls: [{}] and macaroon: [{}]", node_address, cert_path, macaroon_path);
             eprintln!("{:#?}", e);
             std::process::exit(1);
         }
