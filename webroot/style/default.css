@@ -290,3 +290,7 @@ div.loadmore {
     margin: 20px;
     text-align: center;
 }
+div.versionFooter {
+    color: antiquewhite;
+    float: right;
+}
