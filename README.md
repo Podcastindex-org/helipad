@@ -20,7 +20,19 @@ The FQDN of your LND node must be present in an environment variable called $LND
 
 If you don't export that variable, it will attempt to connect to "localhost:10009".
 
-Helipad also needs your admin.macaroon and tls.cert files.  It will first look for them in the standard LND locations.  If it cannot
-find them there, it will fall back to looking for them both in the local working directory that Helipad is running from.
+Helipad also needs your admin.macaroon and tls.cert files.  It will first look for them in the locations pointed to by these two
+environment variables:
+
+ - LND_ADMINMACAROON
+ - LND_TLSCERT
 
 Information about the Umbrel app environment is in the umbrel folder for those interested.
+
+## Configuration
+
+Each configurable item has multiple options.  They are listed in the config file [here](helipad.conf).  In each case, the environment
+variable is tried first, then the configuration file parameter, then a sane default based on known locations in use from other
+projects.
+
+The only exception to this is the `listen_port` which can be specified on the command line as the only argument.  This is just for
+convenience as it's a very common thing to change during testing.
