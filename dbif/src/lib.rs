@@ -157,7 +157,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
                                  FROM boosts \
                                  WHERE action = 2 \
                                    AND idx {} :index \
-                                 ORDER BY idx ASC \
+                                 ORDER BY idx DESC \
                                  LIMIT :max", ltgt);
 
     //Prepare and execute the query
