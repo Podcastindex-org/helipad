@@ -166,7 +166,7 @@ pub async fn boosts(_ctx: Context) -> Response {
         },
         Err(_) => 0
     };
-    if last_index > boostcount {
+    if last_index > boostcount && !old {
         last_index -= boostcount;
     }
 

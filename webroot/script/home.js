@@ -10,7 +10,7 @@ $(document).ready(function () {
     var connection = null;
     var messageIds = [];
 
-    getBoosts();
+    getBoosts(null, 20, true, true);
 
     function getBoosts(startIndex, max, scrollToTop, old) {
         var noIndex = false;
@@ -167,7 +167,7 @@ $(document).ready(function () {
 
                 //Show a message if still building
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
-                    inbox.prepend('<div class="nodata">No data to show yet. Building the initial database may take some time...</div>');
+                    inbox.prepend('<div class="nodata">No data to show yet. Building the initial database may take some time. Check back in a few minutes...</div>');
                 }
 
                 //Load more link
@@ -202,7 +202,11 @@ $(document).ready(function () {
 
     //Set a periodic checker for new boosts
     setInterval(function () {
-        getBoosts(null, 20, true);
+        if ($('div.outgoing_msg').length === 0) {
+            getBoosts(null, 100, true, true);
+        } else {
+            getBoosts(null, 20, true, false);
+        }
     }, 7000);
 
 });
