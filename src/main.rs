@@ -11,6 +11,7 @@ use std::sync::Arc;
 use hyper::server::conn::AddrStream;
 use std::fs;
 use std::env;
+use std::path::PathBuf;
 use drop_root::set_user_group;
 use lnd;
 use serde::{Deserialize, Deserializer};
@@ -31,11 +32,6 @@ type Response = hyper::Response<hyper::Body>;
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
-const HELIPAD_DATABASE_DIR: &str = "database.db";
-const HELIPAD_STANDARD_PORT: &str = "2112";
-const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
-const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
-const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 //Structs ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
@@ -45,21 +41,13 @@ pub struct AppState {
     pub remote_ip: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct HelipadConfig {
-    pub database_file_path: String,
-    pub listen_port: String,
-    pub macaroon_path: String,
-    pub cert_path: String,
-}
-
 #[derive(Debug)]
 pub struct Context {
     pub state: AppState,
     pub req: Request<Body>,
     pub path: String,
     pub params: Params,
-    pub database_file_path: String,
+    pub database_file_path: PathBuf,
     body_bytes: Option<hyper::body::Bytes>,
 }
 
@@ -160,14 +148,6 @@ async fn main() {
     println!("Version: {}", version);
     println!("--------------------");
 
-    //Configuration
-    let mut helipad_config = HelipadConfig {
-        database_file_path: "".to_string(),
-        listen_port: "".to_string(),
-        macaroon_path: "".to_string(),
-        cert_path: "".to_string(),
-    };
-
     //Bring in the configuration info
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
 
@@ -177,49 +157,8 @@ async fn main() {
     println!("Config file(macaroon): {:#?}", server_config.macaroon);
     println!("Config file(cert): {:#?}", server_config.cert);
 
-    //LISTEN PORT -----
-    println!("\nDiscovering listen port...");
-    let mut listen_port = String::from(HELIPAD_STANDARD_PORT);
-    let args: Vec<String> = env::args().collect();
-    let env_listen_port = std::env::var("HELIPAD_LISTEN_PORT");
-    //First try from the environment
-    if env_listen_port.is_ok() {
-        listen_port = env_listen_port.unwrap();
-        println!(" - Using environment var(HELIPAD_LISTEN_PORT): [{}]", listen_port);
-    } else if server_config.listen_port.is_some() {
-        //If that fails, try from the config file
-        listen_port = server_config.listen_port.unwrap().to_string();
-        println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, listen_port);
-    } else if let Some(arg_port) = args.get(1) {
-        //If that fails, try from the command line
-        listen_port = arg_port.to_owned();
-        println!(" - Using arg from command line: [{}]", listen_port);
-    } else {
-        //If everything fails, then just use the default port
-        println!(" - Nothing else found. Using default: [{}]...", listen_port);
-    }
-    helipad_config.listen_port = listen_port.clone();
-
-    //DATABASE FILE -----
-    //First try to get the database file location from the environment
-    println!("\nDiscovering database location...");
-    let env_database_file_path = std::env::var("HELIPAD_DATABASE_DIR");
-    if env_database_file_path.is_ok() {
-        helipad_config.database_file_path = env_database_file_path.unwrap();
-        println!(" - Using environment var(HELIPAD_DATABASE_DIR): [{}]", helipad_config.database_file_path);
-    } else {
-        //If that fails, try to get it from the config file
-        if server_config.database_dir.is_some() {
-            helipad_config.database_file_path = server_config.database_dir.clone().unwrap().to_string();
-            println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.database_file_path);
-        } else {
-            //If that fails just fall back to the local directory
-            helipad_config.database_file_path = HELIPAD_DATABASE_DIR.to_string();
-            println!(" - Nothing else found. Using default: [{}]", helipad_config.database_file_path);
-        }
-    }
     //Create the database file
-    match dbif::create_database(&helipad_config.database_file_path) {
+    match dbif::create_database(&server_config.database_dir) {
         Ok(_) => {
             println!("Database file is ready...");
         }
@@ -229,9 +168,12 @@ async fn main() {
         }
     }
 
+    let db_filepath = server_config.database_dir.clone();
+    let listen_port = server_config.listen_port;
+
     //Start the LND polling thread.  This thread will poll LND every few seconds to
     //get the latest invoices and store them in the database.
-    tokio::spawn(lnd_poller(server_config, helipad_config.database_file_path.clone()));
+    tokio::spawn(lnd_poller(server_config));
 
     //Router
     let some_state = "state".to_string();
@@ -252,7 +194,6 @@ async fn main() {
     //router.get("/streams", Box::new(handler::streams));
 
     let shared_router = Arc::new(router);
-    let db_filepath: String = helipad_config.database_file_path.clone();
     let new_service = make_service_fn(move |conn: &AddrStream| {
         let app_state = AppState {
             state_thing: some_state.clone(),
@@ -269,8 +210,7 @@ async fn main() {
         }
     });
 
-    let binding = format!("0.0.0.0:{}", &listen_port);
-    let addr = binding.parse().expect("address creation works");
+    let addr = ([0, 0, 0, 0], listen_port).into();
     let server = Server::bind(&addr).serve(new_service);
     println!("\nHelipad is listening on http://{}", addr);
 
@@ -299,7 +239,7 @@ async fn route(
     router: Arc<Router>,
     req: Request<hyper::Body>,
     app_state: AppState,
-    database_file_path: String,
+    database_file_path: PathBuf,
 ) -> Result<Response, Error> {
     let found_handler = router.route(req.uri().path(), req.method());
     let path = req.uri().path().to_owned();
@@ -311,7 +251,7 @@ async fn route(
 }
 
 impl Context {
-    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params, database_file_path: String) -> Context {
+    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params, database_file_path: PathBuf) -> Context {
         Context {
             state: state,
             req: reqbody,
@@ -336,27 +276,12 @@ impl Context {
 }
 
 //The LND poller runs in a thread and pulls new invoices
-async fn lnd_poller(server_config: Config, database_file_path: String) {
+async fn lnd_poller(server_config: Config) {
 
-    let db_filepath = database_file_path;
+    let db_filepath = server_config.database_dir;
 
-    //Get the macaroon and cert files.  Look in the local directory first as an override.
-    //If the files are not found in the currect working directory, look for them at their
-    //normal LND directory locations
-    println!("\nDiscovering macaroon file path...");
-    let macaroon_path;
-    let env_macaroon_path = std::env::var("LND_ADMINMACAROON");
-    //First try from the environment
-    if env_macaroon_path.is_ok() {
-        macaroon_path = env_macaroon_path.unwrap();
-        println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", macaroon_path);
-    } else if server_config.macaroon.is_some() {
-        macaroon_path = server_config.macaroon.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, macaroon_path);
-    } else {
-        macaroon_path = "admin.macaroon".to_string();
-        println!(" - Trying current directory: [{}]", macaroon_path);
-    }
+    println!("\nReading macaroon file...");
+    let macaroon_path = server_config.macaroon;
     let macaroon: Vec<u8>;
     match fs::read(macaroon_path.clone()) {
         Ok(macaroon_content) => {
@@ -364,33 +289,13 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
             macaroon = macaroon_content;
         }
         Err(_) => {
-            println!(" - Error reading macaroon from: [{}]", macaroon_path);
-            println!(" - Last fallback attempt: [{}]", LND_STANDARD_MACAROON_LOCATION);
-            match fs::read(LND_STANDARD_MACAROON_LOCATION) {
-                Ok(macaroon_content) => {
-                    macaroon = macaroon_content;
-                }
-                Err(_) => {
-                    eprintln!("Cannot find a valid admin.macaroon file");
-                    std::process::exit(1);
-                }
-            }
+            println!(" - Error reading macaroon from: [{}]", macaroon_path.display());
+            std::process::exit(1);
         }
     }
 
-    println!("\nDiscovering certificate file path...");
-    let cert_path;
-    let env_cert_path = std::env::var("LND_TLSCERT");
-    if env_cert_path.is_ok() {
-        cert_path = env_cert_path.unwrap();
-        println!(" - Trying environment var(LND_TLSCERT): [{}]", cert_path);
-    } else if server_config.cert.is_some() {
-        cert_path = server_config.cert.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cert_path);
-    } else {
-        cert_path = "tls.cert".to_string();
-        println!(" - Trying current directory: [{}]", cert_path);
-    }
+    println!("\nReading certificate file...");
+    let cert_path = server_config.cert;
     let cert: Vec<u8>;
     match fs::read(cert_path.clone()) {
         Ok(cert_content) => {
@@ -398,34 +303,14 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
             cert = cert_content;
         }
         Err(_) => {
-            println!(" - Error reading certificate from: [{}]", cert_path);
-            println!(" - Last fallback attempt: [{}]", LND_STANDARD_TLSCERT_LOCATION);
-            match fs::read(LND_STANDARD_TLSCERT_LOCATION) {
-                Ok(cert_content) => {
-                    cert = cert_content;
-                }
-                Err(_) => {
-                    eprintln!("Cannot find a valid tls.cert file");
-                    std::process::exit(2);
-                }
-            }
+            println!(" - Error reading certificate from: [{}]", cert_path.display());
+            std::process::exit(2);
         }
     }
 
     //Get the url connection string of the lnd node
     println!("\nDiscovering LND node address...");
-    let node_address;
-    let env_lnd_url = std::env::var("LND_URL");
-    if env_lnd_url.is_ok() {
-        node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
-        println!(" - Trying environment var(LND_URL): [{}]", node_address);
-    } else if server_config.lnd_url.is_some() {
-        node_address = server_config.lnd_url.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, node_address);
-    } else {
-        node_address = String::from(LND_STANDARD_GRPC_URL);
-        println!(" - Trying localhost default: [{}].", node_address);
-    }
+    let node_address = server_config.lnd_url;
 
     //Make the connection to LND
     let mut lightning;
@@ -435,7 +320,7 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
             lightning = lndconn;
         }
         Err(e) => {
-            println!("Could not connect to: [{}] using tls: [{}] and macaroon: [{}]", node_address, cert_path, macaroon_path);
+            println!("Could not connect to: [{}] using tls: [{}] and macaroon: [{}]", node_address, cert_path.display(), macaroon_path.display());
             eprintln!("{:#?}", e);
             std::process::exit(1);
         }

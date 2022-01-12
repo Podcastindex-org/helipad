@@ -1,24 +1,34 @@
+[general]
+env_prefix = "HELIPAD"
+conf_file_param = "conf"
+conf_dir_param = "conf_dir"
+
 [[param]]
 name = "database_dir"
-type = "String"
+type = "std::path::PathBuf"
 doc = "The location of the database file."
+default = "std::path::PathBuf::from(\"database.db\")"
 
 [[param]]
 name = "macaroon"
-type = "String"
+type = "std::path::PathBuf"
 doc = "The location of the macaroon file."
+default = "std::path::PathBuf::from(\"/lnd/data/chain/bitcoin/mainnet/admin.macaroon\")"
 
 [[param]]
 name = "cert"
-type = "String"
+type = "std::path::PathBuf"
 doc = "The location of the tls certificate file."
+default = "std::path::PathBuf::from(\"/lnd/tls.cert\")"
 
 [[param]]
 name = "listen_port"
 type = "u16"
 doc = "The port to listen on."
+default = "2112"
 
 [[param]]
 name = "lnd_url"
 type = "String"
 doc = "The url and port of the LND grpc api."
+default = "\"https://127.0.0.1:10009\".to_owned()"
