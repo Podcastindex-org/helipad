@@ -43,6 +43,7 @@ const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 pub struct AppState {
     pub state_thing: String,
     pub remote_ip: String,
+    pub version: String,
 }
 
 #[derive(Clone, Debug)]
@@ -257,6 +258,7 @@ async fn main() {
         let app_state = AppState {
             state_thing: some_state.clone(),
             remote_ip: conn.remote_addr().to_string().clone(),
+            version: version.to_string(),
         };
 
         let database_file_path = db_filepath.clone();
