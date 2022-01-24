@@ -8,7 +8,7 @@ use lnrpc::lnrpc::{
     lightning_client::LightningClient, AddInvoiceResponse, ChannelBalanceRequest,
     ChannelBalanceResponse, Invoice, ListPaymentsRequest, ListPaymentsResponse, PayReq,
     PayReqString, PaymentHash, SendRequest, SendResponse, WalletBalanceRequest,
-    WalletBalanceResponse, ListInvoiceRequest, ListInvoiceResponse,
+    WalletBalanceResponse, ListInvoiceRequest, ListInvoiceResponse, GetInfoRequest, GetInfoResponse
 };
 use openssl::{
     error::ErrorStack,
@@ -132,6 +132,13 @@ impl Interceptor for LndInterceptor {
 }
 
 impl Lnd {
+    pub async fn get_info(&mut self) -> Result<GetInfoResponse, Status> {
+        self.lightning_client
+            .get_info(GetInfoRequest{})
+            .await
+            .map(Response::into_inner)
+    }
+
     pub async fn add_invoice(&mut self, invoice: Invoice) -> Result<AddInvoiceResponse, Status> {
         self.lightning_client
             .add_invoice(invoice)
