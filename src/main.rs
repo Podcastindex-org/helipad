@@ -140,11 +140,19 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
                 if s.is_empty() {
                     return Ok(None);
                 }
-                Some(s.parse().unwrap())
+                if let Ok(number) = s.parse() {
+                    Some(number)
+                } else {
+                    return Ok(None);
+                }
             }
             Value::Number(num) => {
                 if num.is_u64() {
-                    Some(num.as_u64().unwrap())
+                    if let Some(number) = num.as_u64() {
+                        Some(number)
+                    } else {
+                        return Ok(None);
+                    }
                 } else {
                     return Ok(None);
                 }
