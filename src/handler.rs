@@ -5,6 +5,9 @@ use std::error::Error;
 use std::fmt;
 use std::fs;
 use voca_rs::*;
+use handlebars::Handlebars;
+use serde_json::json;
+
 
 
 //Constants --------------------------------------------------------------------------------------------------
@@ -33,12 +36,12 @@ pub async fn home(ctx: Context) -> Response {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
     }).unwrap_or_else(HashMap::new);
 
-    //println!("** Params: {:#?}", _params);
-
+    let reg = Handlebars::new();
     let doc = fs::read_to_string("webroot/html/home.html").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
-        .body(format!("{}", doc).into())
+        .body(format!("{}", doc_rendered).into())
         .unwrap();
 }
 
