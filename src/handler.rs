@@ -124,6 +124,197 @@ pub async fn asset(ctx: Context) -> Response {
     }
 }
 
+
+pub async fn api_v1_boosts(_ctx: Context) -> Response {
+    //Get query parameters
+    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    //Parameter - index (unsigned int)
+    let index: u64;
+    match params.get("index") {
+        Some(supplied_index) => {
+            index = match supplied_index.parse::<u64>() {
+                Ok(index) => {
+                    println!("** Supplied index from call: [{}]", index);
+                    index
+                },
+                Err(_) => {
+                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        },
+        None => {
+            eprintln!("** Error getting boosts: 'index' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
+    //Parameter - boostcount (unsigned int)
+    let boostcount: u64;
+    match params.get("count") {
+        Some(bcount) => {
+            boostcount = match bcount.parse::<u64>() {
+                Ok(boostcount) => {
+                    println!("** Supplied boostcount from call: [{}]", boostcount);
+                    boostcount
+                },
+                Err(_) => {
+                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        },
+        None => {
+            eprintln!("** Error getting boosts: 'count' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
+    //Get the boosts from db for returning
+    match dbif::get_boosts_from_db_descending(&_ctx.database_file_path, index, boostcount) {
+        Ok(boosts) => {
+            let json_doc_raw = serde_json::to_string_pretty(&boosts).unwrap();
+            let json_doc: String = strip::strip_tags(&json_doc_raw);
+
+            return hyper::Response::builder()
+                .status(StatusCode::OK)
+                .body(format!("{}", json_doc).into())
+                .unwrap();
+        }
+        Err(e) => {
+            eprintln!("** Error getting boosts: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting boosts.").into())
+                .unwrap();
+        }
+    }
+
+}
+
+
+pub async fn api_v1_streams(_ctx: Context) -> Response {
+    //Get query parameters
+    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    //Parameter - index (unsigned int)
+    let index: u64;
+    match params.get("index") {
+        Some(supplied_index) => {
+            index = match supplied_index.parse::<u64>() {
+                Ok(index) => {
+                    println!("** Supplied index from call: [{}]", index);
+                    index
+                },
+                Err(_) => {
+                    eprintln!("** Error getting streams: 'index' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        },
+        None => {
+            eprintln!("** Error getting streams: 'index' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
+    //Parameter - boostcount (unsigned int)
+    let boostcount: u64;
+    match params.get("count") {
+        Some(bcount) => {
+            boostcount = match bcount.parse::<u64>() {
+                Ok(boostcount) => {
+                    println!("** Supplied stream count from call: [{}]", boostcount);
+                    boostcount
+                },
+                Err(_) => {
+                    eprintln!("** Error getting streams: 'count' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        },
+        None => {
+            eprintln!("** Error getting streams: 'count' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
+    //Get the boosts from db for returning
+    match dbif::get_streams_from_db_descending(&_ctx.database_file_path, index, boostcount) {
+        Ok(streams) => {
+            let json_doc_raw = serde_json::to_string_pretty(&streams).unwrap();
+            let json_doc: String = strip::strip_tags(&json_doc_raw);
+
+            return hyper::Response::builder()
+                .status(StatusCode::OK)
+                .body(format!("{}", json_doc).into())
+                .unwrap();
+        }
+        Err(e) => {
+            eprintln!("** Error getting streams: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting streams.").into())
+                .unwrap();
+        }
+    }
+}
+
+
+pub async fn api_v1_index(_ctx: Context) -> Response {
+
+    //Get the last known invoice index from the database
+    match dbif::get_last_boost_index_from_db(&_ctx.database_file_path) {
+        Ok(index) => {
+            println!("** get_last_boost_index_from_db() -> [{}]", index);
+            let json_doc_raw = serde_json::to_string_pretty(&index).unwrap();
+            let json_doc: String = strip::strip_tags(&json_doc_raw);
+
+            return hyper::Response::builder()
+                .status(StatusCode::OK)
+                .body(format!("{}", json_doc).into())
+                .unwrap();
+        },
+        Err(e) => {
+            eprintln!("** Error getting current db index: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting current db index.").into())
+                .unwrap();
+        }
+    };
+}
+
+
 pub async fn boosts(_ctx: Context) -> Response {
     let default_boostcount: u64 = 50;
 
@@ -159,7 +350,6 @@ pub async fn boosts(_ctx: Context) -> Response {
         Some(_) => old = true,
         None => { }
     };
-
 
     //Get the last known invoice index from the database
     let mut last_index = match dbif::get_last_boost_index_from_db(&_ctx.database_file_path) {

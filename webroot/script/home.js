@@ -9,8 +9,22 @@ $(document).ready(function () {
     var intvlChatPolling = null;
     var connection = null;
     var messageIds = [];
+    var currentInvoiceIndex = null;
 
-    getBoosts(null, 20, true, true);
+
+    $.ajax({
+        url: "/api/v1/index",
+        type: "GET",
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        success: function (data) {
+            console.log(data);
+            currentInvoiceIndex = data;
+            getBoosts(currentInvoiceIndex, 20, true, true);
+        }
+    });
+
+
 
     function getBoosts(startIndex, max, scrollToTop, old) {
         var noIndex = false;
@@ -44,7 +58,7 @@ $(document).ready(function () {
             noIndex = true;
         }
         if(startIndex === null) {
-            boostIndex = "";
+            boostIndex = lastIndex + 20;
         }
         if (typeof max !== "number") {
             max = 0;
@@ -54,7 +68,7 @@ $(document).ready(function () {
         }
 
         //Build the endpoint url
-        var url = '/boosts?index=' + boostIndex;
+        var url = '/api/v1/boosts?index=' + boostIndex;
         if(max > 0) {
             url += '&count=' + max;
         }

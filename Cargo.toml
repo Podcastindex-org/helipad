@@ -1,6 +1,6 @@
 [package]
 name = "helipad"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2018"
 build = "build.rs"
 
@@ -30,4 +30,4 @@ configure_me = "0.4.0"
 handlebars = "4.2.1"
 
 [build-dependencies]
-configure_me_codegen = "0.4.0"
+configure_me_codegen = "0.4.1"
