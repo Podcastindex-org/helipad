@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+
+jobs:
+  cargo_check:
+    name: Cargo Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Cargo Check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+  build_and_test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Run Tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
