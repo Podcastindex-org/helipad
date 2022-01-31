@@ -47,6 +47,13 @@ impl Router {
             .add(path, handler)
     }
 
+    pub fn options(&mut self, path: &str, handler: Box<dyn Handler>) {
+        self.method_map
+            .entry(Method::OPTIONS)
+            .or_insert_with(InternalRouter::new)
+            .add(path, handler)
+    }
+
     // pub fn post(&mut self, path: &str, handler: Box<dyn Handler>) {
     //     self.method_map
     //         .entry(Method::POST)

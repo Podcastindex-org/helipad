@@ -12,20 +12,10 @@ $(document).ready(function () {
     var currentInvoiceIndex = null;
 
 
-    $.ajax({
-        url: "/api/v1/index",
-        type: "GET",
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        success: function (data) {
-            console.log(data);
-            currentInvoiceIndex = data;
-            getBoosts(currentInvoiceIndex, 20, true, true);
-        }
-    });
+    //Initialize the page
+    initPage();
 
-
-
+    //Get a boost list
     function getBoosts(startIndex, max, scrollToTop, old) {
         var noIndex = false;
 
@@ -112,7 +102,7 @@ $(document).ready(function () {
                         case 'breez':
                             appIconUrl = appIconUrlBase + 'breez';
                             break;
-                        case 'podstation':
+                        case 'podstation' || 'podstation browser extension':
                             appIconUrl = appIconUrlBase + 'podstation';
                             break;
                         case 'sphinx':
@@ -181,8 +171,16 @@ $(document).ready(function () {
 
                 //Show a message if still building
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
-                    inbox.prepend('<div class="nodata">No data to show yet. Building the initial database may take some time. Check back in a few minutes...</div>');
+                    inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
+                        'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
+                        '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
+                        '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
+                        '<p>Current invoice#: <span class="invindex">'+currentInvoiceIndex+'</span></p>' +
+                        '</div>');
                 }
+                $('div.nodata span.invindex').text(currentInvoiceIndex);
+
+                $('span.csv a').attr('href', '/csv?index='+$('div.outgoing_msg:first').data('msgid')+'&count=100');
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && ( boostIndex > 1 || noIndex)) {
@@ -190,8 +188,25 @@ $(document).ready(function () {
                 }
             }
         });
+    }
 
-
+    function initPage() {
+        //Get the current boost index number
+        $.ajax({
+            url: "/api/v1/index",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                console.log(data);
+                currentInvoiceIndex = data;
+                console.log(typeof currentInvoiceIndex);
+                if(typeof currentInvoiceIndex !== "number" || currentInvoiceIndex < 1) {
+                    currentInvoiceIndex = 1;
+                }
+                getBoosts(currentInvoiceIndex, 100, true, true);
+            }
+        });
     }
 
     //Load more messages handler
@@ -209,7 +224,7 @@ $(document).ready(function () {
             old = false;
         }
 
-        getBoosts(boostIndex, 200, false, old);
+        getBoosts(boostIndex, 100, false, old);
 
         return false;
     });
@@ -217,13 +232,13 @@ $(document).ready(function () {
     //Set a periodic checker for new boosts
     setInterval(function () {
         if ($('div.outgoing_msg').length === 0) {
-            getBoosts(null, 100, true, true);
+            initPage();
         } else {
-            getBoosts(null, 20, true, false);
+            getBoosts(currentInvoiceIndex, 20, true, false);
         }
     }, 7000);
-
 });
+
 
 const closest = (arr, num) => {
     return arr.reduce((acc, val) => {

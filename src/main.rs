@@ -266,11 +266,11 @@ async fn main() {
     router.get("/script", Box::new(handler::asset));
     router.get("/extra", Box::new(handler::asset));
     //Api
-    router.get("/boosts", Box::new(handler::boosts));
+    router.options("/api/v1/boosts", Box::new(handler::api_v1_boosts_options));
     router.get("/api/v1/boosts", Box::new(handler::api_v1_boosts));
     router.get("/api/v1/streams", Box::new(handler::api_v1_streams));
     router.get("/api/v1/index", Box::new(handler::api_v1_index));
-    //router.get("/csv", Box::new(handler::csv));
+    router.get("/csv", Box::new(handler::csv_export_boosts));
 
     let shared_router = Arc::new(router);
     let db_filepath: String = helipad_config.database_file_path.clone();

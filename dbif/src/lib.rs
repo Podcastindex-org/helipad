@@ -189,60 +189,15 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
 
 
 //Get all of the boosts from the database
-pub fn get_boosts_from_db_descending(filepath: &String, index: u64, max: u64) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
-    //Build the query
-    let sqltxt = format!("SELECT idx, \
-                                       time, \
-                                       value_msat, \
-                                       value_msat_total, \
-                                       action, \
-                                       sender, \
-                                       app, \
-                                       message, \
-                                       podcast, \
-                                       episode, \
-                                       tlv \
-                                 FROM boosts \
-                                 WHERE action = 2 \
-                                   AND idx <= :index \
-                                 ORDER BY idx DESC \
-                                 LIMIT :max");
 
-    //Prepare and execute the query
-    let mut stmt = conn.prepare(sqltxt.as_str())?;
-    let rows = stmt.query_map(&[(":index", index.to_string().as_str()), (":max", max.to_string().as_str())], |row| {
-        Ok(BoostRecord {
-            index: row.get(0)?,
-            time: row.get(1)?,
-            value_msat: row.get(2)?,
-            value_msat_total: row.get(3)?,
-            action: row.get(4)?,
-            sender: row.get(5)?,
-            app: row.get(6)?,
-            message: row.get(7)?,
-            podcast: row.get(8)?,
-            episode: row.get(9)?,
-            tlv: row.get(10)?,
-        })
-    }).unwrap();
-
-    //Parse the results
-    for row in rows {
-        let boost: BoostRecord = row.unwrap();
-        boosts.push(boost);
+    let mut ltgt = ">=";
+    if direction {
+        ltgt = "<=";
     }
-
-    Ok(boosts)
-}
-
-
-//Get all of the boosts from the database
-pub fn get_streams_from_db_descending(filepath: &String, index: u64, max: u64) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
-    let conn = connect_to_database(false, filepath)?;
-    let mut boosts: Vec<BoostRecord> = Vec::new();
 
     //Build the query
     let sqltxt = format!("SELECT idx, \
@@ -258,9 +213,9 @@ pub fn get_streams_from_db_descending(filepath: &String, index: u64, max: u64) -
                                        tlv \
                                  FROM boosts \
                                  WHERE action = 1 \
-                                   AND idx <= :index \
+                                   AND idx {} :index \
                                  ORDER BY idx DESC \
-                                 LIMIT :max");
+                                 LIMIT :max", ltgt);
 
     //Prepare and execute the query
     let mut stmt = conn.prepare(sqltxt.as_str())?;

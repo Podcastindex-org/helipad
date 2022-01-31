@@ -9,7 +9,6 @@ use handlebars::Handlebars;
 use serde_json::json;
 
 
-
 //Constants --------------------------------------------------------------------------------------------------
 const WEBROOT_PATH_HTML: &str = "webroot/html";
 const WEBROOT_PATH_IMAGE: &str = "webroot/image";
@@ -28,7 +27,9 @@ impl fmt::Display for HydraError {
 impl Error for HydraError {}
 
 
-//Functions --------------------------------------------------------------------------------------------------
+//Route handlers ---------------------------------------------------------------------------------------------
+
+//Homepage html
 pub async fn home(ctx: Context) -> Response {
 
     //Get query parameters
@@ -45,6 +46,7 @@ pub async fn home(ctx: Context) -> Response {
         .unwrap();
 }
 
+//Pew-pew audio
 pub async fn pewmp3(_ctx: Context) -> Response {
     let file = fs::read("webroot/extra/pew.mp3").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
@@ -54,6 +56,7 @@ pub async fn pewmp3(_ctx: Context) -> Response {
         .unwrap();
 }
 
+//Favicon icon
 pub async fn favicon(_ctx: Context) -> Response {
     let file = fs::read("webroot/extra/favicon.ico").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
@@ -124,7 +127,14 @@ pub async fn asset(ctx: Context) -> Response {
     }
 }
 
-
+//API - serve boosts as JSON either in ascending or descending order
+pub async fn api_v1_boosts_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
 pub async fn api_v1_boosts(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -185,14 +195,22 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
         }
     };
 
+    //Was the "old" flag used?
+    let mut old = false;
+    match params.get("old") {
+        Some(_) => old = true,
+        None => { }
+    };
+
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db_descending(&_ctx.database_file_path, index, boostcount) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
         Ok(boosts) => {
             let json_doc_raw = serde_json::to_string_pretty(&boosts).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
         }
@@ -207,7 +225,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
 
 }
 
-
+//API - serve streams as JSON either in ascending or descending order
 pub async fn api_v1_streams(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -268,14 +286,22 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
         }
     };
 
+    //Was the "old" flag used?
+    let mut old = false;
+    match params.get("old") {
+        Some(_) => old = true,
+        None => { }
+    };
+
     //Get the boosts from db for returning
-    match dbif::get_streams_from_db_descending(&_ctx.database_file_path, index, boostcount) {
+    match dbif::get_streams_from_db(&_ctx.database_file_path, index, boostcount, old) {
         Ok(streams) => {
             let json_doc_raw = serde_json::to_string_pretty(&streams).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
         }
@@ -289,7 +315,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
     }
 }
 
-
+//API - get the current invoice index number
 pub async fn api_v1_index(_ctx: Context) -> Response {
 
     //Get the last known invoice index from the database
@@ -301,6 +327,7 @@ pub async fn api_v1_index(_ctx: Context) -> Response {
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
         },
@@ -314,57 +341,14 @@ pub async fn api_v1_index(_ctx: Context) -> Response {
     };
 }
 
-
-pub async fn boosts(_ctx: Context) -> Response {
-    let default_boostcount: u64 = 50;
-
+//CSV export - max is 200 for now so the csv content can be built in memory
+pub async fn csv_export_boosts(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
     }).unwrap_or_else(HashMap::new);
 
-    //println!("Params: {:#?}", params);
-    println!("");
-
-    //Get the count parameter if one was given and convert to an integer
-    let boostcount: u64;
-    match params.get("count") {
-        Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied boostcount from call: [{}]", boostcount);
-                    boostcount
-                },
-                Err(_) => default_boostcount
-            };
-        },
-        None => {
-            println!("** No boostcount given.  Using: [{}]", default_boostcount);
-            boostcount = default_boostcount;
-        }
-    };
-
-    //Was the "old" flag used?
-    let mut old = false;
-    match params.get("old") {
-        Some(_) => old = true,
-        None => { }
-    };
-
-    //Get the last known invoice index from the database
-    let mut last_index = match dbif::get_last_boost_index_from_db(&_ctx.database_file_path) {
-        Ok(index) => {
-            println!("** get_last_boost_index_from_db() -> [{}]", index);
-            index
-        },
-        Err(_) => 0
-    };
-    if last_index > boostcount && !old {
-        last_index -= boostcount;
-    }
-
-    //Get the index url parameter if one was given and convert to an integer
-    //If one wasn't given, just use what we calculated above
+    //Parameter - index (unsigned int)
     let index: u64;
     match params.get("index") {
         Some(supplied_index) => {
@@ -373,25 +357,85 @@ pub async fn boosts(_ctx: Context) -> Response {
                     println!("** Supplied index from call: [{}]", index);
                     index
                 },
-                Err(_) => last_index
+                Err(_) => {
+                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
             };
         },
         None => {
-            println!("** No index given.  Using: [{}]", last_index);
-            index = last_index;
+            eprintln!("** Error getting boosts: 'index' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
         }
     };
 
+    //Parameter - boostcount (unsigned int)
+    let boostcount: u64;
+    match params.get("count") {
+        Some(bcount) => {
+            boostcount = match bcount.parse::<u64>() {
+                Ok(boostcount) => {
+                    println!("** Supplied boostcount from call: [{}]", boostcount);
+                    if boostcount > 200 {
+                        200
+                    } else {
+                        boostcount
+                    }
+                },
+                Err(_) => {
+                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        },
+        None => {
+            eprintln!("** Error getting boosts: 'count' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, true) {
         Ok(boosts) => {
-            let json_doc_raw = serde_json::to_string(&boosts).unwrap();
-            let json_doc: String = strip::strip_tags(&json_doc_raw);
+            let mut csv = String::new();
+            csv.push_str(format!("index, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode\n").as_str());
+            for boost in boosts {
+                let message = boost.message.replace("\"","\"\"");
+                csv.push_str(
+                    format!(
+                        "{}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
+                        boost.index,
+                        boost.time,
+                        boost.value_msat,
+                        boost.value_msat_total,
+                        boost.action,
+                        boost.sender,
+                        boost.app,
+                        message,
+                        boost.podcast,
+                        boost.episode
+                    ).as_str()
+                );
+            }
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)
-                .body(format!("{}", json_doc).into())
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Content-type", "text/plain; charset=utf-8")
+                .header("Content-Disposition", "attachment; filename=\"boosts.csv\"")
+                .body(format!("{}", csv).into())
                 .unwrap();
         }
         Err(e) => {
