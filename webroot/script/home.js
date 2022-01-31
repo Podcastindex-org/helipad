@@ -175,7 +175,7 @@ $(document).ready(function () {
                         'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
                         '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
                         '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
-                        '<p>Current invoice#: <span class="invindex">'+currentInvoiceIndex+'</span></p>' +
+                        '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">'+currentInvoiceIndex+'</span>' +
                         '</div>');
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
