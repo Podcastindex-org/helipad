@@ -114,6 +114,12 @@ $(document).ready(function () {
                         case 'zion':
                             appIconUrl = appIconUrlBase + 'zion';
                             break;
+                        case 'lncli':
+                        case 'boostcli':
+                        case 'terminal':
+                        case 'cmd':
+                            appIconUrl = appIconUrlBase + 'terminal';
+                            break;
 
                     }
 
@@ -126,7 +132,7 @@ $(document).ready(function () {
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
-                            '      <span class="app"><img src="' + appIconUrl + '"></span>' +
+                            '      <span class="app"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></span>' +
                             '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
                             '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
