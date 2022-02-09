@@ -127,7 +127,7 @@ pub async fn asset(ctx: Context) -> Response {
     }
 }
 
-//API - serve boosts as JSON either in ascending or descending order
+//API - serve invoices as JSON either in ascending or descending order
 pub async fn api_v1_boosts_options(_ctx: Context) -> Response {
     return hyper::Response::builder()
         .status(StatusCode::from_u16(204).unwrap())
@@ -151,7 +151,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                     index
                 },
                 Err(_) => {
-                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
+                    eprintln!("** Error getting invoices: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
                         .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
@@ -160,7 +160,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
             };
         },
         None => {
-            eprintln!("** Error getting boosts: 'index' param is not present.\n");
+            eprintln!("** Error getting invoices: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
                 .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
@@ -168,17 +168,17 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
         }
     };
 
-    //Parameter - boostcount (unsigned int)
+    //Parameter - invoicecount (unsigned int)
     let boostcount: u64;
     match params.get("count") {
         Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied boostcount from call: [{}]", boostcount);
-                    boostcount
+            invoicecount = match bcount.parse::<u64>() {
+                Ok(invoicecount) => {
+                    println!("** Supplied invoicecount from call: [{}]", invoicecount);
+                    invoicecount
                 },
                 Err(_) => {
-                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
+                    eprintln!("** Error getting invoices: 'count' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
                         .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
@@ -187,7 +187,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
             };
         },
         None => {
-            eprintln!("** Error getting boosts: 'count' param is not present.\n");
+            eprintln!("** Error getting invoices: 'count' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
                 .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
@@ -202,10 +202,10 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
         None => { }
     };
 
-    //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
-        Ok(boosts) => {
-            let json_doc_raw = serde_json::to_string_pretty(&boosts).unwrap();
+    //Get the invoices from db for returning
+    match dbif::get_invoices_from_db(&_ctx.database_file_path, index, invoicecount, old) {
+        Ok(invoices) => {
+            let json_doc_raw = serde_json::to_string_pretty(&invoices).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
 
             return hyper::Response::builder()
@@ -215,10 +215,10 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                 .unwrap();
         }
         Err(e) => {
-            eprintln!("** Error getting boosts: {}.\n", e);
+            eprintln!("** Error getting invoices: {}.\n", e);
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting boosts.").into())
+                .body(format!("** Error getting invoices.").into())
                 .unwrap();
         }
     }
@@ -259,14 +259,14 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
         }
     };
 
-    //Parameter - boostcount (unsigned int)
-    let boostcount: u64;
+    //Parameter - invoicecount (unsigned int)
+    let invoicecount: u64;
     match params.get("count") {
         Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied stream count from call: [{}]", boostcount);
-                    boostcount
+            invoicecount = match bcount.parse::<u64>() {
+                Ok(invoicecount) => {
+                    println!("** Supplied stream count from call: [{}]", invoicecount);
+                    invoicecount
                 },
                 Err(_) => {
                     eprintln!("** Error getting streams: 'count' param is not a number.\n");
@@ -293,8 +293,8 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
         None => { }
     };
 
-    //Get the boosts from db for returning
-    match dbif::get_streams_from_db(&_ctx.database_file_path, index, boostcount, old) {
+    //Get the invoices from db for returning
+    match dbif::get_streams_from_db(&_ctx.database_file_path, index, invoicecount, old) {
         Ok(streams) => {
             let json_doc_raw = serde_json::to_string_pretty(&streams).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
@@ -319,9 +319,9 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
 pub async fn api_v1_index(_ctx: Context) -> Response {
 
     //Get the last known invoice index from the database
-    match dbif::get_last_boost_index_from_db(&_ctx.database_file_path) {
+    match dbif::get_last_invoice_index_from_db(&_ctx.database_file_path) {
         Ok(index) => {
-            println!("** get_last_boost_index_from_db() -> [{}]", index);
+            println!("** get_last_invoice_index_from_db() -> [{}]", index);
             let json_doc_raw = serde_json::to_string_pretty(&index).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
 
@@ -342,7 +342,7 @@ pub async fn api_v1_index(_ctx: Context) -> Response {
 }
 
 //CSV export - max is 200 for now so the csv content can be built in memory
-pub async fn csv_export_boosts(_ctx: Context) -> Response {
+pub async fn csv_export_invoices(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
@@ -358,7 +358,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                     index
                 },
                 Err(_) => {
-                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
+                    eprintln!("** Error getting invoices: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
                         .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
@@ -367,7 +367,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             };
         },
         None => {
-            eprintln!("** Error getting boosts: 'index' param is not present.\n");
+            eprintln!("** Error getting invoices: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
                 .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
@@ -375,21 +375,21 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
         }
     };
 
-    //Parameter - boostcount (unsigned int)
-    let boostcount: u64;
+    //Parameter - invoicecount (unsigned int)
+    let invoicecount: u64;
     match params.get("count") {
         Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied boostcount from call: [{}]", boostcount);
-                    if boostcount > 200 {
+            invoicecount = match bcount.parse::<u64>() {
+                Ok(invoicecount) => {
+                    println!("** Supplied invoicecount from call: [{}]", invoicecount);
+                    if invoicecount > 200 {
                         200
                     } else {
-                        boostcount
+                        invoicecount
                     }
                 },
                 Err(_) => {
-                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
+                    eprintln!("** Error getting invoices: 'count' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
                         .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
@@ -398,7 +398,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             };
         },
         None => {
-            eprintln!("** Error getting boosts: 'count' param is not present.\n");
+            eprintln!("** Error getting invoices: 'count' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
                 .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
@@ -406,26 +406,26 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
         }
     };
 
-    //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, true) {
-        Ok(boosts) => {
+    //Get the invoices from db for returning
+    match dbif::get_invoices_from_db(&_ctx.database_file_path, index, invoicecount, true) {
+        Ok(invoices) => {
             let mut csv = String::new();
             csv.push_str(format!("index, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode\n").as_str());
-            for boost in boosts {
-                let message = boost.message.replace("\"","\"\"");
+            for invoice in invoices {
+                let message = invoice.message.replace("\"","\"\"");
                 csv.push_str(
                     format!(
                         "{}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
-                        boost.index,
-                        boost.time,
-                        boost.value_msat,
-                        boost.value_msat_total,
-                        boost.action,
-                        boost.sender,
-                        boost.app,
+                        invoice.index,
+                        invoice.time,
+                        invoice.value_msat,
+                        invoice.value_msat_total,
+                        invoice.action,
+                        invoice.sender,
+                        invoice.app,
                         message,
-                        boost.podcast,
-                        boost.episode
+                        invoice.podcast,
+                        invoice.episode
                     ).as_str()
                 );
             }
@@ -434,15 +434,15 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
                 .header("Content-type", "text/plain; charset=utf-8")
-                .header("Content-Disposition", "attachment; filename=\"boosts.csv\"")
+                .header("Content-Disposition", "attachment; filename=\"invoices.csv\"")
                 .body(format!("{}", csv).into())
                 .unwrap();
         }
         Err(e) => {
-            eprintln!("** Error getting boosts: {}.\n", e);
+            eprintln!("** Error getting invoices: {}.\n", e);
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting boosts.").into())
+                .body(format!("** Error getting invoices.").into())
                 .unwrap();
         }
     }

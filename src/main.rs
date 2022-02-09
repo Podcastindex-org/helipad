@@ -473,7 +473,7 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
     }
 
     //The main loop
-    let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
+    let mut current_index = dbif::get_last_invoice_index_from_db(&db_filepath).unwrap();
     loop {
 
         //Get a list of invoices
@@ -482,18 +482,18 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
                 for invoice in response.invoices {
 
                     //Initialize a boost record
-                    let mut boost = dbif::BoostRecord {
+                    let mut invoice = dbif::InvoiceRecord {
                         index: invoice.add_index,
                         time: invoice.settle_date,
                         value_msat: invoice.amt_paid_sat * 1000,
                         value_msat_total: invoice.amt_paid_sat * 1000,
                         action: 0,
-                        sender: "".to_string(),
-                        app: "".to_string(),
-                        message: "".to_string(),
-                        podcast: "".to_string(),
-                        episode: "".to_string(),
-                        tlv: "".to_string(),
+                        sender: "Unknown".to_string(),
+                        app: "Unknown".to_string(),
+                        message: "Unknown".to_string(),
+                        podcast: "Unknown".to_string(),
+                        episode: "Unknown".to_string(),
+                        tlv: "Unknown".to_string(),
                     };
 
                     //Search for podcast boost tlvs
@@ -501,7 +501,7 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
                         for (idx, val) in htlc.custom_records {
                             //Satoshis.stream record type
                             if idx == 7629169 {
-                                boost.tlv = std::str::from_utf8(&val).unwrap().to_string();
+                                invoice.tlv = std::str::from_utf8(&val).unwrap().to_string();
                                 let tlv = std::str::from_utf8(&val).unwrap();
                                 println!("TLV: {:#?}", tlv);
                                 let json_result = serde_json::from_str::<RawBoost>(tlv);
@@ -514,35 +514,35 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
                                         }
                                         //Determine an action type for later filtering ability
                                         if rawboost.action.is_some() {
-                                            boost.action = match rawboost.action.unwrap().as_str() {
+                                            invoice.action = match rawboost.action.unwrap().as_str() {
                                                 "stream" => 1, //This indicates a per-minute podcast payment
-                                                "boost" => 2,  //This is a manual boost or boost-a-gram
+                                                "boost" => 2,  //This is a manual boost or boostagram
                                                 _ => 3,
                                             }
                                         }
                                         //Was a sender name given in the tlv?
                                         if rawboost.sender_name.is_some() && !rawboost.sender_name.clone().unwrap().is_empty() {
-                                            boost.sender = rawboost.sender_name.unwrap();
+                                            invoice.sender = rawboost.sender_name.unwrap();
                                         }
                                         //Was there a message in this tlv?
                                         if rawboost.message.is_some() {
-                                            boost.message = rawboost.message.unwrap();
+                                            invoice.message = rawboost.message.unwrap();
                                         }
                                         //Was an app name given?
                                         if rawboost.app_name.is_some() {
-                                            boost.app = rawboost.app_name.unwrap();
+                                            invoice.app = rawboost.app_name.unwrap();
                                         }
                                         //Was a podcast name given?
                                         if rawboost.podcast.is_some() {
-                                            boost.podcast = rawboost.podcast.unwrap();
+                                            invoice.podcast = rawboost.podcast.unwrap();
                                         }
                                         //Episode name?
                                         if rawboost.episode.is_some() {
-                                            boost.episode = rawboost.episode.unwrap();
+                                            invoice.episode = rawboost.episode.unwrap();
                                         }
                                         //Look for an original sat value in the tlv
                                         if rawboost.value_msat_total.is_some() {
-                                            boost.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
+                                            invoice.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
                                         }
                                     }
                                     Err(e) => {
@@ -554,11 +554,11 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
                     }
 
                     //Give some output
-                    println!("Boost: {:#?}", boost);
+                    println!("Invoice: {:#?}", invoice);
 
                     //Store in the database
-                    println!("{:#?}", boost);
-                    match dbif::add_invoice_to_db(&db_filepath, boost) {
+                    println!("{:#?}", invoice);
+                    match dbif::add_invoice_to_db(&db_filepath, invoice) {
                         Ok(_) => println!("New invoice added."),
                         Err(e) => eprintln!("Error adding invoice: {:#?}", e)
                     }
@@ -570,7 +570,7 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
         }
 
         //Make sure we are tracking our position properly
-        current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
+        current_index = dbif::get_last_invoice_index_from_db(&db_filepath).unwrap();
         println!("Current index: {}", current_index);
 
         std::thread::sleep(std::time::Duration::from_millis(9000));

@@ -15,7 +15,7 @@ $(document).ready(function () {
     //Initialize the page
     initPage();
 
-    //Get a boost list
+    //Get a invoice list
     function getBoosts(startIndex, max, scrollToTop, old) {
         var noIndex = false;
 
@@ -40,15 +40,15 @@ $(document).ready(function () {
 
         //Params
         if (typeof startIndex === "number") {
-            boostIndex = startIndex;
+            invoiceIndex = startIndex;
         } else {
-            boostIndex = lastIndex;
+            invoiceIndex = lastIndex;
         }
-        if(typeof boostIndex !== "number") {
+        if(typeof invoiceIndex !== "number") {
             noIndex = true;
         }
         if(startIndex === null) {
-            boostIndex = lastIndex + 20;
+            invoiceIndex = lastIndex + 20;
         }
         if (typeof max !== "number") {
             max = 0;
@@ -58,7 +58,7 @@ $(document).ready(function () {
         }
 
         //Build the endpoint url
-        var url = '/api/v1/boosts?index=' + boostIndex;
+        var url = '/api/v1/boosts?index=' + invoiceIndex;
         if(max > 0) {
             url += '&count=' + max;
         }
@@ -76,17 +76,17 @@ $(document).ready(function () {
                     let displayedMessageCount = $('div.outgoing_msg').length;
                     //console.log(element);
                     let boostMessage = element.message || "";
-                    let boostSats = Math.trunc(element.value_msat_total / 1000) || Math.trunc(element.value_msat / 1000);
-                    let boostIndex = element.index;
+                    let invoiceSats = Math.trunc(element.value_msat_total / 1000) || Math.trunc(element.value_msat / 1000);
+                    let invoiceIndex = element.index;
                     let boostAction = element.action;
-                    let boostSender = element.sender;
-                    let boostApp = element.app;
+                    let invoiceSender = element.sender;
+                    let invoiceApp = element.app;
                     let boostPodcast = element.podcast;
                     let boostEpisode = element.episode;
 
                     //Icon
                     var appIconUrl = "";
-                    switch (boostApp.toLowerCase()) {
+                    switch (invoiceApp.toLowerCase()) {
                         case 'fountain':
                             appIconUrl = appIconUrlBase + 'fountain';
                             break;
@@ -123,7 +123,7 @@ $(document).ready(function () {
 
                     }
 
-                    if (!messageIds.includes(boostIndex) && element.action == 2) {
+                    if (!messageIds.includes(invoiceIndex)) {
                         let dateTime = new Date(element.time * 1000).toISOString();
                         $('div.nodata').remove();
 
@@ -132,8 +132,8 @@ $(document).ready(function () {
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
-                            '      <span class="app"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></span>' +
-                            '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
+                            '      <span class="app"><img src="' + appIconUrl + '" title="' + invoiceApp.toLowerCase() + '"></span>' +
+                            '      <h5>' + invoiceSats + ' sats <small>from ' + invoiceSender + '</small></h5>' +
                             '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
                             '      <br>' +
@@ -153,8 +153,8 @@ $(document).ready(function () {
                         } else {
                             //Get the closest matching id
                             var prepend = false;
-                            let closestId = closest(messageIds, boostIndex);
-                            if(boostIndex < closestId) {
+                            let closestId = closest(messageIds, invoiceIndex);
+                            if(invoiceIndex < closestId) {
                                 prepend = true;
                             }
 
@@ -167,7 +167,7 @@ $(document).ready(function () {
                         }
 
                         //Update the tracking array
-                        messageIds.push(boostIndex);
+                        messageIds.push(invoiceIndex);
                         messageIds = messageIds.sort((a,b) => a-b);
 
                         //Pew pew pew!
@@ -181,7 +181,7 @@ $(document).ready(function () {
                         'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
                         '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
                         '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
-                        '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">'+currentInvoiceIndex+'</span>' +
+                        '<div class="lds-dual-ring"></div> Looking for invoices: <span class="invindex">'+currentInvoiceIndex+'</span>' +
                         '</div>');
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
@@ -189,15 +189,15 @@ $(document).ready(function () {
                 $('span.csv a').attr('href', '/csv?index='+$('div.outgoing_msg:first').data('msgid')+'&count=100');
 
                 //Load more link
-                if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && ( boostIndex > 1 || noIndex)) {
-                    inbox.append('<div class="loadmore"><a href="#">Show older boosts...</a></div>');
+                if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && ( invoiceIndex > 1 || noIndex)) {
+                    inbox.append('<div class="loadmore"><a href="#">Show older invoices...</a></div>');
                 }
             }
         });
     }
 
     function initPage() {
-        //Get the current boost index number
+        //Get the current invoice index number
         $.ajax({
             url: "/api/v1/index",
             type: "GET",
@@ -218,24 +218,24 @@ $(document).ready(function () {
     //Load more messages handler
     $(document).on('click', 'div.loadmore a', function () {
         var old = true;
-        let boostIndex = $('div.outgoing_msg:last').data('msgid');
-        if (typeof boostIndex === "undefined") {
+        let invoiceIndex = $('div.outgoing_msg:last').data('msgid');
+        if (typeof invoiceIndex === "undefined") {
             return false;
         }
 
-        boostIndex = boostIndex;
-        if(boostIndex < 1) {
-            boostIndex = 1;
-            max = boostIndex
+        invoiceIndex = boostIndex;
+        if(invoiceIndex < 1) {
+            invoiceIndex = 1;
+            max = invoiceIndex
             old = false;
         }
 
-        getBoosts(boostIndex, 100, false, old);
+        getBoosts(invoiceIndex, 100, false, old);
 
         return false;
     });
 
-    //Set a periodic checker for new boosts
+    //Set a periodic checker for new invoices
     setInterval(function () {
         if ($('div.outgoing_msg').length === 0) {
             initPage();
