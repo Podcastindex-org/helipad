@@ -81,6 +81,8 @@ $(document).ready(function () {
                     let boostAction = element.action;
                     let boostSender = element.sender;
                     let boostApp = element.app;
+                    let boostPodcast = element.podcast;
+                    let boostEpisode = element.episode;
 
                     //Icon
                     var appIconUrl = "";
@@ -115,7 +117,7 @@ $(document).ready(function () {
 
                     }
 
-                    if (!messageIds.includes(boostIndex)) {
+                    if (!messageIds.includes(boostIndex) && element.action == 2) {
                         let dateTime = new Date(element.time * 1000).toISOString();
                         $('div.nodata').remove();
 
@@ -127,6 +129,7 @@ $(document).ready(function () {
                             '      <span class="app"><img src="' + appIconUrl + '"></span>' +
                             '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
                             '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
+                            '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
                             '      <br>' +
                             '      <hr>' +
                             '      <p>' + boostMessage + '</p>' +
