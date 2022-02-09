@@ -223,7 +223,7 @@ $(document).ready(function () {
             return false;
         }
 
-        invoiceIndex = boostIndex;
+        invoiceIndex = invoiceIndex;
         if(invoiceIndex < 1) {
             invoiceIndex = 1;
             max = invoiceIndex
