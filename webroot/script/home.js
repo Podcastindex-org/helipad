@@ -114,6 +114,12 @@ $(document).ready(function () {
                         case 'zion':
                             appIconUrl = appIconUrlBase + 'zion';
                             break;
+                        case 'lncli':
+                        case 'boostcli':
+                        case 'terminal':
+                        case 'cmd':
+                            appIconUrl = appIconUrlBase + 'terminal';
+                            break;
 
                     }
 
@@ -126,7 +132,7 @@ $(document).ready(function () {
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
-                            '      <span class="app"><img src="' + appIconUrl + '"></span>' +
+                            '      <span class="app"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></span>' +
                             '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
                             '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
@@ -175,7 +181,7 @@ $(document).ready(function () {
                         'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
                         '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
                         '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
-                        '<p>Current invoice#: <span class="invindex">'+currentInvoiceIndex+'</span></p>' +
+                        '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">'+currentInvoiceIndex+'</span>' +
                         '</div>');
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
