@@ -7,6 +7,7 @@ use std::fs;
 use voca_rs::*;
 use handlebars::Handlebars;
 use serde_json::json;
+use dbif::BoostRecord;
 
 
 //Constants --------------------------------------------------------------------------------------------------
@@ -205,8 +206,10 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
     //Get the boosts from db for returning
     match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
         Ok(boosts) => {
-            let json_doc_raw = serde_json::to_string_pretty(&boosts).unwrap();
-            let json_doc: String = strip::strip_tags(&json_doc_raw);
+
+            let mut json_doc = serde_json::to_string_pretty(&boosts).unwrap();
+            //let json_doc: String = strip::strip_tags(&json_doc_raw);
+            json_doc = json_doc.replace("<", "&lt;").replace(">", "&gt;");
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)
