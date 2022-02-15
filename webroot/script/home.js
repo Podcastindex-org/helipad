@@ -89,38 +89,68 @@ $(document).ready(function () {
                     switch (boostApp.toLowerCase()) {
                         case 'fountain':
                             appIconUrl = appIconUrlBase + 'fountain';
+                            appIconHref = 'https://fountain.fm';
                             break;
                         case 'podfriend':
                             appIconUrl = appIconUrlBase + 'podfriend';
+                            appIconHref = 'https://podfriend.com';
                             break;
                         case 'castamatic':
                             appIconUrl = appIconUrlBase + 'castamatic';
+                            appIconHref = 'https://castamatic.com';
                             break;
                         case 'curiocaster':
                             appIconUrl = appIconUrlBase + 'curiocaster';
+                            appIconHref = 'https://curiocaster.com';
                             break;
                         case 'breez':
                             appIconUrl = appIconUrlBase + 'breez';
+                            appIconHref = 'https://breez.technology';
                             break;
-                        case 'podstation' || 'podstation browser extension':
+                        case 'podstation':
+                        case 'podstation browser extension':
                             appIconUrl = appIconUrlBase + 'podstation';
+                            appIconHref = 'https://podstation.github.io';
                             break;
                         case 'sphinx':
                             appIconUrl = appIconUrlBase + 'sphinxchat';
+                            appIconHref = 'https://sphinx.chat';
                             break;
                         case 'podverse':
                             appIconUrl = appIconUrlBase + 'podverse';
+                            appIconHref = 'https://podverse.fm';
                             break;
+                        case 'n2n2':
                         case 'zion':
                             appIconUrl = appIconUrlBase + 'zion';
+                            appIconHref = 'https://getzion.com';
+                            break;
+                        case 'usocial':
+                        case 'usocial.me':
+                            appIconUrl = appIconUrlBase + 'usocial';
+                            appIconHref = 'https://usocial.me';
                             break;
                         case 'lncli':
                         case 'boostcli':
                         case 'terminal':
                         case 'cmd':
                             appIconUrl = appIconUrlBase + 'terminal';
+                            appIconHref = 'https://github.com/lightningnetwork/lnd';
                             break;
+                        default:
+                            appIconUrl = appIconUrlBase + 'unknown';
+                            appIconHref = '#';
+                    }
 
+                    //Sender
+                    if(boostSender.trim() != "") {
+                        boostSender = 'from ' + boostSender;
+                    }
+
+                    if(boostMessage.trim() != "") {
+                        boostMessage = '' +
+                            '      <hr>' +
+                            '      <p>' + boostMessage + '</p>';
                     }
 
                     if (!messageIds.includes(boostIndex) && element.action == 2) {
@@ -132,13 +162,11 @@ $(document).ready(function () {
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
-                            '      <span class="app"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></span>' +
-                            '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
+                            '      <span class="app"><a href="'+appIconHref+'"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></a></span>' +
+                            '      <h5>' + boostSats + ' sats <small>' + boostSender + '</small></h5>' +
                             '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
-                            '      <br>' +
-                            '      <hr>' +
-                            '      <p>' + boostMessage + '</p>' +
+                            boostMessage
                             '    </div>' +
                             '  </div>' +
                             '</div>';

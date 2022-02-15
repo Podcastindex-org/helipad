@@ -162,7 +162,8 @@ img {
     font-size: 18px;
     margin: 0;
     margin-right: 10px;
-    padding: 5px 10px 5px 12px;
+    padding: 10px;
+    min-height: 81px;
 }
 
 .time_date {
@@ -182,7 +183,8 @@ img {
 }
 
 .sent_msg p {
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: bold;
     margin: 0;
     color: black;
     padding: 5px 10px 15px 12px;

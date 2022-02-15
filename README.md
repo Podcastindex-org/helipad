@@ -28,6 +28,7 @@ environment variables:
 
 Information about the Umbrel app environment is in the umbrel folder for those interested.
 
+
 ## Configuration
 
 Each configurable item has multiple options.  They are listed in the config file [here](helipad.conf).  In each case, the environment
@@ -36,3 +37,18 @@ projects.
 
 The only exception to this is the `listen_port` which can be specified on the command line as the only argument.  This is just for
 convenience as it's a very common thing to change during testing.
+
+
+## API
+The very simplistic API consists of the following endpoints:
+
+#### /api/v1/index
+
+
+#### /api/v1/boosts
+This call returns `count` boosts starting at `index`.  If the `old` parameter is present, the boosts returned start from `index` and
+descend by `count`, showing older boosts.  Otherwise, they start at `index` and ascend by `count`, showing newer boosts.
+
+#### /api/v1/streams
+
+
