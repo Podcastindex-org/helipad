@@ -301,12 +301,17 @@ div.balanceDisplay {
     padding-right:8px;
     float:right;
     color: floralwhite;
+    -webkit-transition: background-color 2s;
+            transition: background-color 2s;
 }
-div.balanceDisplay span {
-    color:greenyellow;
+div.balanceDisplay span.good {
+    colorcolor:greenyellow;
 }
 div.balanceDisplay span.error {
     color:darkred;
+}
+div.balanceDisplay.bump {
+    background-color: #1e7e34;
 }
 div.piIcon {
     padding-top:8px;

@@ -11,6 +11,7 @@ $(document).ready(function () {
     var messageIds = [];
     var currentInvoiceIndex = null;
     var currentBalance = null;
+    var currentBalanceAmount = 0;
 
 
     //Initialize the page
@@ -215,7 +216,11 @@ $(document).ready(function () {
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
 
-                $('span.csv a').attr('href', '/csv?index='+$('div.outgoing_msg:first').data('msgid')+'&count=100');
+                bcount = $('div.outgoing_msg:first').data('msgid') - $('div.outgoing_msg:last').data('msgid');
+                if(typeof bcount !== "number") {
+                    bcount = 9999;
+                }
+                $('span.csv a').attr('href', '/csv?index='+$('div.outgoing_msg:first').data('msgid')+'&count='+bcount+'&old=true');
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && ( boostIndex > 1 || noIndex)) {
@@ -240,6 +245,13 @@ $(document).ready(function () {
                     $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
                 } else {
                     $('div.balanceDisplay').html('Balance: <span>'+currentBalance.toLocaleString("en-US")+'</span>');
+                    if( currentBalance != currentBalanceAmount) {
+                        currentBalanceAmount = currentBalance;
+                        $('div.balanceDisplay').addClass('bump');
+                        setTimeout(function () {
+                            $('div.balanceDisplay').removeClass('bump');
+                        }, 2000);
+                    }
                 }
 
             }
@@ -295,8 +307,10 @@ $(document).ready(function () {
             initPage();
         } else {
             getBoosts(currentInvoiceIndex, 20, true, false);
+            getBalance();
         }
     }, 7000);
+
 });
 
 

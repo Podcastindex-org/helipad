@@ -23,7 +23,7 @@ pub struct BoostRecord {
 impl BoostRecord {
     //Removes unsafe html interpretable characters from displayable strings
     pub fn clean_string( field: String) -> String {
-        return field.replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;");
+        return field.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }
 

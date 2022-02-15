@@ -458,8 +458,15 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
         }
     };
 
+    //Was the "old" flag used?
+    let mut old = false;
+    match params.get("old") {
+        Some(_) => old = true,
+        None => { }
+    };
+
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, true) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
         Ok(boosts) => {
             let mut csv = String::new();
             csv.push_str(format!("index, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode\n").as_str());

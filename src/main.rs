@@ -483,10 +483,15 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
     loop {
 
         //Get lnd node wallet balance
-        match lnd::Lnd::wallet_balance(&mut lightning).await {
+        match lnd::Lnd::channel_balance(&mut lightning).await {
             Ok(balance) => {
-                println!("LND node wallet balance: {:#?}", balance.total_balance);
-                if add_wallet_balance_to_db(&db_filepath, balance.total_balance).is_err() {
+                let mut current_balance: i64 = 0;
+                if let Some(bal) = balance.local_balance {
+                    println!("LND node local balance: {:#?}", bal.sat);
+                    current_balance = bal.sat as i64;
+                }
+
+                if add_wallet_balance_to_db(&db_filepath, current_balance).is_err() {
                     println!("Error adding wallet balance to the database.");
                 }
             }
