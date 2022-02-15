@@ -20,6 +20,12 @@ pub struct BoostRecord {
     pub tlv: String,
 }
 
+impl BoostRecord {
+    //Removes unsafe html interpretable characters from displayable strings
+    pub fn clean_string( field: String) -> String {
+        return field.replace("<", "&lt;").replace(">", "&gt;").replace("&", "&amp;");
+    }
+}
 
 #[derive(Debug)]
 struct HydraError(String);
@@ -181,7 +187,16 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
     //Parse the results
     for row in rows {
         let boost: BoostRecord = row.unwrap();
-        boosts.push(boost);
+        let boost_clean = BoostRecord {
+            sender: BoostRecord::clean_string(boost.sender),
+            app: BoostRecord::clean_string(boost.app),
+            message: BoostRecord::clean_string(boost.message),
+            podcast: BoostRecord::clean_string(boost.podcast),
+            episode: BoostRecord::clean_string(boost.episode),
+            tlv: BoostRecord::clean_string(boost.tlv),
+            ..boost
+        };
+        boosts.push(boost_clean);
     }
 
     Ok(boosts)
