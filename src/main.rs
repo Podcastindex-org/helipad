@@ -15,6 +15,7 @@ use drop_root::set_user_group;
 use lnd;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
+use dbif::add_wallet_balance_to_db;
 // use hyper::http::Request;
 
 #[macro_use]
@@ -268,9 +269,14 @@ async fn main() {
     //Api
     router.options("/api/v1/boosts", Box::new(handler::api_v1_boosts_options));
     router.get("/api/v1/boosts", Box::new(handler::api_v1_boosts));
+    router.options("/api/v1/balance", Box::new(handler::api_v1_balance_options));
+    router.get("/api/v1/balance", Box::new(handler::api_v1_balance));
+    router.options("/api/v1/streams", Box::new(handler::api_v1_streams_options));
     router.get("/api/v1/streams", Box::new(handler::api_v1_streams));
+    router.options("/api/v1/index", Box::new(handler::api_v1_index_options));
     router.get("/api/v1/index", Box::new(handler::api_v1_index));
     router.get("/csv", Box::new(handler::csv_export_boosts));
+
 
     let shared_router = Arc::new(router);
     let db_filepath: String = helipad_config.database_file_path.clone();
@@ -475,6 +481,19 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
     //The main loop
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
     loop {
+
+        //Get lnd node wallet balance
+        match lnd::Lnd::wallet_balance(&mut lightning).await {
+            Ok(balance) => {
+                println!("LND node wallet balance: {:#?}", balance.total_balance);
+                if add_wallet_balance_to_db(&db_filepath, balance.total_balance).is_err() {
+                    println!("Error adding wallet balance to the database.");
+                }
+            }
+            Err(e) => {
+                eprintln!("Error getting LND wallet balance: {:#?}", e);
+            }
+        }
 
         //Get a list of invoices
         match lnd::Lnd::list_invoices(&mut lightning, false, current_index.clone(), 500, false).await {

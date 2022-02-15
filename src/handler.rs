@@ -7,7 +7,7 @@ use std::fs;
 use voca_rs::*;
 use handlebars::Handlebars;
 use serde_json::json;
-use dbif::BoostRecord;
+//use dbif::BoostRecord;
 
 
 //Constants --------------------------------------------------------------------------------------------------
@@ -128,6 +128,43 @@ pub async fn asset(ctx: Context) -> Response {
     }
 }
 
+//API - give back the node balance
+pub async fn api_v1_balance_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
+pub async fn api_v1_balance(_ctx: Context) -> Response {
+    //Get query parameters
+    let _params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    //Get the boosts from db for returning
+    match dbif::get_wallet_balance_from_db(&_ctx.database_file_path) {
+        Ok(balance) => {
+
+            let json_doc = serde_json::to_string_pretty(&balance).unwrap();
+
+            return hyper::Response::builder()
+                .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(format!("{}", json_doc).into())
+                .unwrap();
+        }
+        Err(e) => {
+            eprintln!("** Error getting balance: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting balance.").into())
+                .unwrap();
+        }
+    }
+
+}
+
 //API - serve boosts as JSON either in ascending or descending order
 pub async fn api_v1_boosts_options(_ctx: Context) -> Response {
     return hyper::Response::builder()
@@ -207,9 +244,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
     match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
         Ok(boosts) => {
 
-            let mut json_doc = serde_json::to_string_pretty(&boosts).unwrap();
-            //let json_doc: String = strip::strip_tags(&json_doc_raw);
-            json_doc = json_doc.replace("<", "&lt;").replace(">", "&gt;");
+            let json_doc = serde_json::to_string_pretty(&boosts).unwrap();
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)
@@ -229,6 +264,13 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
 }
 
 //API - serve streams as JSON either in ascending or descending order
+pub async fn api_v1_streams_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
 pub async fn api_v1_streams(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -319,6 +361,13 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
 }
 
 //API - get the current invoice index number
+pub async fn api_v1_index_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
 pub async fn api_v1_index(_ctx: Context) -> Response {
 
     //Get the last known invoice index from the database

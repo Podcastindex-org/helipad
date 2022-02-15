@@ -10,6 +10,7 @@ $(document).ready(function () {
     var connection = null;
     var messageIds = [];
     var currentInvoiceIndex = null;
+    var currentBalance = null;
 
 
     //Initialize the page
@@ -224,7 +225,30 @@ $(document).ready(function () {
         });
     }
 
+    function getBalance() {
+        //Get the current boost index number
+        $.ajax({
+            url: "/api/v1/balance",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                console.log(data);
+                currentBalance = data;
+                console.log(typeof currentBalance);
+                if(typeof currentBalance !== "number") {
+                    $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
+                } else {
+                    $('div.balanceDisplay').html('Balance: <span>'+currentBalance.toLocaleString("en-US")+'</span>');
+                }
+
+            }
+        });
+    }
+
     function initPage() {
+        getBalance();
+
         //Get the current boost index number
         $.ajax({
             url: "/api/v1/index",
@@ -241,6 +265,8 @@ $(document).ready(function () {
                 getBoosts(currentInvoiceIndex, 100, true, true);
             }
         });
+
+
     }
 
     //Load more messages handler
