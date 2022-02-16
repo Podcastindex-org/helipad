@@ -7,7 +7,7 @@ use std::fs;
 use voca_rs::*;
 use handlebars::Handlebars;
 use serde_json::json;
-//use dbif::BoostRecord;
+use chrono::{NaiveDateTime};
 
 
 //Constants --------------------------------------------------------------------------------------------------
@@ -469,16 +469,33 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
         Ok(boosts) => {
             let mut csv = String::new();
-            csv.push_str(format!("index, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode\n").as_str());
+            csv.push_str(format!("index, time, value_msat, value_sat, value_msat_total, value_sat_total, action, sender, app, message, podcast, episode\n").as_str());
             for boost in boosts {
+                //Parse out a friendly date
+                let dt = NaiveDateTime::from_timestamp(boost.time, 0);
+                let boost_time = dt.format("%a,%e %b %Y %H:%M:%S UTC").to_string();
+
+                //Translate to sats
+                let mut value_sat = 0;
+                if boost.value_msat > 1000 {
+                    value_sat = boost.value_msat / 1000;
+                }
+                let mut value_sat_total = 0;
+                if boost.value_msat_total > 1000 {
+                    value_sat_total = boost.value_msat_total / 1000;
+                }
+
+
                 let message = boost.message.replace("\"","\"\"");
                 csv.push_str(
                     format!(
-                        "{}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
+                        "{}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
                         boost.index,
-                        boost.time,
+                        boost_time,
                         boost.value_msat,
+                        value_sat,
                         boost.value_msat_total,
+                        value_sat_total,
                         boost.action,
                         boost.sender,
                         boost.app,
