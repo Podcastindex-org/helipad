@@ -230,7 +230,7 @@ $(document).ready(function () {
         });
     }
 
-    function getBalance() {
+    function getBalance(init) {
         //Get the current boost index number
         $.ajax({
             url: "/api/v1/balance",
@@ -238,20 +238,26 @@ $(document).ready(function () {
             contentType: "application/json; charset=utf-8",
             dataType: "json",
             success: function (data) {
-                console.log(data);
-                currentBalance = data;
-                console.log(typeof currentBalance);
-                if(typeof currentBalance !== "number") {
+                newBalance = data;
+                //If the data returned wasn't a number then give an error
+                if(typeof newBalance !== "number") {
                     $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
                 } else {
-                    $('div.balanceDisplay').html('Balance: <span>'+currentBalance.toLocaleString("en-US")+'</span>');
-                    if( currentBalance != currentBalanceAmount) {
-                        currentBalanceAmount = currentBalance;
+                    //Display the balance
+                    $('div.balanceDisplay').html('Balance: <span>'+newBalance.toLocaleString("en-US")+'</span>');
+
+                    //If the balance went up, do some fun stuff
+                    if( newBalance > currentBalanceAmount && !init) {
                         $('div.balanceDisplay').addClass('bump');
+                        startConfetti();
                         setTimeout(function () {
                             $('div.balanceDisplay').removeClass('bump');
-                        }, 2000);
+                            stopConfetti();
+                        }, 1200);
                     }
+
+                    //This is now the current balance
+                    currentBalanceAmount = newBalance;
                 }
 
             }
@@ -266,7 +272,7 @@ $(document).ready(function () {
     }
 
     function initPage() {
-        getBalance();
+        getBalance(true);
 
         //Get the current boost index number
         $.ajax({
