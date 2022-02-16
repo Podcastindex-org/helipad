@@ -489,7 +489,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 let message = boost.message.replace("\"","\"\"");
                 csv.push_str(
                     format!(
-                        "{}, \"{}\", {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
+                        "{}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
                         boost.index,
                         boost_time,
                         boost.value_msat,
