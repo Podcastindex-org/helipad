@@ -482,7 +482,7 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
     loop {
 
-        //Get lnd node wallet balance
+        //Get lnd node channel balance
         match lnd::Lnd::channel_balance(&mut lightning).await {
             Ok(balance) => {
                 let mut current_balance: i64 = 0;

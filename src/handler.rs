@@ -473,7 +473,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             for boost in boosts {
                 //Parse out a friendly date
                 let dt = NaiveDateTime::from_timestamp(boost.time, 0);
-                let boost_time = dt.format("%a,%e %b %Y %H:%M:%S UTC").to_string();
+                let boost_time = dt.format("%e %b %Y %H:%M:%S UTC").to_string();
 
                 //Translate to sats
                 let mut value_sat = 0;
@@ -489,7 +489,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 let message = boost.message.replace("\"","\"\"");
                 csv.push_str(
                     format!(
-                        "{}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
+                        "{}, \"{}\", {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
                         boost.index,
                         boost_time,
                         boost.value_msat,
