@@ -166,7 +166,7 @@ $(document).ready(function () {
                             '    <div class="sent_withd_msg">' +
                             '      <span class="app"><a href="'+appIconHref+'"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></a></span>' +
                             '      <h5>' + boostSats + ' sats <small>' + boostSender + '</small></h5>' +
-                            '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
+                            '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
                             boostMessage
                             '    </div>' +
@@ -258,6 +258,13 @@ $(document).ready(function () {
         });
     }
 
+    function updateTimestamps() {
+        $('time.time_date').each(function (_, el) {
+            var $el = $(el);
+            $el.text(prettyDate(new Date($el.attr('datetime'))));
+        });
+    }
+
     function initPage() {
         getBalance();
 
@@ -308,6 +315,7 @@ $(document).ready(function () {
         } else {
             getBoosts(currentInvoiceIndex, 20, true, false);
             getBalance();
+            updateTimestamps();
         }
     }, 7000);
 
