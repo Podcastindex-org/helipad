@@ -166,7 +166,7 @@ $(document).ready(function () {
                             '    <div class="sent_withd_msg">' +
                             '      <span class="app"><a href="'+appIconHref+'"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></a></span>' +
                             '      <h5>' + boostSats + ' sats <small>' + boostSender + '</small></h5>' +
-                            '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
+                            '      <time class="time_date" datetime="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
                             boostMessage
                             '    </div>' +
