@@ -258,6 +258,13 @@ $(document).ready(function () {
         });
     }
 
+    function updateTimestamps() {
+        $('time.time_date').each(function (_, el) {
+            var $el = $(el);
+            $el.text(prettyDate(new Date($el.attr('datetime'))));
+        });
+    }
+
     function initPage() {
         getBalance();
 
@@ -308,6 +315,7 @@ $(document).ready(function () {
         } else {
             getBoosts(currentInvoiceIndex, 20, true, false);
             getBalance();
+            updateTimestamps();
         }
     }, 7000);
 
