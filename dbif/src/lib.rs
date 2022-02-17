@@ -194,7 +194,7 @@ pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, 
 
 
 //Get all of the boosts from the database
-pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
@@ -241,16 +241,24 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
     //Parse the results
     for row in rows {
         let boost: BoostRecord = row.unwrap();
-        let boost_clean = BoostRecord {
-            sender: BoostRecord::clean_string(boost.sender),
-            app: BoostRecord::clean_string(boost.app),
-            message: BoostRecord::clean_string(boost.message),
-            podcast: BoostRecord::clean_string(boost.podcast),
-            episode: BoostRecord::clean_string(boost.episode),
-            tlv: BoostRecord::clean_string(boost.tlv),
-            ..boost
-        };
-        boosts.push(boost_clean);
+
+        //Some things like text output don't need to be html entity escaped
+        //so only do it if asked for
+        if escape {
+            let boost_clean = BoostRecord {
+                sender: BoostRecord::clean_string(boost.sender),
+                app: BoostRecord::clean_string(boost.app),
+                message: BoostRecord::clean_string(boost.message),
+                podcast: BoostRecord::clean_string(boost.podcast),
+                episode: BoostRecord::clean_string(boost.episode),
+                tlv: BoostRecord::clean_string(boost.tlv),
+                ..boost
+            };
+            boosts.push(boost_clean);
+        } else {
+            boosts.push(boost);
+        }
+
     }
 
     Ok(boosts)
