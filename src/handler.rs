@@ -241,7 +241,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
     };
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, true) {
         Ok(boosts) => {
 
             let json_doc = serde_json::to_string_pretty(&boosts).unwrap();
@@ -466,7 +466,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     };
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, false) {
         Ok(boosts) => {
             let mut csv = String::new();
             csv.push_str(format!("index, time, value_msat, value_sat, value_msat_total, value_sat_total, action, sender, app, message, podcast, episode\n").as_str());
