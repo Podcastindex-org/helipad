@@ -354,3 +354,13 @@ div.nodata span.invindex {
         transform: rotate(360deg);
     }
 }
+
+/* Small screens */
+@media only screen and (max-width: 550px) {
+    div.titleHeader .titleSubtitle {
+        display:none;
+    }
+    .time_date {
+        display:none;
+    }
+}
