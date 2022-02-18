@@ -164,7 +164,7 @@ $(document).ready(function () {
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
-                            '      <span class="app"><a href="' + appIconHref + '"><img src="' + appIconUrl + '" title="' + boostApp.toLowerCase() + '"></a></span>' +
+                            '      <span class="app"><a href="' + appIconHref + '"><img src="' + appIconUrl + '" title="' + boostApp + '" alt="' + boostApp + '"></a></span>' +
                             '      <h5 class="sats">' + boostSats + ' sats <small>' + boostSender + '</small></h5>' +
                             '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + prettyDate(dateTime) + '</time>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
