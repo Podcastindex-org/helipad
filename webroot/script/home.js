@@ -168,10 +168,12 @@ $(document).ready(function () {
                             '      <h5 class="sats">' + boostSats + ' sats <small>' + boostSender + '</small></h5>' +
                             '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + prettyDate(dateTime) + '</time>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
+                            '      <div class="msg_body">' +
                             boostMessage
-                        '    </div>' +
-                        '  </div>' +
-                        '</div>';
+                            '      </div>' +
+                            '    </div>' +
+                            '  </div>' +
+                            '</div>';
 
                         //Insert the message in the right spot
                         if (displayedMessageCount == 0) {
