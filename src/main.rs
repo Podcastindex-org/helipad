@@ -258,7 +258,7 @@ async fn main() {
 
     //Base
     router.get("/", Box::new(handler::home));
-    router.get("/pew.mp3", Box::new(handler::pewmp3));
+    router.get("/new.mp3", Box::new(handler::newmp3));
     router.get("/favicon.ico", Box::new(handler::favicon));
     //Assets
     router.get("/image", Box::new(handler::asset));

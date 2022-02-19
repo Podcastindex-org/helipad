@@ -2,8 +2,8 @@ $(document).ready(function () {
     let messages = $('div.mesgs');
     let inbox = messages.find('div.msg_history');
     let appIconUrlBase = '/image?name=';
-    let pewAudioFile = '/pew.mp3';
-    let pewAudio = new Audio(pewAudioFile);
+    let newAudioFile = '/new.mp3';
+    let newAudio = new Audio(newAudioFile);
     const urlParams = new URLSearchParams(window.location.search);
     const chat_id = urlParams.get('cid');
     var intvlChatPolling = null;
@@ -203,7 +203,7 @@ $(document).ready(function () {
                         messageIds = messageIds.sort((a, b) => a - b);
 
                         //Pew pew pew!
-                        pewAudio.play();
+                        newAudio.play();
                     }
                 });
 
