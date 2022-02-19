@@ -47,9 +47,9 @@ pub async fn home(ctx: Context) -> Response {
         .unwrap();
 }
 
-//Pew-pew audio
-pub async fn pewmp3(_ctx: Context) -> Response {
-    let file = fs::read("webroot/extra/pew.mp3").expect("Something went wrong reading the file.");
+//Audio
+pub async fn newmp3(_ctx: Context) -> Response {
+    let file = fs::read("webroot/extra/new.mp3").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
         .status(StatusCode::OK)
         .header("Content-type", "audio/mpeg")
