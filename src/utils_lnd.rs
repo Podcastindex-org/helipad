@@ -5,6 +5,9 @@ use std::env;
 use std::fs;
 use lnd;
 
+#[macro_use]
+extern crate configure_me;
+
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_RECEIVED: &str = "database-received.db";
 const HELIPAD_DATABASE_SENT: &str = "database-sent.db";
@@ -15,15 +18,13 @@ const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 
 pub async fn get_server_config() -> config::Config {
-    //Bring in the configuration info
+    include_config!();
+    let server_config = get_server_config();
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
     return server_config;
 }
 
 pub async fn get_macaroon() -> Vec<u8> {
-    //Configure_me
-    include_config!();
-
     let server_config = get_server_config();
     //Get the macaroon file.  Look in the local directory first as an override.
     //If the file is not found in the currect working directory, look for it at the
@@ -66,9 +67,6 @@ pub async fn get_macaroon() -> Vec<u8> {
 }
 
 pub async fn get_cert() -> Vec<u8> {
-    //Configure_me
-    include_config!();
-
     let server_config = get_server_config();
     println!("\nDiscovering certificate file path...");
     let cert_path;
@@ -107,9 +105,6 @@ pub async fn get_cert() -> Vec<u8> {
 }
 
 pub async fn get_node_address() -> String {
-    //Configure_me
-    include_config!();
-
     let server_config = get_server_config();
     //Get the url connection string of the lnd node
     println!("\nDiscovering LND node address...");
