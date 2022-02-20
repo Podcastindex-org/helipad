@@ -21,6 +21,9 @@ pub async fn get_server_config() -> config::Config {
 }
 
 pub async fn get_macaroon() -> Vec<u8> {
+    //Configure_me
+    include_config!();
+
     let server_config = get_server_config();
     //Get the macaroon file.  Look in the local directory first as an override.
     //If the file is not found in the currect working directory, look for it at the
@@ -63,6 +66,9 @@ pub async fn get_macaroon() -> Vec<u8> {
 }
 
 pub async fn get_cert() -> Vec<u8> {
+    //Configure_me
+    include_config!();
+
     let server_config = get_server_config();
     println!("\nDiscovering certificate file path...");
     let cert_path;
@@ -101,6 +107,9 @@ pub async fn get_cert() -> Vec<u8> {
 }
 
 pub async fn get_node_address() -> String {
+    //Configure_me
+    include_config!();
+
     let server_config = get_server_config();
     //Get the url connection string of the lnd node
     println!("\nDiscovering LND node address...");
