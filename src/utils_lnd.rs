@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fs;
 use lnd;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
@@ -10,7 +11,18 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 
+
+
+
+pub async fn get_server_config() -> String {
+    //Bring in the configuration info
+    let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
+    return server_config;
+}
+
+
 pub async fn get_macaroon() -> Vec<u8> {
+    let server_config = get_server_config();
     //Get the macaroon file.  Look in the local directory first as an override.
     //If the file is not found in the currect working directory, look for it at the
     //normal LND directory locations
@@ -52,6 +64,7 @@ pub async fn get_macaroon() -> Vec<u8> {
 }
 
 pub async fn get_cert() -> Vec<u8> {
+    let server_config = get_server_config();
     println!("\nDiscovering certificate file path...");
     let cert_path;
     let env_cert_path = std::env::var("LND_TLSCERT");
@@ -89,6 +102,7 @@ pub async fn get_cert() -> Vec<u8> {
 }
 
 pub async fn get_node_address() -> String {
+    let server_config = get_server_config();
     //Get the url connection string of the lnd node
     println!("\nDiscovering LND node address...");
     let node_address;
@@ -106,8 +120,8 @@ pub async fn get_node_address() -> String {
     return node_address;
 }
 
-pub async fn get_node_info(connection) -> String {
-    match lnd::Lnd::get_info(&mut lightning).await {
+pub async fn get_node_info(connection: lnd::Lnd) -> String {
+    match lnd::Lnd::get_info(&mut connection).await {
         Ok(node_info) => {
             println!("LND node info: {:#?}", node_info);
         }
