@@ -1,4 +1,5 @@
 use crate::Config;
+use crate::config::ResultExt;
 use std::error::Error;
 use std::env;
 use std::fs;
