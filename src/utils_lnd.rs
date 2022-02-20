@@ -9,16 +9,16 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 pub async fn test(node_address: String) -> String {
-    reurn node_address;
+    return node_address;
 }
 
-pub async fn connect(node_address: String, cert: String, macaroon: String) -> Lnd {
+pub async fn connect(node_address: String, cert: String, macaroon: String) -> lnd::Lnd {
     let mut lightning;
     return lightning;
 }
 
 
-/* The next one isn't allowed because outer doc comments
+/* 
 // ===================================================================================================
 pub async fn get_macaroon() -> Vec<u8> {
     //Get the macaroon file.  Look in the local directory first as an override.
