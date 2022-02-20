@@ -21,8 +21,8 @@ use dbif::add_wallet_balance_to_db;
 #[macro_use]
 extern crate configure_me;
 
-#[path = "utils-lnd.rs"]
-mod utils-lnd;
+#[path = "utils_lnd.rs"]
+mod utils_lnd;
 
 
 //Globals ----------------------------------------------------------------------------------------------------
