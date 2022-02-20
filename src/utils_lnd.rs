@@ -14,7 +14,7 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 
-pub async fn get_server_config() -> String {
+pub async fn get_server_config() -> config::Config {
     //Bring in the configuration info
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
     return server_config;
