@@ -1,4 +1,6 @@
+use crate::Config;
 use std::error::Error;
+use std::env;
 use std::fs;
 use lnd;
 
@@ -11,15 +13,11 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 
-
-
-
 pub async fn get_server_config() -> String {
     //Bring in the configuration info
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
     return server_config;
 }
-
 
 pub async fn get_macaroon() -> Vec<u8> {
     let server_config = get_server_config();
@@ -118,16 +116,4 @@ pub async fn get_node_address() -> String {
         println!(" - Trying localhost default: [{}].", node_address);
     }
     return node_address;
-}
-
-pub async fn get_node_info(connection: lnd::Lnd) -> String {
-    match lnd::Lnd::get_info(&mut connection).await {
-        Ok(node_info) => {
-            println!("LND node info: {:#?}", node_info);
-        }
-        Err(e) => {
-            eprintln!("Error getting LND node info: {:#?}", e);
-        }
-    }
-    return node_info;
 }
