@@ -457,7 +457,6 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
         println!(" - Trying localhost default: [{}].", node_address);
     }
 
-    let test = utils_lnd::test(node_address.clone());
     //Make the connection to LND
     let mut lightning;
     match lnd::Lnd::connect_with_macaroon(node_address.clone(), &cert, &macaroon).await {
