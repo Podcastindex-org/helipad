@@ -1,15 +1,7 @@
-use crate::Config;
-use crate::config::ResultExt;
 use std::error::Error;
 use std::env;
 use std::fs;
 use lnd;
-
-#[macro_use]
-extern crate configure_me;
-
-//Configure_me
-include_config!();
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_RECEIVED: &str = "database-received.db";
@@ -20,7 +12,7 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 
-pub async fn get_macaroon(helipad_config: config::Config) -> Vec<u8> {
+pub async fn get_macaroon(helipad_config: String) -> Vec<u8> {
     //Get the macaroon file.  Look in the local directory first as an override.
     //If the file is not found in the currect working directory, look for it at the
     //normal LND directory locations
@@ -61,7 +53,7 @@ pub async fn get_macaroon(helipad_config: config::Config) -> Vec<u8> {
     return macaroon;
 }
 
-pub async fn get_cert(helipad_config: config::Config) -> Vec<u8> {
+pub async fn get_cert(helipad_config: String) -> Vec<u8> {
     println!("\nDiscovering certificate file path...");
     let cert_path;
     let env_cert_path = std::env::var("LND_TLSCERT");
@@ -98,7 +90,7 @@ pub async fn get_cert(helipad_config: config::Config) -> Vec<u8> {
     return cert;
 }
 
-pub async fn get_node_address(helipad_config: config::Config) -> String {
+pub async fn get_node_address(helipad_config: String) -> String {
     //Get the url connection string of the lnd node
     println!("\nDiscovering LND node address...");
     let node_address;
