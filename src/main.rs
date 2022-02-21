@@ -370,7 +370,7 @@ impl Context {
 async fn lnd_poller(server_config: Config, database_file_path: String) {
     let db_filepath = database_file_path;
 
-    let macaroon = utils_lnd::get_macaroon(server_config.macaroon);
+    let macaroon = utils_lnd::get_macaroon(server_config.macaroon.unwrap().to_string());
 
     //Get the macaroon and cert files.  Look in the local directory first as an override.
     //If the files are not found in the currect working directory, look for them at their

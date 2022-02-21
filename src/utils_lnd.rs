@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::env;
 use std::fs;
 use lnd;
 
