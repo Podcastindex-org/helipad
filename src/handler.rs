@@ -20,11 +20,13 @@ const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
 //Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug)]
 struct HydraError(String);
+
 impl fmt::Display for HydraError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Fatal error: {}", self.0)
     }
 }
+
 impl Error for HydraError {}
 
 
@@ -86,28 +88,28 @@ pub async fn asset(ctx: Context) -> Response {
             file_path = WEBROOT_PATH_HTML;
             content_type = "text/html";
             file_extension = "html";
-        },
+        }
         "/image" => {
             file_path = WEBROOT_PATH_IMAGE;
             content_type = "image/png";
             file_extension = "png";
-        },
+        }
         "/style" => {
             file_path = WEBROOT_PATH_STYLE;
             content_type = "text/css";
             file_extension = "css";
-        },
+        }
         "/script" => {
             file_path = WEBROOT_PATH_SCRIPT;
             content_type = "text/javascript";
             file_extension = "js";
-        },
+        }
         _ => {
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
                 .body(format!("** Invalid asset type requested (ex. /images?name=filename.").into())
                 .unwrap();
-        },
+        }
     };
 
     //Attempt to serve the file
@@ -136,6 +138,7 @@ pub async fn api_v1_balance_options(_ctx: Context) -> Response {
         .body(format!("").into())
         .unwrap();
 }
+
 pub async fn api_v1_balance(_ctx: Context) -> Response {
     //Get query parameters
     let _params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -145,7 +148,6 @@ pub async fn api_v1_balance(_ctx: Context) -> Response {
     //Get the boosts from db for returning
     match dbif::get_wallet_balance_from_db(&_ctx.database_file_path) {
         Ok(balance) => {
-
             let json_doc = serde_json::to_string_pretty(&balance).unwrap();
 
             return hyper::Response::builder()
@@ -162,7 +164,6 @@ pub async fn api_v1_balance(_ctx: Context) -> Response {
                 .unwrap();
         }
     }
-
 }
 
 //API - serve boosts as JSON either in ascending or descending order
@@ -173,6 +174,7 @@ pub async fn api_v1_boosts_options(_ctx: Context) -> Response {
         .body(format!("").into())
         .unwrap();
 }
+
 pub async fn api_v1_boosts(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -187,7 +189,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                 Ok(index) => {
                     println!("** Supplied index from call: [{}]", index);
                     index
-                },
+                }
                 Err(_) => {
                     eprintln!("** Error getting boosts: 'index' param is not a number.\n");
                     return hyper::Response::builder()
@@ -196,7 +198,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                         .unwrap();
                 }
             };
-        },
+        }
         None => {
             eprintln!("** Error getting boosts: 'index' param is not present.\n");
             return hyper::Response::builder()
@@ -214,7 +216,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                 Ok(boostcount) => {
                     println!("** Supplied boostcount from call: [{}]", boostcount);
                     boostcount
-                },
+                }
                 Err(_) => {
                     eprintln!("** Error getting boosts: 'count' param is not a number.\n");
                     return hyper::Response::builder()
@@ -223,7 +225,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                         .unwrap();
                 }
             };
-        },
+        }
         None => {
             eprintln!("** Error getting boosts: 'count' param is not present.\n");
             return hyper::Response::builder()
@@ -237,13 +239,12 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
     let mut old = false;
     match params.get("old") {
         Some(_) => old = true,
-        None => { }
+        None => {}
     };
 
     //Get the boosts from db for returning
     match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, true) {
         Ok(boosts) => {
-
             let json_doc = serde_json::to_string_pretty(&boosts).unwrap();
 
             return hyper::Response::builder()
@@ -260,7 +261,6 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                 .unwrap();
         }
     }
-
 }
 
 //API - serve streams as JSON either in ascending or descending order
@@ -271,6 +271,7 @@ pub async fn api_v1_streams_options(_ctx: Context) -> Response {
         .body(format!("").into())
         .unwrap();
 }
+
 pub async fn api_v1_streams(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -285,7 +286,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
                 Ok(index) => {
                     println!("** Supplied index from call: [{}]", index);
                     index
-                },
+                }
                 Err(_) => {
                     eprintln!("** Error getting streams: 'index' param is not a number.\n");
                     return hyper::Response::builder()
@@ -294,7 +295,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
                         .unwrap();
                 }
             };
-        },
+        }
         None => {
             eprintln!("** Error getting streams: 'index' param is not present.\n");
             return hyper::Response::builder()
@@ -312,7 +313,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
                 Ok(boostcount) => {
                     println!("** Supplied stream count from call: [{}]", boostcount);
                     boostcount
-                },
+                }
                 Err(_) => {
                     eprintln!("** Error getting streams: 'count' param is not a number.\n");
                     return hyper::Response::builder()
@@ -321,7 +322,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
                         .unwrap();
                 }
             };
-        },
+        }
         None => {
             eprintln!("** Error getting streams: 'count' param is not present.\n");
             return hyper::Response::builder()
@@ -335,7 +336,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
     let mut old = false;
     match params.get("old") {
         Some(_) => old = true,
-        None => { }
+        None => {}
     };
 
     //Get the boosts from db for returning
@@ -368,6 +369,7 @@ pub async fn api_v1_index_options(_ctx: Context) -> Response {
         .body(format!("").into())
         .unwrap();
 }
+
 pub async fn api_v1_index(_ctx: Context) -> Response {
 
     //Get the last known invoice index from the database
@@ -382,7 +384,7 @@ pub async fn api_v1_index(_ctx: Context) -> Response {
                 .header("Access-Control-Allow-Origin", "*")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
-        },
+        }
         Err(e) => {
             eprintln!("** Error getting current db index: {}.\n", e);
             return hyper::Response::builder()
@@ -408,7 +410,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 Ok(index) => {
                     println!("** Supplied index from call: [{}]", index);
                     index
-                },
+                }
                 Err(_) => {
                     eprintln!("** Error getting boosts: 'index' param is not a number.\n");
                     return hyper::Response::builder()
@@ -417,7 +419,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                         .unwrap();
                 }
             };
-        },
+        }
         None => {
             eprintln!("** Error getting boosts: 'index' param is not present.\n");
             return hyper::Response::builder()
@@ -435,7 +437,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 Ok(boostcount) => {
                     println!("** Supplied boostcount from call: [{}]", boostcount);
                     boostcount
-                },
+                }
                 Err(_) => {
                     eprintln!("** Error getting boosts: 'count' param is not a number.\n");
                     return hyper::Response::builder()
@@ -444,7 +446,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                         .unwrap();
                 }
             };
-        },
+        }
         None => {
             eprintln!("** Error getting boosts: 'count' param is not present.\n");
             return hyper::Response::builder()
@@ -458,7 +460,28 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     let mut old = false;
     match params.get("old") {
         Some(_) => old = true,
-        None => { }
+        None => {}
+    };
+
+    //Was a stop index given?
+    let mut endex: u64 = 0;
+    match params.get("end") {
+        Some(endexnum) => {
+            endex = match endexnum.parse::<u64>() {
+                Ok(endex) => {
+                    println!("** Supplied endex from call: [{}]", endex);
+                    endex
+                }
+                Err(_) => {
+                    eprintln!("** Error getting boosts: 'endex' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'endex' parameter must be an integer.").into())
+                        .unwrap();
+                }
+            };
+        }
+        None => {}
     };
 
     //Get the boosts from db for returning
@@ -487,7 +510,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 }
 
                 //The main export data formatting
-                let message = boost.message.replace("\"","\"\"");
+                let message = boost.message.replace("\"", "\"\"");
                 csv.push_str(
                     format!(
                         "{}, {}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
@@ -509,13 +532,18 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
 
                 //Keep count
                 count += 1;
+
+                //If an exit point was given then bail when it's reached
+                if (old && boost.index <= endex) || (!old && boost.index >= endex) {
+                    break;
+                }
             }
 
             return hyper::Response::builder()
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
                 .header("Content-type", "text/plain; charset=utf-8")
-                //.header("Content-Disposition", "attachment; filename=\"boosts.csv\"")
+                .header("Content-Disposition", "attachment; filename=\"boosts.csv\"")
                 .body(format!("{}", csv).into())
                 .unwrap();
         }
@@ -527,5 +555,4 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 .unwrap();
         }
     }
-
 }

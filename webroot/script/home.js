@@ -218,11 +218,19 @@ $(document).ready(function () {
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
 
-                bcount = $('div.outgoing_msg:first').data('msgid') - $('div.outgoing_msg:last').data('msgid');
+                var bcount = $('div.outgoing_msg:first').data('msgid') - $('div.outgoing_msg:last').data('msgid');
                 if (typeof bcount !== "number") {
                     bcount = 9999;
                 }
-                $('span.csv a').attr('href', '/csv?index=' + $('div.outgoing_msg:first').data('msgid') + '&count=' + bcount + '&old=true');
+
+                //Update the csv export link
+                var csvindex = $('div.outgoing_msg:first').data('msgid');
+                if (typeof csvindex !== "number") {
+                    csvindex = currentInvoiceIndex;
+                }
+
+                var endex = csvindex - bcount;
+                $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
