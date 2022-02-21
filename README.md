@@ -38,12 +38,10 @@ projects.
 The only exception to this is the `listen_port` which can be specified on the command line as the only argument.  This is just for
 convenience as it's a very common thing to change during testing.
 
-
 ## API
 The very simplistic API consists of the following endpoints:
 
 #### /api/v1/index
-
 
 #### /api/v1/boosts
 This call returns `count` boosts starting at `index`.  If the `old` parameter is present, the boosts returned start from `index` and
@@ -51,4 +49,17 @@ descend by `count`, showing older boosts.  Otherwise, they start at `index` and 
 
 #### /api/v1/streams
 
+## Development
 
+### Quick Start (Debian/Linux Mint/Ubuntu/Pop!_OS) 
+
+In order to run Helipad locally you need to install the Rust Compiler `rustc`, the Rust package manager `cargo`, and the needed shared libraries `libssl-dev`/`libsqlite3-dev`. Clone the Github repo with `git clone ...` and enter the `helipad` directory. Note, all commands going forward will need to be ran from this directory. `cargo run` will compile and run helipad. If Helipad fails to start you may need to edit `helipad.conf` or set/unset Environment Variables.
+
+```sh
+sudo apt install rustc cargo libssl-dev libsqlite3-dev
+git clone https://github.com/Podcastindex-org/helipad.git
+cd helipad
+# Edit helipad.conf as needed
+cargo run
+# Open http://127.0.0.1:2112 in your browser
+```
