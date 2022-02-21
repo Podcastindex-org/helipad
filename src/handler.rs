@@ -465,7 +465,12 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, false) {
         Ok(boosts) => {
             let mut csv = String::new();
-            csv.push_str(format!("index, time, value_msat, value_sat, value_msat_total, value_sat_total, action, sender, app, message, podcast, episode\n").as_str());
+
+            //CSV column name header
+            csv.push_str(format!("count, index, time, value_msat, value_sat, value_msat_total, value_sat_total, action, sender, app, message, podcast, episode\n").as_str());
+
+            //Iterate the boost set
+            let mut count: u64 = 1;
             for boost in boosts {
                 //Parse out a friendly date
                 let dt = NaiveDateTime::from_timestamp(boost.time, 0);
@@ -481,10 +486,12 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                     value_sat_total = boost.value_msat_total / 1000;
                 }
 
+                //The main export data formatting
                 let message = boost.message.replace("\"","\"\"");
                 csv.push_str(
                     format!(
-                        "{}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
+                        "{}, {}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
+                        count,
                         boost.index,
                         boost_time,
                         boost.value_msat,
@@ -499,6 +506,9 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                         boost.episode
                     ).as_str()
                 );
+
+                //Keep count
+                count += 1;
             }
 
             return hyper::Response::builder()
