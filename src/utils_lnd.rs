@@ -12,7 +12,7 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 
-pub async fn get_macaroon(helipad_config: config::Config) -> Vec<u8> {
+pub async fn get_macaroon(config_setting: String) -> Vec<u8> {
     //Get the macaroon file.  Look in the local directory first as an override.
     //If the file is not found in the currect working directory, look for it at the
     //normal LND directory locations
@@ -23,8 +23,8 @@ pub async fn get_macaroon(helipad_config: config::Config) -> Vec<u8> {
     if env_macaroon_path.is_ok() {
         macaroon_path = env_macaroon_path.unwrap();
         println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", macaroon_path);
-    } else if helipad_config.macaroon.is_some() {
-        macaroon_path = helipad_config.macaroon.unwrap();
+    } else if config_setting.is_some() {
+        macaroon_path = config_setting.unwrap();
         println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, macaroon_path);
     } else {
         macaroon_path = "admin.macaroon".to_string();
@@ -53,15 +53,15 @@ pub async fn get_macaroon(helipad_config: config::Config) -> Vec<u8> {
     return macaroon;
 }
 
-pub async fn get_cert(helipad_config: config::Config) -> Vec<u8> {
+pub async fn get_cert(config_setting: String) -> Vec<u8> {
     println!("\nDiscovering certificate file path...");
     let cert_path;
     let env_cert_path = std::env::var("LND_TLSCERT");
     if env_cert_path.is_ok() {
         cert_path = env_cert_path.unwrap();
         println!(" - Trying environment var(LND_TLSCERT): [{}]", cert_path);
-    } else if helipad_config.cert.is_some() {
-        cert_path = helipad_config.cert.unwrap();
+    } else if config_setting.is_some() {
+        cert_path = config_setting.unwrap();
         println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cert_path);
     } else {
         cert_path = "tls.cert".to_string();
@@ -90,7 +90,7 @@ pub async fn get_cert(helipad_config: config::Config) -> Vec<u8> {
     return cert;
 }
 
-pub async fn get_node_address(helipad_config: config::Config) -> String {
+pub async fn get_node_address(config_setting: String) -> String {
     //Get the url connection string of the lnd node
     println!("\nDiscovering LND node address...");
     let node_address;
@@ -98,8 +98,8 @@ pub async fn get_node_address(helipad_config: config::Config) -> String {
     if env_lnd_url.is_ok() {
         node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
         println!(" - Trying environment var(LND_URL): [{}]", node_address);
-    } else if helipad_config.lnd_url.is_some() {
-        node_address = helipad_config.lnd_url.unwrap();
+    } else if config_setting.is_some() {
+        node_address = config_setting.unwrap();
         println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, node_address);
     } else {
         node_address = String::from(LND_STANDARD_GRPC_URL);
