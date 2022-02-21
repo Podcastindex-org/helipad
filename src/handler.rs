@@ -510,7 +510,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 }
 
                 //The main export data formatting
-                let message = boost.message.replace("\"", "\"\"");
+                let message = boost.message.replace("\"", "\"\"").replace("\n", " ");
                 csv.push_str(
                     format!(
                         "{}, {}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
