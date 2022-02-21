@@ -22,8 +22,13 @@ pub struct BoostRecord {
 
 impl BoostRecord {
     //Removes unsafe html interpretable characters from displayable strings
-    pub fn clean_string( field: String) -> String {
+    pub fn escape_for_html( field: String) -> String {
         return field.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    //Removes unsafe html interpretable characters from displayable strings
+    pub fn escape_for_csv( field: String) -> String {
+        return field.replace("\"", "\"\"").replace("\n", " ");
     }
 }
 
@@ -194,7 +199,7 @@ pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, 
 
 
 //Get all of the boosts from the database
-pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
@@ -244,14 +249,14 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
 
         //Some things like text output don't need to be html entity escaped
         //so only do it if asked for
-        if escape {
+        if escape_html {
             let boost_clean = BoostRecord {
-                sender: BoostRecord::clean_string(boost.sender),
-                app: BoostRecord::clean_string(boost.app),
-                message: BoostRecord::clean_string(boost.message),
-                podcast: BoostRecord::clean_string(boost.podcast),
-                episode: BoostRecord::clean_string(boost.episode),
-                tlv: BoostRecord::clean_string(boost.tlv),
+                sender: BoostRecord::escape_for_html(boost.sender),
+                app: BoostRecord::escape_for_html(boost.app),
+                message: BoostRecord::escape_for_html(boost.message),
+                podcast: BoostRecord::escape_for_html(boost.podcast),
+                episode: BoostRecord::escape_for_html(boost.episode),
+                tlv: BoostRecord::escape_for_html(boost.tlv),
                 ..boost
             };
             boosts.push(boost_clean);

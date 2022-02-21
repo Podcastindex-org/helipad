@@ -8,6 +8,7 @@ use voca_rs::*;
 use handlebars::Handlebars;
 use serde_json::json;
 use chrono::{NaiveDateTime};
+use dbif::BoostRecord;
 
 
 //Constants --------------------------------------------------------------------------------------------------
@@ -510,7 +511,6 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 }
 
                 //The main export data formatting
-                let message = boost.message.replace("\"", "\"\"").replace("\n", " ");
                 csv.push_str(
                     format!(
                         "{}, {}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
@@ -522,11 +522,11 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                         boost.value_msat_total,
                         value_sat_total,
                         boost.action,
-                        boost.sender,
-                        boost.app,
-                        message,
-                        boost.podcast,
-                        boost.episode
+                        BoostRecord::escape_for_csv(boost.sender),
+                        BoostRecord::escape_for_csv(boost.app),
+                        BoostRecord::escape_for_csv(boost.message),
+                        BoostRecord::escape_for_csv(boost.podcast),
+                        BoostRecord::escape_for_csv(boost.episode)
                     ).as_str()
                 );
 
