@@ -2,14 +2,6 @@ use std::error::Error;
 use std::fs;
 use lnd;
 
-const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
-const HELIPAD_DATABASE_RECEIVED: &str = "database-received.db";
-const HELIPAD_DATABASE_SENT: &str = "database-sent.db";
-const HELIPAD_STANDARD_PORT: &str = "2112";
-const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
-const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
-const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
-
 
 pub async fn get_macaroon(config_setting: String) -> Vec<u8> {
     //Get the macaroon file.  Look in the local directory first as an override.
