@@ -434,11 +434,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             boostcount = match bcount.parse::<u64>() {
                 Ok(boostcount) => {
                     println!("** Supplied boostcount from call: [{}]", boostcount);
-                    if boostcount > 200 {
-                        200
-                    } else {
-                        boostcount
-                    }
+                    boostcount
                 },
                 Err(_) => {
                     eprintln!("** Error getting boosts: 'count' param is not a number.\n");
@@ -485,7 +481,6 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                     value_sat_total = boost.value_msat_total / 1000;
                 }
 
-
                 let message = boost.message.replace("\"","\"\"");
                 csv.push_str(
                     format!(
@@ -510,7 +505,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
                 .header("Content-type", "text/plain; charset=utf-8")
-                .header("Content-Disposition", "attachment; filename=\"boosts.csv\"")
+                //.header("Content-Disposition", "attachment; filename=\"boosts.csv\"")
                 .body(format!("{}", csv).into())
                 .unwrap();
         }
