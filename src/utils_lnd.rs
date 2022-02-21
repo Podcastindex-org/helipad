@@ -8,6 +8,9 @@ use lnd;
 #[macro_use]
 extern crate configure_me;
 
+//Configure_me
+include_config!();
+
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_RECEIVED: &str = "database-received.db";
 const HELIPAD_DATABASE_SENT: &str = "database-sent.db";
@@ -18,8 +21,6 @@ const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 
 pub async fn get_server_config() -> config::Config {
-    include_config!();
-    let server_config = get_server_config();
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
     return server_config;
 }
