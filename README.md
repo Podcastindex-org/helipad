@@ -73,7 +73,10 @@ This will give back a csv list of 13,049 boosts starting at index 38097 and desc
 
 ### Quick Start (Debian/Linux Mint/Ubuntu/Pop!_OS) 
 
-In order to run Helipad locally you need to install the Rust Compiler `rustc`, the Rust package manager `cargo`, and the needed shared libraries `libssl-dev`/`libsqlite3-dev`. Clone the Github repo with `git clone ...` and enter the `helipad` directory. Note, all commands going forward will need to be ran from this directory. `cargo run` will compile and run helipad. If Helipad fails to start you may need to edit `helipad.conf` or set/unset Environment Variables.
+In order to run Helipad locally you need to install the Rust Compiler `rustc`, the Rust package manager `cargo`, and the needed shared
+libraries `libssl-dev`/`libsqlite3-dev`. Clone the Github repo with `git clone ...` and enter the `helipad` directory. Note, all commands
+going forward will need to be ran from this directory. `cargo run` will compile and run helipad. If Helipad fails to start you may need to
+edit `helipad.conf` or set/unset Environment Variables.
 
 ```sh
 sudo apt install rustc cargo libssl-dev libsqlite3-dev
@@ -83,3 +86,6 @@ cd helipad
 cargo run
 # Open http://127.0.0.1:2112 in your browser
 ```
+
+There is an [example build script](testbuildrun.sh) for quick compile/run when iterating on new features.  The script sets a proper environment, does a debug
+compile and runs the executable.
