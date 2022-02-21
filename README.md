@@ -29,6 +29,7 @@ environment variables:
 Information about the Umbrel app environment is in the umbrel folder for those interested.
 
 
+<br><br>
 ## Configuration
 Each configurable item has multiple options.  They are listed in the config file [here](helipad.conf).  In each case, the environment
 variable is tried first, then the configuration file parameter, then a sane default based on known locations in use from other
@@ -38,6 +39,7 @@ The only exception to this is the `listen_port` which can be specified on the co
 convenience as it's a very common thing to change during testing.
 
 
+<br><br>
 ## API
 The very simplistic API consists of the following endpoints:
 
@@ -56,6 +58,7 @@ This call returns `count` streams starting at `index`.  If the `old` parameter i
 descend by `count`, showing older streams.  Otherwise, they start at `index` and ascend by `count`, showing newer streams.
 
 
+<br><br>
 ## CSV export
 There is an endpoint called `/csv` that will export boosts as a CSV list to make organizing easier.  The parameters behave just like the
 `boosts` and `streams` endpoints, but also accept an `end` parameter which limits how far back in time the CSV export list goes.  An example
@@ -69,6 +72,7 @@ This will give back a csv list of 13,049 boosts starting at index 38097 and desc
 25048.
 
 
+<br><br>
 ## Development
 
 ### Quick Start (Debian/Linux Mint/Ubuntu/Pop!_OS) 
