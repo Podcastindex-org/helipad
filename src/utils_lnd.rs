@@ -23,8 +23,8 @@ pub async fn get_macaroon(config_setting: String) -> Vec<u8> {
     if env_macaroon_path.is_ok() {
         macaroon_path = env_macaroon_path.unwrap();
         println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", macaroon_path);
-    } else if config_setting.is_some() {
-        macaroon_path = config_setting.unwrap();
+    } else if config_setting.len() > 0 {
+        macaroon_path = config_setting;
         println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, macaroon_path);
     } else {
         macaroon_path = "admin.macaroon".to_string();
@@ -60,8 +60,8 @@ pub async fn get_cert(config_setting: String) -> Vec<u8> {
     if env_cert_path.is_ok() {
         cert_path = env_cert_path.unwrap();
         println!(" - Trying environment var(LND_TLSCERT): [{}]", cert_path);
-    } else if config_setting.is_some() {
-        cert_path = config_setting.unwrap();
+    } else if config_setting.len() > 0 {
+        cert_path = config_setting;
         println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cert_path);
     } else {
         cert_path = "tls.cert".to_string();
@@ -98,8 +98,8 @@ pub async fn get_node_address(config_setting: String) -> String {
     if env_lnd_url.is_ok() {
         node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
         println!(" - Trying environment var(LND_URL): [{}]", node_address);
-    } else if config_setting.is_some() {
-        node_address = config_setting.unwrap();
+    } else if config_setting.len() > 0 {
+        node_address = config_setting;
         println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, node_address);
     } else {
         node_address = String::from(LND_STANDARD_GRPC_URL);
