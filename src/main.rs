@@ -21,6 +21,9 @@ use dbif::add_wallet_balance_to_db;
 #[macro_use]
 extern crate configure_me;
 
+// #[path = "utils-lnd.rs"]
+// mod utils-lnd;
+
 
 //Globals ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
@@ -31,7 +34,8 @@ type Response = hyper::Response<hyper::Body>;
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
-const HELIPAD_DATABASE_DIR: &str = "database.db";
+const HELIPAD_DATABASE_RECEIVED: &str = "database-received.db";
+const HELIPAD_DATABASE_SENT: &str = "database-sent.db";
 const HELIPAD_STANDARD_PORT: &str = "2112";
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
 const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
@@ -49,6 +53,7 @@ pub struct AppState {
 #[derive(Clone, Debug)]
 pub struct HelipadConfig {
     pub database_file_path: String,
+    pub database_sent_file_path: String,
     pub listen_port: String,
     pub macaroon_path: String,
     pub cert_path: String,
@@ -61,6 +66,7 @@ pub struct Context {
     pub path: String,
     pub params: Params,
     pub database_file_path: String,
+    pub database_sent_file_path: String,
     body_bytes: Option<hyper::body::Bytes>,
 }
 
@@ -182,6 +188,7 @@ async fn main() {
     //Configuration
     let mut helipad_config = HelipadConfig {
         database_file_path: "".to_string(),
+        database_sent_file_path: "".to_string(),
         listen_port: "".to_string(),
         macaroon_path: "".to_string(),
         cert_path: "".to_string(),
@@ -191,7 +198,8 @@ async fn main() {
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
 
     //Debugging
-    println!("Config file(database_dir): {:#?}", server_config.database_dir);
+    println!("Config file(database_received): {:#?}", server_config.database_received);
+    println!("Config file(database_sent): {:#?}", server_config.database_sent);
     println!("Config file(listen_port): {:#?}", server_config.listen_port);
     println!("Config file(macaroon): {:#?}", server_config.macaroon);
     println!("Config file(cert): {:#?}", server_config.cert);
@@ -219,26 +227,53 @@ async fn main() {
     }
     helipad_config.listen_port = listen_port.clone();
 
-    //DATABASE FILE -----
+    //DATABASE FILES -----
     //First try to get the database file location from the environment
     println!("\nDiscovering database location...");
-    let env_database_file_path = std::env::var("HELIPAD_DATABASE_DIR");
+    let env_database_file_path = std::env::var("HELIPAD_DATABASE_RECEIVED");
     if env_database_file_path.is_ok() {
         helipad_config.database_file_path = env_database_file_path.unwrap();
-        println!(" - Using environment var(HELIPAD_DATABASE_DIR): [{}]", helipad_config.database_file_path);
+        println!(" - Using environment var(HELIPAD_DATABASE_RECEIVED): [{}]", helipad_config.database_file_path);
     } else {
         //If that fails, try to get it from the config file
-        if server_config.database_dir.is_some() {
-            helipad_config.database_file_path = server_config.database_dir.clone().unwrap().to_string();
+        if server_config.database_received.is_some() {
+            helipad_config.database_file_path = server_config.database_received.clone().unwrap().to_string();
             println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.database_file_path);
         } else {
             //If that fails just fall back to the local directory
-            helipad_config.database_file_path = HELIPAD_DATABASE_DIR.to_string();
+            helipad_config.database_file_path = HELIPAD_DATABASE_RECEIVED.to_string();
             println!(" - Nothing else found. Using default: [{}]", helipad_config.database_file_path);
         }
     }
     //Create the database file
     match dbif::create_database(&helipad_config.database_file_path) {
+        Ok(_) => {
+            println!("Database file is ready...");
+        }
+        Err(e) => {
+            eprintln!("Database error: {:#?}", e);
+            std::process::exit(3);
+        }
+    }
+    //First try to get the database file location from the environment
+    println!("\nDiscovering database location...");
+    let env_database_sent_file_path = std::env::var("HELIPAD_DATABASE_SENT");
+    if env_database_sent_file_path.is_ok() {
+        helipad_config.database_sent_file_path = env_database_sent_file_path.unwrap();
+        println!(" - Using environment var(HELIPAD_DATABASE_SENT): [{}]", helipad_config.database_sent_file_path);
+    } else {
+        //If that fails, try to get it from the config file
+        if server_config.database_sent.is_some() {
+            helipad_config.database_sent_file_path = server_config.database_sent.clone().unwrap().to_string();
+            println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.database_sent_file_path);
+        } else {
+            //If that fails just fall back to the local directory
+            helipad_config.database_sent_file_path = HELIPAD_DATABASE_SENT.to_string();
+            println!(" - Nothing else found. Using default: [{}]", helipad_config.database_sent_file_path);
+        }
+    }
+    //Create the database file
+    match dbif::create_database(&helipad_config.database_sent_file_path) {
         Ok(_) => {
             println!("Database file is ready...");
         }
@@ -275,11 +310,13 @@ async fn main() {
     router.get("/api/v1/streams", Box::new(handler::api_v1_streams));
     router.options("/api/v1/index", Box::new(handler::api_v1_index_options));
     router.get("/api/v1/index", Box::new(handler::api_v1_index));
-    router.get("/csv", Box::new(handler::csv_export_boosts));
 
+    router.get("/csv", Box::new(handler::csv_export_boosts));
+    router.get("/sendboostagram", Box::new(handler::send_boostagram));
 
     let shared_router = Arc::new(router);
     let db_filepath: String = helipad_config.database_file_path.clone();
+    let db_sent_filepath: String = helipad_config.database_sent_file_path.clone();
     let new_service = make_service_fn(move |conn: &AddrStream| {
         let app_state = AppState {
             state_thing: some_state.clone(),
@@ -288,11 +325,12 @@ async fn main() {
         };
 
         let database_file_path = db_filepath.clone();
+        let database_sent_file_path = db_sent_filepath.clone();
 
         let router_capture = shared_router.clone();
         async {
             Ok::<_, Error>(service_fn(move |req| {
-                route(router_capture.clone(), req, app_state.clone(), database_file_path.clone())
+                route(router_capture.clone(), req, app_state.clone(), database_file_path.clone(), database_sent_file_path.clone())
             }))
         }
     });
@@ -328,24 +366,26 @@ async fn route(
     req: Request<hyper::Body>,
     app_state: AppState,
     database_file_path: String,
+    database_sent_file_path: String,
 ) -> Result<Response, Error> {
     let found_handler = router.route(req.uri().path(), req.method());
     let path = req.uri().path().to_owned();
     let resp = found_handler
         .handler
-        .invoke(Context::new(app_state, req, &path, found_handler.params, database_file_path))
+        .invoke(Context::new(app_state, req, &path, found_handler.params, database_file_path, database_sent_file_path))
         .await;
     Ok(resp)
 }
 
 impl Context {
-    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params, database_file_path: String) -> Context {
+    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params, database_file_path: String, database_sent_file_path: String) -> Context {
         Context {
             state: state,
             req: reqbody,
             path: path.to_string(),
             params: params,
             database_file_path: database_file_path,
+            database_sent_file_path: database_sent_file_path,
             body_bytes: None,
         }
     }

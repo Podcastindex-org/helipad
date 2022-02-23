@@ -10,6 +10,9 @@ use serde_json::json;
 use chrono::{NaiveDateTime};
 use dbif::BoostRecord;
 
+#[path = "utils_lnd.rs"]
+mod utils_lnd;
+
 
 //Constants --------------------------------------------------------------------------------------------------
 const WEBROOT_PATH_HTML: &str = "webroot/html";
@@ -43,6 +46,23 @@ pub async fn home(ctx: Context) -> Response {
 
     let reg = Handlebars::new();
     let doc = fs::read_to_string("webroot/html/home.html").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .body(format!("{}", doc_rendered).into())
+        .unwrap();
+}
+
+//Sendpage html
+pub async fn send(ctx: Context) -> Response {
+
+    //Get query parameters
+    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/html/send.html").expect("Something went wrong reading the file.");
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
@@ -175,7 +195,6 @@ pub async fn api_v1_boosts_options(_ctx: Context) -> Response {
         .body(format!("").into())
         .unwrap();
 }
-
 pub async fn api_v1_boosts(_ctx: Context) -> Response {
     //Get query parameters
     let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
@@ -242,6 +261,18 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
         Some(_) => old = true,
         None => {}
     };
+
+    //Database file
+    let mut sent = false;
+    match params.get("sent") {
+        Some(_) => sent = true,
+        None => { }
+    };
+
+    let mut db = &_ctx.database_file_path;
+    if sent == true {
+        db = &_ctx.database_sent_file_path;
+    }
 
     //Get the boosts from db for returning
     match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, true) {
@@ -485,6 +516,18 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
         None => {}
     };
 
+    //Database file
+    let mut sent = false;
+    match params.get("sent") {
+        Some(_) => sent = true,
+        None => {}
+    };
+
+    let mut db = &_ctx.database_file_path;
+    if sent == true {
+        db = &_ctx.database_sent_file_path;
+    }
+
     //Get the boosts from db for returning
     match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, false) {
         Ok(boosts) => {
@@ -555,4 +598,46 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 .unwrap();
         }
     }
+}
+
+pub async fn send_boostagram(_ctx: Context){
+    let cert_path_config_file: String;
+    let macaroon_path_config_file: String;
+    let lnd_url_config_file: String;
+    let db_filepath: String;
+    let podcast: String;
+    let episode: String;
+    let episode_time_seconds: i64;
+    let sender: String;
+    let message: String;
+    let node_address_destination: String;
+    let amount_msat: i64;
+
+    // TODO: Get input values from UI
+
+    cert_path_config_file = "unknown".to_string();
+    macaroon_path_config_file = "unknown".to_string();
+    lnd_url_config_file = "unknown".to_string();
+
+    db_filepath = "unknown".to_string();
+
+    podcast = "unknown".to_string();
+    episode = "unknown".to_string();
+    episode_time_seconds = 0;
+    sender = "unknown".to_string();
+    message = "unknown".to_string();
+    node_address_destination = "unknown".to_string();
+    amount_msat = 0;
+
+    // TODO: Call send_boostagram function
+
+    let sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
+
+    if sent {
+       eprintln!("** Sent ");
+    } else {
+       eprintln!("** NOT sent ");
+    }
+
+    // TODO: Give feedback to UI
 }
