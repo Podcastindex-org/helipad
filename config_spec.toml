@@ -1,7 +1,12 @@
 [[param]]
-name = "database_dir"
+name = "database_received"
 type = "String"
-doc = "The location of the database file."
+doc = "The location of the received boosts database file."
+
+[[param]]
+name = "database_sent"
+type = "String"
+doc = "The location of the boosts sent database file."
 
 [[param]]
 name = "macaroon"
