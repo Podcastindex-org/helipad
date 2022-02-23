@@ -34,7 +34,7 @@ type Response = hyper::Response<hyper::Body>;
 type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
-const HELIPAD_DATABASE_RECEIVED: &str = "database-received.db";
+const HELIPAD_DATABASE_RECEIVED: &str = "database.db";
 const HELIPAD_DATABASE_SENT: &str = "database-sent.db";
 const HELIPAD_STANDARD_PORT: &str = "2112";
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
@@ -312,7 +312,7 @@ async fn main() {
     router.get("/api/v1/index", Box::new(handler::api_v1_index));
 
     router.get("/csv", Box::new(handler::csv_export_boosts));
-    router.get("/sendboostagram", Box::new(handler::send_boostagram));
+    router.get("/send", Box::new(handler::send_boostagram));
 
     let shared_router = Arc::new(router);
     let db_filepath: String = helipad_config.database_file_path.clone();
