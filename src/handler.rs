@@ -629,7 +629,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     }
 }
 
-pub async fn send_boostagram(_ctx: Context) -> Response {
+pub async fn sendboost(_ctx: Context) -> Response {
     let cert_path_config_file: String;
     let macaroon_path_config_file: String;
     let lnd_url_config_file: String;
