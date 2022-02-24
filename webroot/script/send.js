@@ -18,7 +18,7 @@ $(document).ready(function () {
     initPage();
 
     //Get a boost list starting at a particular invoice index
-    function getBoosts(startIndex, max, scrollToTop, old) {
+    function getBoosts(startIndex, max, scrollToTop, old, sent) {
         var noIndex = false;
 
         //Find newest index
@@ -67,6 +67,9 @@ $(document).ready(function () {
         if (old) {
             url += '&old=true';
         }
+        if (sent) {
+            url += '&sent=true';
+        }
 
         $.ajax({
             url: url,
@@ -88,65 +91,8 @@ $(document).ready(function () {
 
                     //Icon
                     var appIconUrl = "";
-                    switch (boostApp.toLowerCase()) {
-                        case 'fountain':
-                            appIconUrl = appIconUrlBase + 'fountain';
-                            appIconHref = 'https://fountain.fm';
-                            break;
-                        case 'podfriend':
-                            appIconUrl = appIconUrlBase + 'podfriend';
-                            appIconHref = 'https://podfriend.com';
-                            break;
-                        case 'castamatic':
-                            appIconUrl = appIconUrlBase + 'castamatic';
-                            appIconHref = 'https://castamatic.com';
-                            break;
-                        case 'curiocaster':
-                            appIconUrl = appIconUrlBase + 'curiocaster';
-                            appIconHref = 'https://curiocaster.com';
-                            break;
-                        case 'breez':
-                            appIconUrl = appIconUrlBase + 'breez';
-                            appIconHref = 'https://breez.technology';
-                            break;
-                        case 'podstation':
-                        case 'podstation browser extension':
-                            appIconUrl = appIconUrlBase + 'podstation';
-                            appIconHref = 'https://podstation.github.io';
-                            break;
-                        case 'sphinx':
-                            appIconUrl = appIconUrlBase + 'sphinxchat';
-                            appIconHref = 'https://sphinx.chat';
-                            break;
-                        case 'podverse':
-                            appIconUrl = appIconUrlBase + 'podverse';
-                            appIconHref = 'https://podverse.fm';
-                            break;
-                        case 'n2n2':
-                        case 'zion':
-                            appIconUrl = appIconUrlBase + 'zion';
-                            appIconHref = 'https://getzion.com';
-                            break;
-                        case 'usocial':
-                        case 'usocial.me':
-                            appIconUrl = appIconUrlBase + 'usocial';
-                            appIconHref = 'https://usocial.me';
-                            break;
-                        case 'helipad':
-                            appIconUrl = appIconUrlBase + 'terminal';
-                            appIconHref = 'https://podcastindex.org';
-                            break;
-                        case 'lncli':
-                        case 'boostcli':
-                        case 'terminal':
-                        case 'cmd':
-                            appIconUrl = appIconUrlBase + 'terminal';
-                            appIconHref = 'https://github.com/lightningnetwork/lnd';
-                            break;
-                        default:
-                            appIconUrl = appIconUrlBase + 'unknown';
-                            appIconHref = '#';
-                    }
+                    appIconUrl = appIconUrlBase + 'terminal';
+                    appIconHref = 'https://podcastindex.org';
 
                     //Sender
                     if (boostSender.trim() != "") {
@@ -234,7 +180,7 @@ $(document).ready(function () {
                 }
 
                 var endex = csvindex - bcount;
-                $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
+                $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex + '&sent=true');
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
@@ -309,7 +255,7 @@ $(document).ready(function () {
                 if (typeof currentInvoiceIndex !== "number" || currentInvoiceIndex < 1) {
                     currentInvoiceIndex = 1;
                 }
-                getBoosts(currentInvoiceIndex, 100, true, true);
+                getBoosts(currentInvoiceIndex, 100, true, true, true);
             }
         });
     }
@@ -335,7 +281,7 @@ $(document).ready(function () {
             old = false;
         }
 
-        getBoosts(boostIndex, 100, false, old);
+        getBoosts(boostIndex, 100, false, old, true);
 
         return false;
     });
@@ -345,7 +291,7 @@ $(document).ready(function () {
         if ($('div.outgoing_msg').length === 0) {
             initPage();
         } else {
-            getBoosts(currentInvoiceIndex, 20, true, false);
+            getBoosts(currentInvoiceIndex, 20, true, false, true);
             getBalance();
         }
     }, 7000);

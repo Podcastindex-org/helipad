@@ -275,7 +275,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
     }
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, true) {
+    match dbif::get_boosts_from_db(db, index, boostcount, old, true) {
         Ok(boosts) => {
             let json_doc = serde_json::to_string_pretty(&boosts).unwrap();
 
@@ -371,8 +371,20 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
         None => {}
     };
 
+    //Database file
+    let mut sent = false;
+    match params.get("sent") {
+        Some(_) => sent = true,
+        None => {}
+    };
+
+    let mut db = &_ctx.database_file_path;
+    if sent == true {
+        db = &_ctx.database_sent_file_path;
+    }
+
     //Get the boosts from db for returning
-    match dbif::get_streams_from_db(&_ctx.database_file_path, index, boostcount, old) {
+    match dbif::get_streams_from_db(db, index, boostcount, old) {
         Ok(streams) => {
             let json_doc_raw = serde_json::to_string_pretty(&streams).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
