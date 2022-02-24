@@ -139,7 +139,6 @@ pub async fn get_balance(mut connection: lnd::Lnd) -> i64 {
     return current_balance;
 }
 
-
 pub async fn get_connection(cert_path_config_file: String, macaroon_path_config_file: String, lnd_url_config_file: String) -> lnd::Lnd {
     let lightning;
     let cert_path: Vec<u8>;
