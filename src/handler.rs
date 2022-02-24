@@ -627,6 +627,65 @@ pub async fn sendboost(_ctx: Context) -> Response {
 
     // TODO: Get input values from UI
 
+    //Get query parameters
+    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    //Parameter - index (unsigned int)
+    let index: u64;
+    match params.get("index") {
+        Some(supplied_index) => {
+            index = match supplied_index.parse::<u64>() {
+                Ok(index) => {
+                    println!("** Supplied index from call: [{}]", index);
+                    index
+                }
+                Err(_) => {
+                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        }
+        None => {
+            eprintln!("** Error getting boosts: 'index' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
+    //Parameter - boostcount (unsigned int)
+    let boostcount: u64;
+    match params.get("count") {
+        Some(bcount) => {
+            boostcount = match bcount.parse::<u64>() {
+                Ok(boostcount) => {
+                    println!("** Supplied boostcount from call: [{}]", boostcount);
+                    boostcount
+                }
+                Err(_) => {
+                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        }
+        None => {
+            eprintln!("** Error getting boosts: 'count' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
     cert_path_config_file = "unknown".to_string();
     macaroon_path_config_file = "unknown".to_string();
     lnd_url_config_file = "unknown".to_string();
@@ -645,8 +704,6 @@ pub async fn sendboost(_ctx: Context) -> Response {
 
     let sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
 
-    // TODO: Give feedback to UI
-
     if sent {
        eprintln!("** Sent ***\n");
        return hyper::Response::builder()
@@ -660,4 +717,6 @@ pub async fn sendboost(_ctx: Context) -> Response {
            .body(format!("** Error getting boosts.").into())
            .unwrap();
     }
+
+    // TODO: Give feedback to UI
 }
