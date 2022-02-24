@@ -636,13 +636,13 @@ pub async fn send_boostagram(_ctx: Context) -> Response {
     // TODO: Give feedback to UI
 
     if sent {
-       eprintln!("** Sent: {}.\n", e);
+       eprintln!("** Sent ***\n");
        return hyper::Response::builder()
            .status(StatusCode::from_u16(200).unwrap())
            .body(format!("** Boostagram sent.").into())
            .unwrap();
     } else {
-       eprintln!("** NOT sent: {}.\n", e);
+       eprintln!("** NOT sent ***\n");
        return hyper::Response::builder()
            .status(StatusCode::from_u16(500).unwrap())
            .body(format!("** Error getting boosts.").into())
