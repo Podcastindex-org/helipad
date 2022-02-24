@@ -71,7 +71,7 @@ pub async fn send(ctx: Context) -> Response {
 }
 
 //Sendboost html
-pub async fn sendresult(ctx: Context) -> Response {
+pub async fn sendboost(ctx: Context) -> Response {
 
     //Get query parameters
     let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
@@ -79,7 +79,7 @@ pub async fn sendresult(ctx: Context) -> Response {
     }).unwrap_or_else(HashMap::new);
 
     let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/sendresult.html").expect("Something went wrong reading the file.");
+    let doc = fs::read_to_string("webroot/html/sendboost.html").expect("Something went wrong reading the file.");
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)

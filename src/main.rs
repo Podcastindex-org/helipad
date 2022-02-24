@@ -313,7 +313,7 @@ async fn main() {
 
     router.get("/csv", Box::new(handler::csv_export_boosts));
     router.get("/send", Box::new(handler::send));
-    router.get("/sendboost", Box::new(handler::sendresult));
+    router.get("/sendboost", Box::new(handler::sendboost));
 
     let shared_router = Arc::new(router);
     let db_filepath: String = helipad_config.database_file_path.clone();
