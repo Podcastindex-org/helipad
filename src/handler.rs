@@ -634,54 +634,27 @@ pub async fn sendboost(_ctx: Context) -> Response {
 
     //Parameter - index (unsigned int)
     let index: u64;
-    match params.get("index") {
+    match params.get("nodeid") {
         Some(supplied_index) => {
             index = match supplied_index.parse::<u64>() {
                 Ok(index) => {
-                    println!("** Supplied index from call: [{}]", index);
+                    println!("** Supplied nodeid from call: [{}]", index);
                     index
                 }
                 Err(_) => {
-                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
+                    eprintln!("** Error getting nodeid: 'nodeid' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .body(format!("** 'nodeid' is a required parameter and must be an unsigned integer.").into())
                         .unwrap();
                 }
             };
         }
         None => {
-            eprintln!("** Error getting boosts: 'index' param is not present.\n");
+            eprintln!("** Error getting nodeid: 'nodeid' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
-                .unwrap();
-        }
-    };
-
-    //Parameter - boostcount (unsigned int)
-    let boostcount: u64;
-    match params.get("count") {
-        Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied boostcount from call: [{}]", boostcount);
-                    boostcount
-                }
-                Err(_) => {
-                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {
-            eprintln!("** Error getting boosts: 'count' param is not present.\n");
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                .body(format!("** 'nodeid' is a required parameter and must be an unsigned integer.").into())
                 .unwrap();
         }
     };
