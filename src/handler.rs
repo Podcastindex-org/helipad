@@ -70,6 +70,23 @@ pub async fn send(ctx: Context) -> Response {
         .unwrap();
 }
 
+//Sendboost html
+pub async fn sendresult(ctx: Context) -> Response {
+
+    //Get query parameters
+    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/html/sendresult.html").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .body(format!("{}", doc_rendered).into())
+        .unwrap();
+}
+
 //Pew-pew audio
 pub async fn pewmp3(_ctx: Context) -> Response {
     let file = fs::read("webroot/extra/pew.mp3").expect("Something went wrong reading the file.");
