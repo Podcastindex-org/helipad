@@ -170,7 +170,7 @@ $(document).ready(function () {
                     bcount = 9999;
                 }
                 $('span.csv a').attr('href', '/csv?index='+$('div.outgoing_msg:first').data('msgid')+'&count=100'+'&sent=true');
-                $('span.send a').attr('href', '/sendboostagram?nodeid=00000');
+                $('span.send a').attr('href', '/send?nodeid=00000');
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && ( boostIndex > 1 || noIndex)) {
