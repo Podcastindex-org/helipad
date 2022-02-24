@@ -558,7 +558,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     }
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, false) {
+    match dbif::get_boosts_from_db(db, index, boostcount, old, false) {
         Ok(boosts) => {
             let mut csv = String::new();
 
