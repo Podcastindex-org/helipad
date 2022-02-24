@@ -600,7 +600,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     }
 }
 
-pub async fn send_boostagram(_ctx: Context){
+pub async fn send_boostagram(_ctx: Context) -> Response {
     let cert_path_config_file: String;
     let macaroon_path_config_file: String;
     let lnd_url_config_file: String;
@@ -633,11 +633,19 @@ pub async fn send_boostagram(_ctx: Context){
 
     let sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
 
-    if sent {
-       eprintln!("** Sent ");
-    } else {
-       eprintln!("** NOT sent ");
-    }
-
     // TODO: Give feedback to UI
+
+    if sent {
+       eprintln!("** Sent: {}.\n", e);
+       return hyper::Response::builder()
+           .status(StatusCode::from_u16(200).unwrap())
+           .body(format!("** Boostagram sent.").into())
+           .unwrap();
+    } else {
+       eprintln!("** NOT sent: {}.\n", e);
+       return hyper::Response::builder()
+           .status(StatusCode::from_u16(500).unwrap())
+           .body(format!("** Error getting boosts.").into())
+           .unwrap();
+    }
 }
