@@ -181,6 +181,7 @@ $(document).ready(function () {
 
                 var endex = csvindex - bcount;
                 $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex + '&sent=true');
+                $('span.sendboost a').attr('href', '/sendboost?nodeid=00000');
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
