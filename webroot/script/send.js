@@ -68,9 +68,6 @@ $(document).ready(function () {
             url += '&old=true';
         }
 
-        // database file
-        url += '&sent=true';
-
         $.ajax({
             url: url,
             type: "GET",
@@ -90,8 +87,66 @@ $(document).ready(function () {
                     let boostEpisode = element.episode;
 
                     //Icon
-                    var appIconUrl = appIconUrlBase + 'terminal';
-                        appIconHref = 'https://podcastindex.org';
+                    var appIconUrl = "";
+                    switch (boostApp.toLowerCase()) {
+                        case 'fountain':
+                            appIconUrl = appIconUrlBase + 'fountain';
+                            appIconHref = 'https://fountain.fm';
+                            break;
+                        case 'podfriend':
+                            appIconUrl = appIconUrlBase + 'podfriend';
+                            appIconHref = 'https://podfriend.com';
+                            break;
+                        case 'castamatic':
+                            appIconUrl = appIconUrlBase + 'castamatic';
+                            appIconHref = 'https://castamatic.com';
+                            break;
+                        case 'curiocaster':
+                            appIconUrl = appIconUrlBase + 'curiocaster';
+                            appIconHref = 'https://curiocaster.com';
+                            break;
+                        case 'breez':
+                            appIconUrl = appIconUrlBase + 'breez';
+                            appIconHref = 'https://breez.technology';
+                            break;
+                        case 'podstation':
+                        case 'podstation browser extension':
+                            appIconUrl = appIconUrlBase + 'podstation';
+                            appIconHref = 'https://podstation.github.io';
+                            break;
+                        case 'sphinx':
+                            appIconUrl = appIconUrlBase + 'sphinxchat';
+                            appIconHref = 'https://sphinx.chat';
+                            break;
+                        case 'podverse':
+                            appIconUrl = appIconUrlBase + 'podverse';
+                            appIconHref = 'https://podverse.fm';
+                            break;
+                        case 'n2n2':
+                        case 'zion':
+                            appIconUrl = appIconUrlBase + 'zion';
+                            appIconHref = 'https://getzion.com';
+                            break;
+                        case 'usocial':
+                        case 'usocial.me':
+                            appIconUrl = appIconUrlBase + 'usocial';
+                            appIconHref = 'https://usocial.me';
+                            break;
+                        case 'helipad':
+                            appIconUrl = appIconUrlBase + 'terminal';
+                            appIconHref = 'https://podcastindex.org';
+                            break;
+                        case 'lncli':
+                        case 'boostcli':
+                        case 'terminal':
+                        case 'cmd':
+                            appIconUrl = appIconUrlBase + 'terminal';
+                            appIconHref = 'https://github.com/lightningnetwork/lnd';
+                            break;
+                        default:
+                            appIconUrl = appIconUrlBase + 'unknown';
+                            appIconHref = '#';
+                    }
 
                     //Sender
                     if (boostSender.trim() != "") {
@@ -160,7 +215,7 @@ $(document).ready(function () {
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
                     inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
                         'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
-                        '<p>This screen will automatically refresh as boostagrams are sent.</p>' +
+                        '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
                         '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
                         '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">' + currentInvoiceIndex + '</span>' +
                         '</div>');
@@ -179,8 +234,7 @@ $(document).ready(function () {
                 }
 
                 var endex = csvindex - bcount;
-                $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex + 'sent=true');
-                $('span.send a').attr('href', '/send?nodeid=00000');
+                $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
