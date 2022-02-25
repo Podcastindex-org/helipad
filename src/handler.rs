@@ -214,7 +214,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                     eprintln!("** Error getting boosts: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .body(format!("**1 'index' is a required parameter and must be an unsigned integer.").into())
                         .unwrap();
                 }
             };
@@ -223,7 +223,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
             eprintln!("** Error getting boosts: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .body(format!("**2 'index' is a required parameter and must be an unsigned integer.").into())
                 .unwrap();
         }
     };
@@ -323,7 +323,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
                     eprintln!("** Error getting streams: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .body(format!("**3 'index' is a required parameter and must be an unsigned integer.").into())
                         .unwrap();
                 }
             };
@@ -332,7 +332,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
             eprintln!("** Error getting streams: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .body(format!("**4 'index' is a required parameter and must be an unsigned integer.").into())
                 .unwrap();
         }
     };
@@ -459,7 +459,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                     eprintln!("** Error getting boosts: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .body(format!("**5 'index' is a required parameter and must be an unsigned integer.").into())
                         .unwrap();
                 }
             };
@@ -468,7 +468,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             eprintln!("** Error getting boosts: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .body(format!("**6 'index' is a required parameter and must be an unsigned integer.").into())
                 .unwrap();
         }
     };
