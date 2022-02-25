@@ -214,7 +214,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
                     eprintln!("** Error getting boosts: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("**1 'index' is a required parameter and must be an unsigned integer.").into())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
                         .unwrap();
                 }
             };
@@ -223,7 +223,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
             eprintln!("** Error getting boosts: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("**2 'index' is a required parameter and must be an unsigned integer.").into())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
                 .unwrap();
         }
     };
@@ -323,7 +323,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
                     eprintln!("** Error getting streams: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("**3 'index' is a required parameter and must be an unsigned integer.").into())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
                         .unwrap();
                 }
             };
@@ -332,7 +332,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
             eprintln!("** Error getting streams: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("**4 'index' is a required parameter and must be an unsigned integer.").into())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
                 .unwrap();
         }
     };
@@ -459,7 +459,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                     eprintln!("** Error getting boosts: 'index' param is not a number.\n");
                     return hyper::Response::builder()
                         .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("**5 'index' is a required parameter and must be an unsigned integer.").into())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
                         .unwrap();
                 }
             };
@@ -468,7 +468,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             eprintln!("** Error getting boosts: 'index' param is not present.\n");
             return hyper::Response::builder()
                 .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("**6 'index' is a required parameter and must be an unsigned integer.").into())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
                 .unwrap();
         }
     };
@@ -674,7 +674,9 @@ pub async fn send_boostagram(_ctx: Context) -> Response {
     amount_msat = 0;
 
     // TODO: Send_boostagram function
-    let sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
+    //let sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
+
+    // TODO: Give feedback to UI
 
     if sent {
        eprintln!("** Sent ***\n");
@@ -686,9 +688,7 @@ pub async fn send_boostagram(_ctx: Context) -> Response {
        eprintln!("** NOT sent ***\n");
        return hyper::Response::builder()
            .status(StatusCode::from_u16(500).unwrap())
-           .body(format!("** Error getting boosts.").into())
+           .body(format!("** Error sending boostagram.").into())
            .unwrap();
     }
-
-    // TODO: Give feedback to UI
 }
