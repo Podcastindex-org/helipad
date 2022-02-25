@@ -632,14 +632,14 @@ pub async fn sendboost(_ctx: Context) -> Response {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
     }).unwrap_or_else(HashMap::new);
 
-    //Parameter - index (unsigned int)
-    let index: u64;
+    //Parameter - nodeid (unsigned int)
+    let nodeid: u64;
     match params.get("nodeid") {
-        Some(supplied_index) => {
-            index = match supplied_index.parse::<u64>() {
-                Ok(index) => {
-                    println!("** Supplied nodeid from call: [{}]", index);
-                    index
+        Some(supplied_nodeid) => {
+            nodeid = match supplied_nodeid.parse::<u64>() {
+                Ok(nodeid) => {
+                    println!("** Supplied nodeid from call: [{}]", nodeid);
+                    nodeid
                 }
                 Err(_) => {
                     eprintln!("** Error getting nodeid: 'nodeid' param is not a number.\n");
