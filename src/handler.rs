@@ -612,7 +612,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     }
 }
 
-pub async fn sendboost(_ctx: Context) -> Response {
+pub async fn send_boostagram(_ctx: Context) -> Response {
     let cert_path_config_file: String;
     let macaroon_path_config_file: String;
     let lnd_url_config_file: String;
@@ -673,8 +673,7 @@ pub async fn sendboost(_ctx: Context) -> Response {
     node_address_destination = "unknown".to_string();
     amount_msat = 0;
 
-    // TODO: Call send_boostagram function
-
+    // TODO: Send_boostagram function
     let sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
 
     if sent {
