@@ -662,6 +662,7 @@ pub async fn send_boostagram(_ctx: Context) -> Response {
     cert_path_config_file = "unknown".to_string();
     macaroon_path_config_file = "unknown".to_string();
     lnd_url_config_file = "unknown".to_string();
+    let mut sent = false;
 
     db_filepath = "unknown".to_string();
 
@@ -674,7 +675,7 @@ pub async fn send_boostagram(_ctx: Context) -> Response {
     amount_msat = 0;
 
     // TODO: Send_boostagram function
-    //let sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
+    //sent: bool = utils_lnd::send_boostagram(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file, db_filepath, podcast, episode, episode_time_seconds, sender, message, node_address_destination, amount_msat).await;
 
     // TODO: Give feedback to UI
 
