@@ -312,7 +312,7 @@ async fn main() {
     router.get("/api/v1/index", Box::new(handler::api_v1_index));
 
     router.get("/csv", Box::new(handler::csv_export_boosts));
-    router.get("/sent", Box::new(handler::compose));
+    router.get("/compose", Box::new(handler::compose));
     router.get("/sent", Box::new(handler::sent));
     router.get("/sendboost", Box::new(handler::send_boostagram));
 
