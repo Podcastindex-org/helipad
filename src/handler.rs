@@ -62,7 +62,24 @@ pub async fn send(ctx: Context) -> Response {
     }).unwrap_or_else(HashMap::new);
 
     let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/send.html").expect("Something went wrong reading the file.");
+    let doc = fs::read_to_string("webroot/html/sent.html").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .body(format!("{}", doc_rendered).into())
+        .unwrap();
+}
+
+//Composepage html
+pub async fn compose(ctx: Context) -> Response {
+
+    //Get query parameters
+    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/html/compose.html").expect("Something went wrong reading the file.");
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
