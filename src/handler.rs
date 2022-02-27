@@ -53,8 +53,8 @@ pub async fn home(ctx: Context) -> Response {
         .unwrap();
 }
 
-//Sendpage html
-pub async fn send(ctx: Context) -> Response {
+//Sentpage html
+pub async fn sent(ctx: Context) -> Response {
 
     //Get query parameters
     let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
