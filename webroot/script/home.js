@@ -12,6 +12,7 @@ $(document).ready(function () {
     var currentInvoiceIndex = null;
     var currentBalance = null;
     var currentBalanceAmount = 0;
+    var play_sound_transactions = false;
 
 
     //Initialize the page
@@ -205,6 +206,11 @@ $(document).ready(function () {
                         //Pew pew pew!
                         pewAudio.play();
                     }
+
+                    // Pew pew pew! for regular transactions
+                    if (!messageIds.includes(boostIndex) && element.action == 0 && play_sound_transactions) {
+                        pewAudio.play();
+                    }
                 });
 
                 //Show a message if still building
@@ -310,10 +316,18 @@ $(document).ready(function () {
         });
     }
 
+    function getAudioSetting() {
+        var play_sound = urlParams.get('playall');
+        if (typeof play_sound !== "undefined" && typeof play_sound === "boolean") {
+           play_sound_transactions = play_sound;
+        }
+    }
+
     //Build the UI with the page loads
     function initPage() {
         getBalance(true);
         getIndex();
+        getAudioSetting();
     }
 
     //Load more messages handler

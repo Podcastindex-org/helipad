@@ -4,6 +4,11 @@ type = "String"
 doc = "The location of the database file."
 
 [[param]]
+name = "play_sound_transactions"
+type = "String"
+doc = "Play sound with regular incoming transactions."
+
+[[param]]
 name = "macaroon"
 type = "String"
 doc = "The location of the macaroon file."
