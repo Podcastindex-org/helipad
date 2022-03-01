@@ -221,7 +221,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
                                        tlv \
                                  FROM boosts \
                                  WHERE action = 2 \
-                                   AND value_msat_total >= " + minimal_amount + " \
+                                   AND value_msat_total >= " + minimal_amount.to_string() + " \
                                    AND idx {} :index \
                                  ORDER BY idx DESC \
                                  LIMIT :max", ltgt);

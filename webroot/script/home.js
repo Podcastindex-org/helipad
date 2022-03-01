@@ -60,7 +60,7 @@ $(document).ready(function () {
             scrollToTop = true;
         }
         if (typeof amount !== "number") {
-            minimalAmountToShow = 0;
+            amount = 0;
         }
 
         //Build the endpoint url
