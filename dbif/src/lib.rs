@@ -199,7 +199,7 @@ pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, 
 
 
 //Get all of the boosts from the database
-pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, minimal_amount: u64, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
@@ -221,6 +221,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
                                        tlv \
                                  FROM boosts \
                                  WHERE action = 2 \
+                                   AND value_msat_total >= " + minimal_amount + " \
                                    AND idx {} :index \
                                  ORDER BY idx DESC \
                                  LIMIT :max", ltgt);
