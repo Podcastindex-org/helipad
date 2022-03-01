@@ -19,6 +19,11 @@ type = "u16"
 doc = "The port to listen on."
 
 [[param]]
+name = "amount"
+type = "u64"
+doc = "Minimal amount of boosts to show."
+
+[[param]]
 name = "lnd_url"
 type = "String"
 doc = "The url and port of the LND grpc api."
