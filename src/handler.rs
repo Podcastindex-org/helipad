@@ -513,7 +513,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 //The main export data formatting
                 csv.push_str(
                     format!(
-                        "{}, {}, {}, {}, {}, {}, {}, {}, \"{}\", \"{}\", \"{}\", \"{}\", \"{}\"\n",
+                        "{},{},\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
                         count,
                         boost.index,
                         boost_time,
