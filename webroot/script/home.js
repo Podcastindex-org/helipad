@@ -133,11 +133,14 @@ $(document).ready(function () {
                             appIconHref = 'https://usocial.me';
                             break;
                         case 'lncli':
-                        case 'boostcli':
                         case 'terminal':
                         case 'cmd':
                             appIconUrl = appIconUrlBase + 'terminal';
                             appIconHref = 'https://github.com/lightningnetwork/lnd';
+                            break;
+                        case 'boostcli':
+                            appIconUrl = appIconUrlBase + 'boostcli';
+                            appIconHref = 'https://github.com/valcanobacon/BoostCLI';
                             break;
                         default:
                             appIconUrl = appIconUrlBase + 'unknown';
