@@ -29,6 +29,7 @@ voca_rs = "1.14.0"
 configure_me = "0.4.0"
 handlebars = "4.2.1"
 chrono = "0.4.19"
+hex = "0.4.3"
 
 [build-dependencies]
 configure_me_codegen = "0.4.1"

@@ -3,6 +3,7 @@ use std::fs;
 
 use dbif;
 use lnd;
+extern crate hex;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
@@ -163,10 +164,12 @@ pub async fn get_connection(cert_path_config_file: String, macaroon_path_config_
     return lightning;
 }
 
-pub async fn send_boostagram(cert_path_config_file: String, macaroon_path_config_file: String, lnd_url_config_file: String, db_filepath: String, podcast: String, episode: String, episode_time_seconds: i64, sender: String, message: String, node_address_destination: String, amount_msat: i64) -> bool {
+pub async fn send_boostagram(cert_path_config_file: String, macaroon_path_config_file: String, lnd_url_config_file: String, db_filepath: String, feed_id: String, feed_url: String, recipient: String, podcast: String, episode: String, episode_time_seconds: i64, sender: String, message: String, node_address_destination: String, amount_sat: i64) -> bool {
     let mut sent: bool = false;
     let mut connection: lnd::Lnd = get_connection(cert_path_config_file, macaroon_path_config_file, lnd_url_config_file).await;
     let mut lnd_request: lnd::lnrpc::lnrpc::SendRequest;
+
+    let amount_msat = amount_sat * 1000;
 
     //Initialize a boostagram record
     let mut boost = dbif::BoostRecord {
@@ -185,8 +188,15 @@ pub async fn send_boostagram(cert_path_config_file: String, macaroon_path_config
 
     // TODO: Create lnd request
 
-    // TODO: Encode tlv
-    boost.tlv = "".to_string();
+    // Create json string
+    let action = "boost";
+    let app_name = "helipad";
+
+    let tlv_json = format!("{{ \"action\": \"{}\", \"app_name\": \"{}\", \"sender_name\": \"{}\", \"feedID\": {}, \"url\": \"{}\", \"podcast\": \"{}\", \"episode\": \"{}\", \"name\": \"{}\", \"ts\": {}, \"value_msat\": {}, \"value_msat_total\": {}, \"message\": \"{}\" }}\n", action, app_name, sender, feed_id, feed_url, podcast, episode, recipient, episode_time_seconds, amount_msat, amount_msat, message);
+    
+
+    // Encode tlv json to hex
+    boost.tlv = hex::encode(tlv_json);
 
     // TODO: Send boostagram
 //    match lnd::Lnd::send_payment_sync(&mut connection, lnd_request).await {
