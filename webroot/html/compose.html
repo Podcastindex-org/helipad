@@ -10,7 +10,6 @@
     <script src="/script?name=bootstrap"></script>
     <script src="/script?name=bootbox"></script>
     <script src="/script?name=utils"></script>
-    <script src="/script?name=home"></script>
     <script src="/script?name=compose"></script>
     <script src="/script?name=confetti"></script>
 
@@ -68,6 +67,39 @@
         <h5 class="titleHeader">Helipad<span class="titleSubtitle">: Boost Tracker</span></h5>
     </div>
     <div class="messaging">
+        <div class="inbox_msg">
+            <div class="mesgs">
+                <div class="msg_history">
+                   <form id='formId' action='/sendboost'>
+                       Node ID:
+                       <input type='text' 
+                              id='nodeid' 
+                              name='nodeid'> 
+                       </input>
+                       <br> Sender:
+                       <input type='text' 
+                              id='sender' 
+                              name='sender'> 
+                       </input>
+                       <br> Amount (sats):
+                       <input type='text' 
+                              id='amount' 
+                              name='amount'> 
+                       </input>
+                       <br> Message:
+                       <input type='text' 
+                              id='message' 
+                              name='message'> 
+                       </input>
+                       <br>
+                       <button type='submit' 
+                              id='submitButton'>
+                           Send
+                       </button>
+                   </form>
+                </div>
+            </div>
+        </div>
         <div class="versionFooter"><a target="_blank" href="https://github.com/Podcastindex-org/helipad">v{{version}}</a></div>
     </div>
 </div>
