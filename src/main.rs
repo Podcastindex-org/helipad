@@ -15,11 +15,11 @@ use drop_root::set_user_group;
 use lnd;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
+use dbif::add_wallet_balance_to_db;
 // use hyper::http::Request;
 
 #[macro_use]
 extern crate configure_me;
-
 
 
 //Globals ----------------------------------------------------------------------------------------------------
@@ -43,6 +43,7 @@ const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 pub struct AppState {
     pub state_thing: String,
     pub remote_ip: String,
+    pub version: String,
 }
 
 #[derive(Clone, Debug)]
@@ -67,58 +68,57 @@ pub struct Context {
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 struct RawBoost {
-    #[serde(default="d_action")]
+    #[serde(default = "d_action")]
     action: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     app_name: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     app_version: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     boost_link: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     message: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     name: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     pubkey: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     sender_key: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     sender_name: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     sender_id: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     sig_fields: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     signature: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     speed: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     uuid: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     podcast: Option<String>,
-    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
+    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     feedID: Option<u64>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     guid: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     url: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     episode: Option<String>,
-    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
+    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     itemID: Option<u64>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     episode_guid: Option<String>,
-    #[serde(default="d_blank")]
+    #[serde(default = "d_blank")]
     time: Option<String>,
-    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
+    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     ts: Option<u64>,
-    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
+    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     value_msat: Option<u64>,
-    #[serde(default="d_zero", deserialize_with="de_optional_string_or_number")]
+    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     value_msat_total: Option<u64>,
 }
-
 
 
 //Traits------------------------------------------------------------------------------------------------------
@@ -126,24 +126,43 @@ struct RawBoost {
 fn d_action() -> Option<String> {
     Some("stream".to_string())
 }
+
 fn d_blank() -> Option<String> {
     None
 }
+
 fn d_zero() -> Option<u64> {
     None
 }
 
 fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<u64>, D::Error> {
-    Ok(match Value::deserialize(deserializer)? {
-        Value::String(s) => {
-            if s.is_empty() {
-                return Ok(None)
+    Ok(
+        match Value::deserialize(deserializer)? {
+            Value::String(s) => {
+                if s.is_empty() {
+                    return Ok(None);
+                }
+                if let Ok(number) = s.parse() {
+                    Some(number)
+                } else {
+                    return Ok(None);
+                }
             }
-            Some(s.parse().unwrap())
-        },
-        Value::Number(num) => Some(num.as_u64().unwrap()),
-        _ => Some(0)
-    })
+            Value::Number(num) => {
+                if num.is_u64() {
+                    if let Some(number) = num.as_u64() {
+                        Some(number)
+                    } else {
+                        return Ok(None);
+                    }
+                } else {
+                    return Ok(None);
+                }
+
+            }
+            _ => Some(0)
+        }
+    )
 }
 
 //Configure_me
@@ -248,8 +267,16 @@ async fn main() {
     router.get("/script", Box::new(handler::asset));
     router.get("/extra", Box::new(handler::asset));
     //Api
-    router.get("/boosts", Box::new(handler::boosts));
-    //router.get("/streams", Box::new(handler::streams));
+    router.options("/api/v1/boosts", Box::new(handler::api_v1_boosts_options));
+    router.get("/api/v1/boosts", Box::new(handler::api_v1_boosts));
+    router.options("/api/v1/balance", Box::new(handler::api_v1_balance_options));
+    router.get("/api/v1/balance", Box::new(handler::api_v1_balance));
+    router.options("/api/v1/streams", Box::new(handler::api_v1_streams_options));
+    router.get("/api/v1/streams", Box::new(handler::api_v1_streams));
+    router.options("/api/v1/index", Box::new(handler::api_v1_index_options));
+    router.get("/api/v1/index", Box::new(handler::api_v1_index));
+    router.get("/csv", Box::new(handler::csv_export_boosts));
+
 
     let shared_router = Arc::new(router);
     let db_filepath: String = helipad_config.database_file_path.clone();
@@ -257,6 +284,7 @@ async fn main() {
         let app_state = AppState {
             state_thing: some_state.clone(),
             remote_ip: conn.remote_addr().to_string().clone(),
+            version: version.to_string(),
         };
 
         let database_file_path = db_filepath.clone();
@@ -337,7 +365,6 @@ impl Context {
 
 //The LND poller runs in a thread and pulls new invoices
 async fn lnd_poller(server_config: Config, database_file_path: String) {
-
     let db_filepath = database_file_path;
 
     //Get the macaroon and cert files.  Look in the local directory first as an override.
@@ -441,9 +468,37 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
         }
     }
 
+    //Get lnd node info
+    match lnd::Lnd::get_info(&mut lightning).await {
+        Ok(node_info) => {
+            println!("LND node info: {:#?}", node_info);
+        }
+        Err(e) => {
+            eprintln!("Error getting LND node info: {:#?}", e);
+        }
+    }
+
     //The main loop
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
     loop {
+
+        //Get lnd node channel balance
+        match lnd::Lnd::channel_balance(&mut lightning).await {
+            Ok(balance) => {
+                let mut current_balance: i64 = 0;
+                if let Some(bal) = balance.local_balance {
+                    println!("LND node local balance: {:#?}", bal.sat);
+                    current_balance = bal.sat as i64;
+                }
+
+                if add_wallet_balance_to_db(&db_filepath, current_balance).is_err() {
+                    println!("Error adding wallet balance to the database.");
+                }
+            }
+            Err(e) => {
+                eprintln!("Error getting LND wallet balance: {:#?}", e);
+            }
+        }
 
         //Get a list of invoices
         match lnd::Lnd::list_invoices(&mut lightning, false, current_index.clone(), 500, false).await {
@@ -534,7 +589,7 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
                 }
             }
             Err(e) => {
-                eprintln!("{}", e);
+                eprintln!("lnd::Lnd::list_invoices failed: {}", e);
             }
         }
 

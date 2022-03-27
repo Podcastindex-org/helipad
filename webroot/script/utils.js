@@ -161,3 +161,15 @@ dateFormat.i18n = {
 Date.prototype.format = function (mask, utc) {
     return dateFormat(this, mask, utc);
 };
+
+
+// Given an array of numbers, find the closest one to a number
+const closest = (arr, num) => {
+    return arr.reduce((acc, val) => {
+        if (Math.abs(val - num) < Math.abs(acc)) {
+            return val - num;
+        } else {
+            return acc;
+        }
+    }, Infinity) + num;
+}

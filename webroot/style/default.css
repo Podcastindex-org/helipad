@@ -162,7 +162,8 @@ img {
     font-size: 18px;
     margin: 0;
     margin-right: 10px;
-    padding: 5px 10px 5px 12px;
+    padding: 10px;
+    min-height: 81px;
 }
 
 .time_date {
@@ -182,7 +183,8 @@ img {
 }
 
 .sent_msg p {
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: bold;
     margin: 0;
     color: black;
     padding: 5px 10px 15px 12px;
@@ -293,4 +295,72 @@ div.loadmore {
 div.versionFooter {
     color: antiquewhite;
     float: right;
+}
+div.balanceDisplay {
+    padding-top:8px;
+    padding-right:8px;
+    padding-left:8px;
+    float:right;
+    color: floralwhite;
+    -webkit-transition: background-color 2s;
+            transition: background-color 2s;
+}
+div.balanceDisplay span.good {
+    colorcolor:greenyellow;
+}
+div.balanceDisplay span.error {
+    color:darkred;
+}
+div.balanceDisplay.bump {
+    background-color: #1e7e34;
+}
+div.piIcon {
+    padding-top:8px;
+    padding-right:2px;
+    float:right;
+}
+span.csv {
+    padding-right:8px;
+}
+span.csv a {
+    text-decoration: none;
+}
+div.nodata span.invindex {
+    color: orange;
+}
+/* https://loading.io/css/ */
+.lds-dual-ring {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+}
+.lds-dual-ring:after {
+    content: " ";
+    display: block;
+    width: 20px;
+    height: 20px;
+    margin: 8px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    border-color: #fff transparent #fff transparent;
+    animation: lds-dual-ring 1.2s linear infinite;
+}
+@keyframes lds-dual-ring {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Small screens */
+@media only screen and (max-width: 550px) {
+    div.titleHeader .titleSubtitle {
+        display:none;
+    }
+    .time_date {
+        display:none;
+    }
 }

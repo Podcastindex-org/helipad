@@ -9,9 +9,15 @@ $(document).ready(function () {
     var intvlChatPolling = null;
     var connection = null;
     var messageIds = [];
+    var currentInvoiceIndex = null;
+    var currentBalance = null;
+    var currentBalanceAmount = 0;
 
-    getBoosts();
 
+    //Initialize the page
+    initPage();
+
+    //Get a boost list starting at a particular invoice index
     function getBoosts(startIndex, max, scrollToTop, old) {
         var noIndex = false;
 
@@ -40,11 +46,11 @@ $(document).ready(function () {
         } else {
             boostIndex = lastIndex;
         }
-        if(typeof boostIndex !== "number") {
+        if (typeof boostIndex !== "number") {
             noIndex = true;
         }
-        if(startIndex === null) {
-            boostIndex = "";
+        if (startIndex === null) {
+            boostIndex = lastIndex + 20;
         }
         if (typeof max !== "number") {
             max = 0;
@@ -54,11 +60,11 @@ $(document).ready(function () {
         }
 
         //Build the endpoint url
-        var url = '/boosts?index=' + boostIndex;
-        if(max > 0) {
+        var url = '/api/v1/boosts?index=' + boostIndex;
+        if (max > 0) {
             url += '&count=' + max;
         }
-        if(old) {
+        if (old) {
             url += '&old=true';
         }
 
@@ -85,34 +91,71 @@ $(document).ready(function () {
                     switch (boostApp.toLowerCase()) {
                         case 'fountain':
                             appIconUrl = appIconUrlBase + 'fountain';
+                            appIconHref = 'https://fountain.fm';
                             break;
                         case 'podfriend':
                             appIconUrl = appIconUrlBase + 'podfriend';
+                            appIconHref = 'https://podfriend.com';
                             break;
                         case 'castamatic':
                             appIconUrl = appIconUrlBase + 'castamatic';
+                            appIconHref = 'https://castamatic.com';
                             break;
                         case 'curiocaster':
                             appIconUrl = appIconUrlBase + 'curiocaster';
+                            appIconHref = 'https://curiocaster.com';
                             break;
                         case 'breez':
                             appIconUrl = appIconUrlBase + 'breez';
+                            appIconHref = 'https://breez.technology';
                             break;
                         case 'podstation':
+                        case 'podstation browser extension':
                             appIconUrl = appIconUrlBase + 'podstation';
+                            appIconHref = 'https://podstation.github.io';
                             break;
                         case 'sphinx':
                             appIconUrl = appIconUrlBase + 'sphinxchat';
+                            appIconHref = 'https://sphinx.chat';
                             break;
                         case 'podverse':
                             appIconUrl = appIconUrlBase + 'podverse';
+                            appIconHref = 'https://podverse.fm';
                             break;
+                        case 'n2n2':
                         case 'zion':
                             appIconUrl = appIconUrlBase + 'zion';
+                            appIconHref = 'https://getzion.com';
                             break;
-                        case 'zion':
-                            appIconUrl = appIconUrlBase + 'v4vapp';
+                        case 'usocial':
+                        case 'usocial.me':
+                            appIconUrl = appIconUrlBase + 'usocial';
+                            appIconHref = 'https://usocial.me';
                             break;
+                        case 'lncli':
+                        case 'terminal':
+                        case 'cmd':
+                            appIconUrl = appIconUrlBase + 'terminal';
+                            appIconHref = 'https://github.com/lightningnetwork/lnd';
+                            break;
+                        case 'boostcli':
+                            appIconUrl = appIconUrlBase + 'boostcli';
+                            appIconHref = 'https://github.com/valcanobacon/BoostCLI';
+                            break;
+                        default:
+                            appIconUrl = appIconUrlBase + 'unknown';
+                            appIconHref = '#';
+                    }
+
+                    //Sender
+                    if (boostSender.trim() != "") {
+                        boostSender = 'from ' + boostSender;
+                    }
+
+                    if (boostMessage.trim() != "") {
+                        boostMessage = '' +
+                            '      <hr>' +
+                            '      <p>' + boostMessage + '</p>';
                     }
 
                     if (!messageIds.includes(boostIndex) && element.action == 2) {
@@ -124,19 +167,17 @@ $(document).ready(function () {
                             '<div class="outgoing_msg message" data-msgid="' + boostIndex + '">' +
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
-                            '      <span class="app"><img src="' + appIconUrl + '"></span>' +
-                            '      <h5>' + boostSats + ' sats <small>from ' + boostSender + '</small></h5>' +
-                            '      <span class="time_date" data-timestamp="' + dateTime + '">' + prettyDate(dateTime) + '</span>' +
+                            '      <span class="app"><a href="' + appIconHref + '"><img src="' + appIconUrl + '" title="' + boostApp + '" alt="' + boostApp + '"></a></span>' +
+                            '      <h5 class="sats">' + boostSats + ' sats <small>' + boostSender + '</small></h5>' +
+                            '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + prettyDate(dateTime) + '</time>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
-                            '      <br>' +
-                            '      <hr>' +
-                            '      <p>' + boostMessage + '</p>' +
-                            '    </div>' +
-                            '  </div>' +
-                            '</div>';
+                            boostMessage
+                        '    </div>' +
+                        '  </div>' +
+                        '</div>';
 
                         //Insert the message in the right spot
-                        if(displayedMessageCount == 0) {
+                        if (displayedMessageCount == 0) {
                             inbox.prepend(elMessage);
                             //Scroll the list back up if necessary
                             if (scrollToTop) {
@@ -146,21 +187,23 @@ $(document).ready(function () {
                             //Get the closest matching id
                             var prepend = false;
                             let closestId = closest(messageIds, boostIndex);
-                            if(boostIndex < closestId) {
+                            if (boostIndex < closestId) {
                                 prepend = true;
                             }
 
-                            if(prepend) {
-                                $('div.outgoing_msg[data-msgid='+closestId+']').after(elMessage);
+                            if (prepend) {
+                                $('div.outgoing_msg[data-msgid=' + closestId + ']').after(elMessage);
+
                             } else {
-                                $('div.outgoing_msg[data-msgid='+closestId+']').before(elMessage);
+                                $('div.outgoing_msg[data-msgid=' + closestId + ']').before(elMessage);
+                                shootConfetti(1500);
                             }
 
                         }
 
                         //Update the tracking array
                         messageIds.push(boostIndex);
-                        messageIds = messageIds.sort((a,b) => a-b);
+                        messageIds = messageIds.sort((a, b) => a - b);
 
                         //Pew pew pew!
                         pewAudio.play();
@@ -169,17 +212,111 @@ $(document).ready(function () {
 
                 //Show a message if still building
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
-                    inbox.prepend('<div class="nodata">No data to show yet. Building the initial database may take some time...</div>');
+                    inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
+                        'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
+                        '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
+                        '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
+                        '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">' + currentInvoiceIndex + '</span>' +
+                        '</div>');
+                }
+                $('div.nodata span.invindex').text(currentInvoiceIndex);
+
+                var bcount = $('div.outgoing_msg:first').data('msgid') - $('div.outgoing_msg:last').data('msgid');
+                if (typeof bcount !== "number") {
+                    bcount = 9999;
                 }
 
+                //Update the csv export link
+                var csvindex = $('div.outgoing_msg:first').data('msgid');
+                if (typeof csvindex !== "number") {
+                    csvindex = currentInvoiceIndex;
+                }
+
+                var endex = csvindex - bcount;
+                $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
+
                 //Load more link
-                if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && ( boostIndex > 1 || noIndex)) {
+                if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
                     inbox.append('<div class="loadmore"><a href="#">Show older boosts...</a></div>');
                 }
             }
         });
+    }
 
+    //Animate some confetti on the page with a given duration interval in milliseconds
+    function shootConfetti(time) {
+        startConfetti();
+        setTimeout(function () {
+            stopConfetti();
+        }, time);
+    }
 
+    //Get the current channel balance from the node
+    function getBalance(init) {
+        //Get the current boost index number
+        $.ajax({
+            url: "/api/v1/balance",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                newBalance = data;
+                //If the data returned wasn't a number then give an error
+                if (typeof newBalance !== "number") {
+                    $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
+                } else {
+                    //Display the balance
+                    $('div.balanceDisplay').html('Balance: <span>' + newBalance.toLocaleString("en-US") + '</span>');
+
+                    //If the balance went up, do some fun stuff
+                    if (newBalance > currentBalanceAmount && !init) {
+                        $('div.balanceDisplay').addClass('bump');
+                        setTimeout(function () {
+                            $('div.balanceDisplay').removeClass('bump');
+                        }, 1200);
+                    }
+
+                    //This is now the current balance
+                    currentBalanceAmount = newBalance;
+                }
+
+            }
+        });
+    }
+
+    //Refresh the timestatmps of all the boosts on the list
+    function updateTimestamps() {
+        console.log("Updating timestamps...");
+        $('time.time_date').each(function (_, el) {
+            var $el = $(el);
+            $el.text(prettyDate(new Date($el.attr('datetime'))));
+        });
+    }
+
+    //Get the most recent invoice index the node knows about
+    function getIndex() {
+        //Get the current boost index number
+        $.ajax({
+            url: "/api/v1/index",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json",
+            success: function (data) {
+                //console.log(data);
+                currentInvoiceIndex = data;
+                //console.log(typeof currentInvoiceIndex);
+                if (typeof currentInvoiceIndex !== "number" || currentInvoiceIndex < 1) {
+                    currentInvoiceIndex = 1;
+                }
+                getBoosts(currentInvoiceIndex, 100, true, true);
+            }
+        });
+    }
+
+    //Build the UI with the page loads
+    function initPage() {
+        getBalance(true);
+        getIndex();
     }
 
     //Load more messages handler
@@ -191,30 +328,30 @@ $(document).ready(function () {
         }
 
         boostIndex = boostIndex;
-        if(boostIndex < 1) {
+        if (boostIndex < 1) {
             boostIndex = 1;
             max = boostIndex
             old = false;
         }
 
-        getBoosts(boostIndex, 200, false, old);
+        getBoosts(boostIndex, 100, false, old);
 
         return false;
     });
 
-    //Set a periodic checker for new boosts
+    //Boost and node info checker
     setInterval(function () {
-        getBoosts(null, 20, true);
+        if ($('div.outgoing_msg').length === 0) {
+            initPage();
+        } else {
+            getBoosts(currentInvoiceIndex, 20, true, false);
+            getBalance();
+        }
     }, 7000);
 
-});
+    //Timestamp refresher
+    setInterval(function () {
+        updateTimestamps();
+    }, 60000);
 
-const closest = (arr, num) => {
-    return arr.reduce((acc, val) => {
-        if(Math.abs(val - num) < Math.abs(acc)){
-            return val - num;
-        }else{
-            return acc;
-        }
-    }, Infinity) + num;
-}
+});
