@@ -110,7 +110,9 @@ $(document).ready(function () {
                         case 'zion':
                             appIconUrl = appIconUrlBase + 'zion';
                             break;
-
+                        case 'zion':
+                            appIconUrl = appIconUrlBase + 'v4vapp';
+                            break;
                     }
 
                     if (!messageIds.includes(boostIndex) && element.action == 2) {
