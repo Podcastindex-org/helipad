@@ -142,6 +142,10 @@ $(document).ready(function () {
                             appIconUrl = appIconUrlBase + 'boostcli';
                             appIconHref = 'https://github.com/valcanobacon/BoostCLI';
                             break;
+                        case 'v4vapp':
+                            appIconUrl = appIconUrlBase + 'v4vapp';
+                            appIconHref = 'https://lnd.v4v.app/';
+                            break;
                         default:
                             appIconUrl = appIconUrlBase + 'unknown';
                             appIconHref = '#';
