@@ -236,6 +236,33 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
         }
     };
 
+    //Parameter - minimal amount to show (unsigned int)
+    let minimal_amount_to_show: u64;
+    match params.get("amount") {
+        Some(amount) => {
+            minimal_amount_to_show = match amount.parse::<u64>() {
+                Ok(minimal_amount_to_show) => {
+                    println!("** Supplied minimal amount from call: [{}]", minimal_amount_to_show);
+                    minimal_amount_to_show
+                }
+                Err(_) => {
+                    eprintln!("** Error getting minimal amount: 'amount' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'amount' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        }
+        None => {
+            eprintln!("** Error getting minimal amount: 'amount' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'amount' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
     //Was the "old" flag used?
     let mut old = false;
     match params.get("old") {
@@ -244,7 +271,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
     };
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, true) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, minimal_amount_to_show, true) {
         Ok(boosts) => {
             let json_doc = serde_json::to_string_pretty(&boosts).unwrap();
 
@@ -486,7 +513,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
     };
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, false) {
+    match dbif::get_boosts_from_db(&_ctx.database_file_path, index, boostcount, old, minimal_amount_to_show, false) {
         Ok(boosts) => {
             let mut csv = String::new();
 

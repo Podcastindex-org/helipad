@@ -33,6 +33,7 @@ type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
 const HELIPAD_STANDARD_PORT: &str = "2112";
+const HELIPAD_MINIMAL_AMOUNT: &u64 = 0;
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
 const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
@@ -50,6 +51,7 @@ pub struct AppState {
 pub struct HelipadConfig {
     pub database_file_path: String,
     pub listen_port: String,
+    pub minimal_amount: u64,
     pub macaroon_path: String,
     pub cert_path: String,
 }
@@ -183,6 +185,7 @@ async fn main() {
     let mut helipad_config = HelipadConfig {
         database_file_path: "".to_string(),
         listen_port: "".to_string(),
+        minimal_amount: 0,
         macaroon_path: "".to_string(),
         cert_path: "".to_string(),
     };
@@ -218,6 +221,29 @@ async fn main() {
         println!(" - Nothing else found. Using default: [{}]...", listen_port);
     }
     helipad_config.listen_port = listen_port.clone();
+
+    //SHOW MINIMAL AMOUNT -----
+    println!("\nDiscovering minimal amount to show...");
+    let mut minimal_amount = HELIPAD_MINIMAL_AMOUNT;
+    let args: Vec<String> = env::args().collect();
+    let env_minimal_amount = std::env::var("HELIPAD_MINIMAL_AMOUNT");
+    //First try from the environment
+    if env_minimal_amount.is_ok() {
+        minimal_amount = env_minimal_amount.unwrap();
+        println!(" - Using environment var(HELIPAD_MINIMAL_AMOUNT): [{}]", minimal_amount);
+    } else if server_config.minimal_amount.is_some() {
+        //If that fails, try from the config file
+        minimal_amount = server_config.minimal_amount.unwrap();
+        println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, minimal_amount);
+    } else if let Some(arg_port) = args.get(1) {
+        //If that fails, try from the command line
+        minimal_amount = arg_port.to_owned();
+        println!(" - Using arg from command line: [{}]", minimal_amount);
+    } else {
+        //If everything fails, then just use the default port
+        println!(" - Nothing else found. Using default: [{}]...", minimal_amount);
+    }
+    helipad_config.minimal_amount = minimal_amount.clone();
 
     //DATABASE FILE -----
     //First try to get the database file location from the environment

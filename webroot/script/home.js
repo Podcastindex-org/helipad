@@ -6,6 +6,7 @@ $(document).ready(function () {
     let pewAudio = new Audio(pewAudioFile);
     const urlParams = new URLSearchParams(window.location.search);
     const chat_id = urlParams.get('cid');
+    const minimal_amount = urlParams.get('amount');
     var intvlChatPolling = null;
     var connection = null;
     var messageIds = [];
@@ -18,7 +19,7 @@ $(document).ready(function () {
     initPage();
 
     //Get a boost list starting at a particular invoice index
-    function getBoosts(startIndex, max, scrollToTop, old) {
+    function getBoosts(startIndex, max, scrollToTop, amount, old) {
         var noIndex = false;
 
         //Find newest index
@@ -58,11 +59,17 @@ $(document).ready(function () {
         if (typeof scrollToTop !== "boolean") {
             scrollToTop = true;
         }
+        if (typeof amount !== "number") {
+            amount = 0;
+        }
 
         //Build the endpoint url
         var url = '/api/v1/boosts?index=' + boostIndex;
         if (max > 0) {
             url += '&count=' + max;
+        }
+        if (amount > 0) {
+            url += '&amount=' + amount;
         }
         if (old) {
             url += '&old=true';
@@ -312,7 +319,7 @@ $(document).ready(function () {
                 if (typeof currentInvoiceIndex !== "number" || currentInvoiceIndex < 1) {
                     currentInvoiceIndex = 1;
                 }
-                getBoosts(currentInvoiceIndex, 100, true, true);
+                getBoosts(currentInvoiceIndex, 100, true, minimal_amount, true);
             }
         });
     }
@@ -338,7 +345,7 @@ $(document).ready(function () {
             old = false;
         }
 
-        getBoosts(boostIndex, 100, false, old);
+        getBoosts(boostIndex, 100, false, minimal_amount, old);
 
         return false;
     });
@@ -348,7 +355,7 @@ $(document).ready(function () {
         if ($('div.outgoing_msg').length === 0) {
             initPage();
         } else {
-            getBoosts(currentInvoiceIndex, 20, true, false);
+            getBoosts(currentInvoiceIndex, 20, true, minimal_amount, false);
             getBalance();
         }
     }, 7000);
