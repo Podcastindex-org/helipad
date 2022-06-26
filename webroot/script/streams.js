@@ -57,7 +57,7 @@ $(document).ready(function () {
         }
 
         //Build the endpoint url
-        var url = '/api/v1/boosts?index=' + boostIndex;
+        var url = '/api/v1/streams?index=' + boostIndex;
         if (max > 0) {
             url += '&count=' + max;
         }
@@ -167,7 +167,7 @@ $(document).ready(function () {
                         boostDisplayAmount = boostActualSats + ' (<span title="Original amount before fees.">' + boostSats + '</span>)';
                     }
 
-                    if (!messageIds.includes(boostIndex) && element.action == 2) {
+                    if (!messageIds.includes(boostIndex)) {
                         let dateTime = new Date(element.time * 1000).toISOString();
                         $('div.nodata').remove();
 

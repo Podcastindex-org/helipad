@@ -328,6 +328,9 @@ span.csv a {
 div.nodata span.invindex {
     color: orange;
 }
+div.modeFooter {
+    float:left;
+}
 /* https://loading.io/css/ */
 .lds-dual-ring {
     display: inline-block;
