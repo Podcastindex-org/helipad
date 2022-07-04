@@ -115,6 +115,31 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
     }
 
+    //Create the leaderboard table
+    match conn.execute(
+    "BEGIN;
+         CREATE TABLE IF NOT EXISTS leaderboard (
+             idx integer primary key,
+             sender text,
+             total integer,
+             lasttime integer
+         );
+         CREATE INDEX sender ON leaderboard (sender);
+         CREATE INDEX total ON leaderboard (total);
+         CREATE INDEX lasttime ON leaderboard (lasttime);
+         COMMIT;
+         ",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Leaderboard table is ready.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create database leaderboard table: [{}].", filepath).into())))
+        }
+    }
+
     //Create the node info table
     match conn.execute(
         "CREATE TABLE IF NOT EXISTS node_info (
