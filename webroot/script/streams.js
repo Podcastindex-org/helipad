@@ -15,7 +15,7 @@ $(document).ready(function () {
     initPage();
 
     //Get a boost list starting at a particular invoice index
-    function getBoosts(startIndex, max, scrollToTop, old) {
+    function getBoosts(startIndex, max, scrollToTop, old, shouldPew) {
         var noIndex = false;
 
         //Find newest index
@@ -214,8 +214,10 @@ $(document).ready(function () {
                         messageIds.push(boostIndex);
                         messageIds = messageIds.sort((a, b) => a - b);
 
-                        //Pew pew pew!
-                        pewAudio.play();
+                        if (shouldPew) {
+                            //Pew pew pew!
+                            pewAudio.play();
+                        }
                     }
                 });
 
@@ -317,7 +319,7 @@ $(document).ready(function () {
                 if (typeof currentInvoiceIndex !== "number" || currentInvoiceIndex < 1) {
                     currentInvoiceIndex = 1;
                 }
-                getBoosts(currentInvoiceIndex, 100, true, true);
+                getBoosts(currentInvoiceIndex, 100, true, true, false);
             }
         });
     }
@@ -344,7 +346,7 @@ $(document).ready(function () {
             old = false;
         }
 
-        getBoosts(boostIndex, 100, false, old);
+        getBoosts(boostIndex, 100, false, old, false);
 
         return false;
     });
@@ -354,7 +356,7 @@ $(document).ready(function () {
         if ($('div.outgoing_msg').length === 0) {
             initPage();
         } else {
-            getBoosts(currentInvoiceIndex, 20, true, false);
+            getBoosts(currentInvoiceIndex, 20, true, false, true);
             getBalance();
         }
     }, 7000);
