@@ -56,6 +56,11 @@ $(document).ready(function () {
             scrollToTop = true;
         }
 
+        //Override shouldPew for receiving our first boost
+        if ($('div.nodata').length) {
+            shouldPew = true;
+        }
+
         //Build the endpoint url
         var url = '/api/v1/boosts?index=' + boostIndex;
         if (max > 0) {
