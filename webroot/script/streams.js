@@ -1,8 +1,8 @@
 $(document).ready(function () {
     let messages = $('div.mesgs');
     let inbox = messages.find('div.msg_history');
-    let appIconUrlBase = '/image?name=';
-    let pewAudioFile = '/pew.mp3';
+    let appIconUrlBase = 'image/';
+    let pewAudioFile = 'audio/pew.mp3';
     let pewAudio = new Audio(pewAudioFile);
     var connection = null;
     var messageIds = [];
@@ -93,64 +93,64 @@ $(document).ready(function () {
                     var appIconUrl = "";
                     switch (boostApp.toLowerCase()) {
                         case 'fountain':
-                            appIconUrl = appIconUrlBase + 'fountain';
+                            appIconUrl = appIconUrlBase + 'fountain.png';
                             appIconHref = 'https://fountain.fm';
                             break;
                         case 'podfriend':
-                            appIconUrl = appIconUrlBase + 'podfriend';
+                            appIconUrl = appIconUrlBase + 'podfriend.png';
                             appIconHref = 'https://podfriend.com';
                             break;
                         case 'castamatic':
-                            appIconUrl = appIconUrlBase + 'castamatic';
+                            appIconUrl = appIconUrlBase + 'castamatic.png';
                             appIconHref = 'https://castamatic.com';
                             break;
                         case 'curiocaster':
-                            appIconUrl = appIconUrlBase + 'curiocaster';
+                            appIconUrl = appIconUrlBase + 'curiocaster.png';
                             appIconHref = 'https://curiocaster.com';
                             break;
                         case 'breez':
-                            appIconUrl = appIconUrlBase + 'breez';
+                            appIconUrl = appIconUrlBase + 'breez.png';
                             appIconHref = 'https://breez.technology';
                             break;
                         case 'podstation':
                         case 'podstation browser extension':
-                            appIconUrl = appIconUrlBase + 'podstation';
+                            appIconUrl = appIconUrlBase + 'podstation.png';
                             appIconHref = 'https://podstation.github.io';
                             break;
                         case 'sphinx':
-                            appIconUrl = appIconUrlBase + 'sphinxchat';
+                            appIconUrl = appIconUrlBase + 'sphinxchat.png';
                             appIconHref = 'https://sphinx.chat';
                             break;
                         case 'podverse':
-                            appIconUrl = appIconUrlBase + 'podverse';
+                            appIconUrl = appIconUrlBase + 'podverse.png';
                             appIconHref = 'https://podverse.fm';
                             break;
                         case 'n2n2':
                         case 'zion':
-                            appIconUrl = appIconUrlBase + 'zion';
+                            appIconUrl = appIconUrlBase + 'zion.png';
                             appIconHref = 'https://getzion.com';
                             break;
                         case 'usocial':
                         case 'usocial.me':
-                            appIconUrl = appIconUrlBase + 'usocial';
+                            appIconUrl = appIconUrlBase + 'usocial.png';
                             appIconHref = 'https://usocial.me';
                             break;
                         case 'lncli':
                         case 'terminal':
                         case 'cmd':
-                            appIconUrl = appIconUrlBase + 'terminal';
+                            appIconUrl = appIconUrlBase + 'terminal.png';
                             appIconHref = 'https://github.com/lightningnetwork/lnd';
                             break;
                         case 'boostcli':
-                            appIconUrl = appIconUrlBase + 'boostcli';
+                            appIconUrl = appIconUrlBase + 'boostcli.png';
                             appIconHref = 'https://github.com/valcanobacon/BoostCLI';
                             break;
                         case 'v4vapp':
-                            appIconUrl = appIconUrlBase + 'v4vapp';
+                            appIconUrl = appIconUrlBase + 'v4vapp.png';
                             appIconHref = 'https://lnd.v4v.app/';
                             break;
                         default:
-                            appIconUrl = appIconUrlBase + 'unknown';
+                            appIconUrl = appIconUrlBase + 'unknown.png';
                             appIconHref = '#';
                     }
 

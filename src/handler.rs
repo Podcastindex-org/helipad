@@ -12,10 +12,7 @@ use dbif::BoostRecord;
 
 
 //Constants --------------------------------------------------------------------------------------------------
-const WEBROOT_PATH_HTML: &str = "webroot/html";
-const WEBROOT_PATH_IMAGE: &str = "webroot/image";
-const WEBROOT_PATH_STYLE: &str = "webroot/style";
-const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
+const WEBROOT_PATH: &str = "webroot";
 
 
 //Structs and Enums ------------------------------------------------------------------------------------------
@@ -42,7 +39,7 @@ pub async fn home(ctx: Context) -> Response {
     }).unwrap_or_else(HashMap::new);
 
     let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/home.html").expect("Something went wrong reading the file.");
+    let doc = fs::read_to_string("webroot/home.html").expect("Something went wrong reading the file.");
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
@@ -59,7 +56,7 @@ pub async fn streams(ctx: Context) -> Response {
     }).unwrap_or_else(HashMap::new);
 
     let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/streams.html").expect("Something went wrong reading the file.");
+    let doc = fs::read_to_string("webroot/streams.html").expect("Something went wrong reading the file.");
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
@@ -67,74 +64,55 @@ pub async fn streams(ctx: Context) -> Response {
         .unwrap();
 }
 
-//Pew-pew audio
-pub async fn pewmp3(_ctx: Context) -> Response {
-    let file = fs::read("webroot/extra/pew.mp3").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "audio/mpeg")
-        .body(hyper::Body::from(file))
-        .unwrap();
-}
-
-//Favicon icon
-pub async fn favicon(_ctx: Context) -> Response {
-    let file = fs::read("webroot/extra/favicon.ico").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "image/x-icon")
-        .body(hyper::Body::from(file))
-        .unwrap();
-}
-
 //Serve a web asset by name from webroot subfolder according to it's requested type
 pub async fn asset(ctx: Context) -> Response {
-    //Get query parameters
-    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
-
     println!("** Context: {:#?}", ctx);
-    println!("** Params: {:#?}", _params);
 
-    //Set up the response framework
-    let file_path;
-    let content_type;
-    let file_extension;
-    match ctx.path.as_str() {
-        "/html" => {
-            file_path = WEBROOT_PATH_HTML;
-            content_type = "text/html";
-            file_extension = "html";
-        }
-        "/image" => {
-            file_path = WEBROOT_PATH_IMAGE;
-            content_type = "image/png";
-            file_extension = "png";
-        }
-        "/style" => {
-            file_path = WEBROOT_PATH_STYLE;
-            content_type = "text/css";
-            file_extension = "css";
-        }
-        "/script" => {
-            file_path = WEBROOT_PATH_SCRIPT;
-            content_type = "text/javascript";
-            file_extension = "js";
-        }
-        _ => {
+    //Resolve the full webroot path and make sure it exists
+    let base_path = fs::canonicalize(WEBROOT_PATH).unwrap();
+
+    //Resolve the full path to the requested file and check if it exists
+    let file_path = match fs::canonicalize(
+        format!("{}/{}", WEBROOT_PATH, ctx.path.as_str())
+    ) {
+        Ok(path) => path,
+        Err(_) => {
             return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** Invalid asset type requested (ex. /images?name=filename.").into())
-                .unwrap();
+                .status(StatusCode::NOT_FOUND)
+                .body("NOT FOUND".into())
+                .unwrap()
         }
     };
 
+    //Paranoia check: Make sure the requested path is inside the webroot path
+    if ! file_path.starts_with(base_path) {
+        return hyper::Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body("NOT FOUND".into())
+            .unwrap()
+    }
+
+    //Use the file extension to figure out the mime type
+    let file_extension = match file_path.extension() {
+        Some(ext) => ext.to_str().unwrap(),
+        None => "", // file with no extension
+    };
+
+    let content_type = match file_extension {
+        "html" => "text/html",
+        "mp3"  => "audio/mpeg",
+        "png"  => "image/png",
+        "css"  => "text/css",
+        "js"   => "text/javascript",
+        "ico"  => "image/x-icon",
+        _      => "text/plain", // unknown extension => plain text
+    };
+
     //Attempt to serve the file
-    if let Some(filename) = _params.get("name") {
-        let file_to_serve = format!("{}/{}.{}", file_path, filename, file_extension);
+    if file_path.exists() {
+        let file_to_serve = file_path.to_str().unwrap();
         println!("** Serving file: [{}]", file_to_serve);
-        let file = fs::read(file_to_serve.as_str()).expect("Something went wrong reading the file.");
+        let file = fs::read(file_to_serve).expect("Something went wrong reading the file.");
         return hyper::Response::builder()
             .status(StatusCode::OK)
             .header("Content-type", content_type)
@@ -142,9 +120,9 @@ pub async fn asset(ctx: Context) -> Response {
             .unwrap();
     } else {
         return hyper::Response::builder()
-            .status(StatusCode::from_u16(500).unwrap())
-            .body(format!("** No file specified.").into())
-            .unwrap();
+            .status(StatusCode::NOT_FOUND)
+            .body("NOT FOUND".into())
+            .unwrap()
     }
 }
 
