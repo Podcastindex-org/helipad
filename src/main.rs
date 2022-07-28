@@ -598,6 +598,6 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
         current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
         println!("Current index: {}", current_index);
 
-        std::thread::sleep(std::time::Duration::from_millis(9000));
+        tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
     }
 }
