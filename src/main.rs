@@ -259,14 +259,12 @@ async fn main() {
     //Base
     router.get("/", Box::new(handler::home));
     router.get("/streams", Box::new(handler::streams));
-    router.get("/pew.mp3", Box::new(handler::pewmp3));
-    router.get("/favicon.ico", Box::new(handler::favicon));
     //Assets
-    router.get("/image", Box::new(handler::asset));
-    router.get("/html", Box::new(handler::asset));
-    router.get("/style", Box::new(handler::asset));
-    router.get("/script", Box::new(handler::asset));
-    router.get("/extra", Box::new(handler::asset));
+    router.get("/favicon.ico", Box::new(handler::asset));
+    router.get("/audio/*", Box::new(handler::asset));
+    router.get("/image/*", Box::new(handler::asset));
+    router.get("/style/*", Box::new(handler::asset));
+    router.get("/script/*", Box::new(handler::asset));
     //Api
     router.options("/api/v1/boosts", Box::new(handler::api_v1_boosts_options));
     router.get("/api/v1/boosts", Box::new(handler::api_v1_boosts));
