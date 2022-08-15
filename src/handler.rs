@@ -413,6 +413,38 @@ pub async fn api_v1_index(_ctx: Context) -> Response {
     };
 }
 
+//API - get the current leaderboard as JSON
+pub async fn api_v1_leaderboard_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
+
+pub async fn api_v1_leaderboard(_ctx: Context) -> Response {
+    //Get the leaderboard entries
+    match dbif::get_leaderboard_entries_from_db(&_ctx.database_file_path) {
+        Ok(entries) => {
+            let json_doc = serde_json::to_string_pretty(&entries).unwrap();
+
+            return hyper::Response::builder()
+                .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(format!("{}", json_doc).into())
+                .unwrap();
+        }
+        Err(e) => {
+            eprintln!("** Error getting leaderboard entries: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting leaderboard entries.").into())
+                .unwrap();
+        }
+    }
+}
+
+
 //CSV export - max is 200 for now so the csv content can be built in memory
 pub async fn csv_export_boosts(_ctx: Context) -> Response {
     //Get query parameters

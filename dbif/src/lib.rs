@@ -20,6 +20,14 @@ pub struct BoostRecord {
     pub tlv: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LeaderBoardEntry {
+    pub sender: String,
+    pub total: i64,
+    pub podcast: String,
+    pub lasttime: i64,
+}
+
 impl BoostRecord {
     //Removes unsafe html interpretable characters from displayable strings
     pub fn escape_for_html( field: String) -> String {
@@ -117,18 +125,13 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
 
     //Create the leaderboard table
     match conn.execute(
-    "BEGIN;
-         CREATE TABLE IF NOT EXISTS leaderboard (
+    "CREATE TABLE IF NOT EXISTS leaderboard (
              idx integer primary key,
              sender text,
              total integer,
+             podcast text,
              lasttime integer
-         );
-         CREATE INDEX sender ON leaderboard (sender);
-         CREATE INDEX total ON leaderboard (total);
-         CREATE INDEX lasttime ON leaderboard (lasttime);
-         COMMIT;
-         ",
+         )",
         [],
     ) {
         Ok(_) => {
@@ -137,6 +140,57 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         Err(e) => {
             eprintln!("{}", e);
             return Err(Box::new(HydraError(format!("Failed to create database leaderboard table: [{}].", filepath).into())))
+        }
+    }
+
+    //Create indexes in the leaderboard table
+    //TODO:  Put all this in a callable piece outside of this block
+    match conn.execute(
+        "CREATE INDEX IF NOT EXISTS sender ON leaderboard (sender)",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Sender index is now on leaderboard table.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create sender index on leaderboard table: [{}].", filepath).into())))
+        }
+    }
+    match conn.execute(
+        "CREATE INDEX IF NOT EXISTS total ON leaderboard (total)",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Total index is now on leaderboard table.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create total index on leaderboard table: [{}].", filepath).into())))
+        }
+    }
+    match conn.execute(
+        "CREATE INDEX IF NOT EXISTS podcast ON leaderboard (podcast)",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Podcast index is now on leaderboard table.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create podcast index on leaderboard table: [{}].", filepath).into())))
+        }
+    }
+    match conn.execute(
+        "CREATE INDEX IF NOT EXISTS lasttime ON leaderboard (lasttime)",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Lasttime index is now on leaderboard table.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create lasttime index on leaderboard table: [{}].", filepath).into())))
         }
     }
 
@@ -498,4 +552,113 @@ pub fn get_wallet_balance_from_db(filepath: &String) -> Result<i64, Box<dyn Erro
     }
 
     Ok(info[0])
+}
+
+//Get totals from the database aggregated by sender
+pub fn gather_sender_totals_from_db(filepath: &String) -> Result<Vec<LeaderBoardEntry>, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    //Prepare and execute the query
+    let mut stmt = conn.prepare("SELECT sender, \
+                                                      SUM(value_msat) as total,\
+                                                      podcast,
+                                                      MAX(time) as lasttime \
+                                               FROM boosts \
+                                               GROUP BY podcast,sender \
+                                               ORDER BY lasttime DESC\
+                                               ")?;
+    let rows = stmt.query_map([], |row| {
+        Ok(LeaderBoardEntry{
+            sender: row.get(0)?,
+            total: row.get(1)?,
+            podcast: row.get(2)?,
+            lasttime: row.get(3)?
+        })
+    }).unwrap();
+
+    let mut totals = Vec::new();
+
+    for total_result in rows {
+        totals.push(total_result?);
+    }
+
+    Ok(totals)
+}
+
+//Clear the leaderboard
+pub fn clear_leaderboard_from_db(filepath: &String) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    match conn.execute(
+        "DELETE FROM leaderboard",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Cleared leaderboard table.");
+            Ok(true)
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to clear leaderboard table: [{}].", filepath).into())))
+        }
+    }
+}
+
+//Add a sender total entry to the leaderboard
+pub fn add_sender_leaderboard_entry_to_db(filepath: &String, leaderboard_entry: LeaderBoardEntry) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    match conn.execute("INSERT INTO leaderboard (sender, \
+                                                     total, \
+                                                     podcast, \
+                                                     lasttime) \
+                                        VALUES (?1, \
+                                                ?2, \
+                                                ?3, \
+                                                ?4)",
+                       params![
+                           leaderboard_entry.sender,
+                           leaderboard_entry.total,
+                           leaderboard_entry.podcast,
+                           leaderboard_entry.lasttime
+                       ]
+    ) {
+        Ok(_) => {
+            Ok(true)
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to add leaderboard entry for sender: [{}].", leaderboard_entry.sender).into())))
+        }
+    }
+}
+
+//Get totals from the database aggregated by sender
+pub fn get_leaderboard_entries_from_db(filepath: &String) -> Result<Vec<LeaderBoardEntry>, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    //Prepare and execute the query
+    let mut stmt = conn.prepare("SELECT sender, \
+                                                      total, \
+                                                      podcast, \
+                                                      lasttime \
+                                               FROM leaderboard \
+                                               ORDER BY total DESC\
+                                               ")?;
+    let rows = stmt.query_map([], |row| {
+        Ok(LeaderBoardEntry{
+            sender: row.get(0)?,
+            total: row.get(1)?,
+            podcast: row.get(2)?,
+            lasttime: row.get(3)?
+        })
+    }).unwrap();
+
+    let mut totals = Vec::new();
+
+    for total_result in rows {
+        totals.push(total_result?);
+    }
+
+    Ok(totals)
 }

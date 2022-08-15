@@ -15,7 +15,7 @@ use drop_root::set_user_group;
 use lnd;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
-use dbif::add_wallet_balance_to_db;
+use dbif::{add_sender_leaderboard_entry_to_db, add_wallet_balance_to_db, clear_leaderboard_from_db, gather_sender_totals_from_db};
 // use hyper::http::Request;
 
 #[macro_use]
@@ -277,7 +277,23 @@ async fn main() {
     router.options("/api/v1/index", Box::new(handler::api_v1_index_options));
     router.get("/api/v1/index", Box::new(handler::api_v1_index));
     router.get("/csv", Box::new(handler::csv_export_boosts));
+    router.options("/api/v1/leaderboard", Box::new(handler::api_v1_leaderboard_options));
+    router.get("/api/v1/leaderboard", Box::new(handler::api_v1_leaderboard));
 
+    //TODO: testing leaderboard
+    if clear_leaderboard_from_db(&helipad_config.database_file_path).is_ok() {
+        println!("Leaderboard prepped.");
+    }
+    match gather_sender_totals_from_db(&helipad_config.database_file_path) {
+        Ok(leaderboard_entries) => {
+            for leaderboard_entry in leaderboard_entries {
+                let _leaderboard_add_result = add_sender_leaderboard_entry_to_db(&helipad_config.database_file_path, leaderboard_entry);
+            }
+        }
+        Err(e) => {
+            eprintln!("Error building leaderboard: {:#?}", e);
+        }
+    }
 
     let shared_router = Arc::new(router);
     let db_filepath: String = helipad_config.database_file_path.clone();
