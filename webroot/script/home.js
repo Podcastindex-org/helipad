@@ -149,6 +149,12 @@ $(document).ready(function () {
                             appIconUrl = appIconUrlBase + 'v4vapp';
                             appIconHref = 'https://lnd.v4v.app/';
                             break;
+                        case 'podcast index':
+                        case 'podcast-index':
+                        case 'podcastindex':
+                            appIconUrl = appIconUrlBase + 'podcastindex';
+                            appIconHref = 'https:/podcastindex.org/';
+                            break;
                         default:
                             appIconUrl = appIconUrlBase + 'unknown';
                             appIconHref = '#';
