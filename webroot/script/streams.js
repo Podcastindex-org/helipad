@@ -149,6 +149,10 @@ $(document).ready(function () {
                             appIconUrl = appIconUrlBase + 'v4vapp';
                             appIconHref = 'https://lnd.v4v.app/';
                             break;
+                        case 'ipfspodcasting':
+                            appIconUrl = appIconUrlBase + 'ipfspodcasting';
+                            appIconHref = 'https://ipfspodcasting.net';
+                            break;
                         default:
                             appIconUrl = appIconUrlBase + 'unknown';
                             appIconHref = '#';
