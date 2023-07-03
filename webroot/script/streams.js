@@ -286,7 +286,7 @@ $(document).ready(function () {
                     $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
                 } else {
                     //Display the balance
-                    $('div.balanceDisplay').html('Balance: <span>' + newBalance.toLocaleString("en-US") + '</span>');
+                    $('div.balanceDisplay').html('<span class="balanceLabel">Balance: </span>' + newBalance.toLocaleString("en-US"));
 
                     //If the balance went up, do some fun stuff
                     if (newBalance > currentBalanceAmount && !init) {
