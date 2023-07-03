@@ -1,0 +1,90 @@
+{
+    "fountain": {
+        "icon": "fountain",
+        "url": "https://fountain.fm"
+    },
+    "podfriend": {
+        "icon": "podfriend",
+        "url": "https://podfriend.com"
+    },
+    "castamatic": {
+        "icon": "castamatic",
+        "url": "https://castamatic.com"
+    },
+    "curiocaster": {
+        "icon": "curiocaster",
+        "url": "https://curiocaster.com"
+    },
+    "breez": {
+        "icon": "breez",
+        "url": "https://breez.technology"
+    },
+    "podstation": {
+        "icon": "podstation",
+        "url": "https://podstation.github.io"
+    },
+    "podstation browser extension": {
+        "icon": "podstation",
+        "url": "https://podstation.github.io"
+    },
+    "sphinx": {
+        "icon": "sphinxchat",
+        "url": "https://sphinx.chat"
+    },
+    "podverse": {
+        "icon": "podverse",
+        "url": "https://podverse.fm"
+    },
+    "n2n2": {
+        "icon": "zion",
+        "url": "https://getzion.com"
+    },
+    "zion": {
+        "icon": "zion",
+        "url": "https://getzion.com"
+    },
+    "usocial": {
+        "icon": "usocial",
+        "url": "https://usocial.me"
+    },
+    "usocial.me": {
+        "icon": "usocial",
+        "url": "https://usocial.me"
+    },
+    "lncli": {
+        "icon": "terminal",
+        "url": "https://github.com/lightningnetwork/lnd"
+    },
+    "terminal": {
+        "icon": "terminal",
+        "url": "https://github.com/lightningnetwork/lnd"
+    },
+    "cmd": {
+        "icon": "terminal",
+        "url": "https://github.com/lightningnetwork/lnd"
+    },
+    "boostcli": {
+        "icon": "boostcli",
+        "url": "https://github.com/valcanobacon/BoostCLI"
+    },
+    "v4vapp": {
+        "icon": "v4vapp",
+        "url": "https://lnd.v4v.app/"
+    },
+    "ipfspodcasting": {
+        "icon": "ipfspodcasting",
+        "url": "https://ipfspodcasting.net"
+    },
+    "podcast index": {
+        "icon": "podcastindex",
+        "url": "https:/podcastindex.org/"
+    },
+    "podcast-index": {
+        "icon": "podcastindex",
+        "url": "https:/podcastindex.org/"
+    },
+    "podcastindex": {
+        "icon": "podcastindex",
+        "url": "https:/podcastindex.org/"
+    }
+}
