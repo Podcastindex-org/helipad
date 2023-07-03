@@ -177,9 +177,9 @@ $(document).ready(function () {
                     }
 
                     //If there is a difference between actual and stated sats, display it
-                    var boostDisplayAmount = boostSats + " sats";
+                    var boostDisplayAmount = numberFormat(boostSats) + " sats";
                     if ((boostSats != boostActualSats) && boostSats > 0 && boostActualSats > 0) {
-                        boostDisplayAmount = '<span class="actual_sats" title="' + boostActualSats + ' sats received after splits/fees.">' + boostDisplayAmount + '</span>';
+                        boostDisplayAmount = '<span class="actual_sats" title="' + numberFormat(boostActualSats) + ' sats received after splits/fees.">' + boostDisplayAmount + '</span>';
                     }
 
                     if (!messageIds.includes(boostIndex) && element.action == 2) {
@@ -292,7 +292,7 @@ $(document).ready(function () {
                     $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
                 } else {
                     //Display the balance
-                    $('div.balanceDisplay').html('<span class="balanceLabel">Balance: </span>' + newBalance.toLocaleString("en-US"));
+                    $('div.balanceDisplay').html('<span class="balanceLabel">Balance: </span>' + numberFormat(newBalance));
 
                     //If the balance went up, do some fun stuff
                     if (newBalance > currentBalanceAmount && !init) {
