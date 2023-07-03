@@ -166,6 +166,10 @@ img {
     min-height: 81px;
 }
 
+.actual_sats:hover {
+    border-bottom: 1px dotted #666;
+}
+
 .time_date {
     text-align: right;
     color: black;

@@ -173,7 +173,7 @@ $(document).ready(function () {
                     //If there is a difference between actual and stated sats, display it
                     var boostDisplayAmount = boostSats + " sats";
                     if ((boostSats != boostActualSats) && boostSats > 0 && boostActualSats > 0) {
-                        boostDisplayAmount = boostActualSats + ' (<span title="Original amount before fees.">' + boostSats + '</span>)';
+                        boostDisplayAmount = '<span class="actual_sats" title="' + boostActualSats + ' sats received after splits/fees.">' + boostDisplayAmount + '</span>';
                     }
 
                     if (!messageIds.includes(boostIndex)) {
