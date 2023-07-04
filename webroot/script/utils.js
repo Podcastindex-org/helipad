@@ -173,3 +173,8 @@ const closest = (arr, num) => {
         }
     }, Infinity) + num;
 }
+
+// Format a number according to the locale set in the browser
+const numberFormat = (num) => {
+    return new Intl.NumberFormat().format(num);
+}

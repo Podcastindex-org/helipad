@@ -108,9 +108,9 @@ $(document).ready(function () {
                     }
 
                     //If there is a difference between actual and stated sats, display it
-                    var boostDisplayAmount = boostSats + " sats";
+                    var boostDisplayAmount = numberFormat(boostSats) + " sats";
                     if ((boostSats != boostActualSats) && boostSats > 0 && boostActualSats > 0) {
-                        boostDisplayAmount = boostActualSats + ' (<span title="Original amount before fees.">' + boostSats + '</span>)';
+                        boostDisplayAmount = '<span class="actual_sats" title="' + numberFormat(boostActualSats) + ' sats received after splits/fees.">' + boostDisplayAmount + '</span>';
                     }
 
                     if (!messageIds.includes(boostIndex)) {
@@ -170,10 +170,10 @@ $(document).ready(function () {
                 //Show a message if still building
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
                     inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
-                        'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
-                        '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
-                        '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
-                        '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">' + currentInvoiceIndex + '</span>' +
+                        'transactions, or maybe you have not had any satoshis streamed to you yet?</p>' +
+                        '<p>This screen will automatically refresh as satoshis are streamed to you.</p>' +
+                        '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to stream satoshis.</a></p>' +
+                        '<div class="lds-dual-ring"></div> Looking for streams: <span class="invindex">' + currentInvoiceIndex + '</span>' +
                         '</div>');
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
@@ -194,7 +194,7 @@ $(document).ready(function () {
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
-                    inbox.append('<div class="loadmore"><a href="#">Show older boosts...</a></div>');
+                    inbox.append('<div class="loadmore"><a href="#">Show older streams...</a></div>');
                 }
             }
         });
@@ -223,7 +223,7 @@ $(document).ready(function () {
                     $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
                 } else {
                     //Display the balance
-                    $('div.balanceDisplay').html('Balance: <span>' + newBalance.toLocaleString("en-US") + '</span>');
+                    $('div.balanceDisplay').html('<span class="balanceLabel">Balance: </span>' + numberFormat(newBalance));
 
                     //If the balance went up, do some fun stuff
                     if (newBalance > currentBalanceAmount && !init) {

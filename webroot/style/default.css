@@ -166,6 +166,10 @@ img {
     min-height: 81px;
 }
 
+.actual_sats:hover {
+    border-bottom: 1px dotted #666;
+}
+
 .time_date {
     text-align: right;
     color: black;
@@ -252,11 +256,19 @@ img {
     height: 30px;
 }
 
+.titleBar {
+    display: flex;
+    align-items: baseline;
+    margin-top: 10px;
+    margin-bottom: 8px;
+}
+
 h5.titleHeader {
     color: floralwhite;
     display: inline;
     display: inline-block;
-    margin-top: 10px;
+    margin: 0;
+    margin-right: .5rem;
 }
 
 .msg_entry {
@@ -297,13 +309,12 @@ div.versionFooter {
     float: right;
 }
 div.balanceDisplay {
-    padding-top:8px;
     padding-right:8px;
     padding-left:8px;
-    float:right;
     color: floralwhite;
     -webkit-transition: background-color 2s;
             transition: background-color 2s;
+    text-align: right;
 }
 div.balanceDisplay span.good {
     colorcolor:greenyellow;
@@ -328,9 +339,41 @@ span.csv a {
 div.nodata span.invindex {
     color: orange;
 }
-div.modeFooter {
-    float:left;
+ul.navButtons {
+    display: flex;
+    align-items: center;
+    list-style: none;
+    column-gap: 1rem;
+    margin: 0;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 0;
+    font-size: 1.125rem;
 }
+ul.navButtons li {
+    border-bottom: 2px solid transparent;
+}
+ul.navButtons li:hover,
+ul.navButtons li.active {
+    border-bottom: 2px solid red
+}
+ul.navButtons li:hover a {
+    color: white;
+    text-decoration: none;
+}
+ul.navButtons li a {
+    color: #ccc;
+}
+ul.navButtons li.active a {
+    color: white;
+    font-weight: bold;
+}
+.rightHeader {
+    display: flex;
+    align-items: center;
+    justify-self: end;
+}
+
 /* https://loading.io/css/ */
 .lds-dual-ring {
     display: inline-block;
@@ -360,7 +403,16 @@ div.modeFooter {
 
 /* Small screens */
 @media only screen and (max-width: 550px) {
-    div.titleHeader .titleSubtitle {
+    h5, ul.navButtons {
+        font-size: 1rem;
+    }
+    .titleBar {
+        font-size: 0.875rem;
+    }
+    .balanceLabel {
+        display: none;
+    }
+    .titleSubtitle {
         display:none;
     }
     .time_date {

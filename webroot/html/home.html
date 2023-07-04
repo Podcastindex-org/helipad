@@ -21,8 +21,17 @@
 
 <body>
 <div class="container">
-    <div class="titleHeader">
-        <div class="piIcon">
+    <div class="titleBar">
+        <h5 class="titleHeader">
+            Helipad<span class="titleSubtitle">: Boost Tracker</span>
+        </h5>
+        <ul class="navButtons">
+            <li class="active"><a href="/">Boosts</a></li>
+            <li><a href="/streams">Streams</a></li>
+        </ul>
+        <div class="rightHeader">
+            <div class="balanceDisplay">
+            </div>
             <span class="csv">
                 <a target="_blank" href="" title="Export as CSV">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" class="bi bi-file-earmark-spreadsheet" viewBox="0 0 16 16">
@@ -47,17 +56,13 @@
                 </svg>
             </a>
         </div>
-        <div class="balanceDisplay"></div>
-        <h5 class="titleHeader">Helipad<span class="titleSubtitle">: Boost Tracker</span></h5>
     </div>
     <div class="messaging">
         <div class="inbox_msg">
-
             <div class="mesgs">
                 <div class="msg_history"></div>
             </div>
         </div>
-        <div class="modeFooter"><a href="/streams">Streams</a></div>
         <div class="versionFooter"><a target="_blank" href="https://github.com/Podcastindex-org/helipad">v{{version}}</a></div>
     </div>
 </div>
