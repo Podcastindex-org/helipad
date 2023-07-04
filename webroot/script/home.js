@@ -4,6 +4,7 @@ $(document).ready(function () {
     let appIconUrlBase = '/image?name=';
     let pewAudioFile = '/pew.mp3';
     let pewAudio = new Audio(pewAudioFile);
+    let appList = {};
     var connection = null;
     var messageIds = [];
     var currentInvoiceIndex = null;
@@ -90,79 +91,9 @@ $(document).ready(function () {
                     let boostEpisode = element.episode;
 
                     //Icon
-                    var appIconUrl = "";
-                    switch (boostApp.toLowerCase()) {
-                        case 'fountain':
-                            appIconUrl = appIconUrlBase + 'fountain';
-                            appIconHref = 'https://fountain.fm';
-                            break;
-                        case 'podfriend':
-                            appIconUrl = appIconUrlBase + 'podfriend';
-                            appIconHref = 'https://podfriend.com';
-                            break;
-                        case 'castamatic':
-                            appIconUrl = appIconUrlBase + 'castamatic';
-                            appIconHref = 'https://castamatic.com';
-                            break;
-                        case 'curiocaster':
-                            appIconUrl = appIconUrlBase + 'curiocaster';
-                            appIconHref = 'https://curiocaster.com';
-                            break;
-                        case 'breez':
-                            appIconUrl = appIconUrlBase + 'breez';
-                            appIconHref = 'https://breez.technology';
-                            break;
-                        case 'podstation':
-                        case 'podstation browser extension':
-                            appIconUrl = appIconUrlBase + 'podstation';
-                            appIconHref = 'https://podstation.github.io';
-                            break;
-                        case 'sphinx':
-                            appIconUrl = appIconUrlBase + 'sphinxchat';
-                            appIconHref = 'https://sphinx.chat';
-                            break;
-                        case 'podverse':
-                            appIconUrl = appIconUrlBase + 'podverse';
-                            appIconHref = 'https://podverse.fm';
-                            break;
-                        case 'n2n2':
-                        case 'zion':
-                            appIconUrl = appIconUrlBase + 'zion';
-                            appIconHref = 'https://getzion.com';
-                            break;
-                        case 'usocial':
-                        case 'usocial.me':
-                            appIconUrl = appIconUrlBase + 'usocial';
-                            appIconHref = 'https://usocial.me';
-                            break;
-                        case 'lncli':
-                        case 'terminal':
-                        case 'cmd':
-                            appIconUrl = appIconUrlBase + 'terminal';
-                            appIconHref = 'https://github.com/lightningnetwork/lnd';
-                            break;
-                        case 'boostcli':
-                            appIconUrl = appIconUrlBase + 'boostcli';
-                            appIconHref = 'https://github.com/valcanobacon/BoostCLI';
-                            break;
-                        case 'v4vapp':
-                            appIconUrl = appIconUrlBase + 'v4vapp';
-                            appIconHref = 'https://lnd.v4v.app/';
-                            break;
-                        case 'ipfspodcasting':
-                            appIconUrl = appIconUrlBase + 'ipfspodcasting';
-                            appIconHref = 'https://ipfspodcasting.net';
-                            break;
-                        case 'podcast index':
-                        case 'podcast-index':
-                        case 'podcastindex':
-                            appIconUrl = appIconUrlBase + 'podcastindex';
-                            appIconHref = 'https:/podcastindex.org/';
-                            break;
-                        default:
-                            appIconUrl = appIconUrlBase + 'unknown';
-                            appIconHref = '#';
-                    }
+                    let appIcon = appList[boostApp.toLowerCase()] || {};
+                    let appIconUrl = appIconUrlBase + (appIcon.icon || 'unknown');
+                    let appIconHref = appIcon.url || '#';
 
                     //Sender
                     if (boostSender.trim() != "") {
@@ -339,10 +270,23 @@ $(document).ready(function () {
         });
     }
 
+    //Get the defined list of apps
+    async function getAppList() {
+        appList = await $.ajax({
+            url: "/apps.json",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json"
+        });
+
+        return appList;
+    }
+
     //Build the UI with the page loads
-    function initPage() {
+    async function initPage() {
         //Get starting balance and index number
         getBalance(true);
+        await getAppList();
         getIndex();
     }
 
@@ -367,7 +311,7 @@ $(document).ready(function () {
     });
 
     //Boost and node info checker
-    setInterval(function () {
+    setInterval(async function () {
         if ($('div.outgoing_msg').length === 0) {
             initPage();
         } else {

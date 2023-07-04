@@ -87,6 +87,16 @@ pub async fn favicon(_ctx: Context) -> Response {
         .unwrap();
 }
 
+//Apps definitions file
+pub async fn apps_json(_ctx: Context) -> Response {
+    let file = fs::read("webroot/extra/apps.json").expect("Something went wrong reading the file.");
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-type", "application/json; charset=utf-8")
+        .body(hyper::Body::from(file))
+        .unwrap();
+}
+
 //Serve a web asset by name from webroot subfolder according to it's requested type
 pub async fn asset(ctx: Context) -> Response {
     //Get query parameters
