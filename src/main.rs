@@ -262,6 +262,7 @@ async fn main() {
     router.get("/pew.mp3", Box::new(handler::pewmp3));
     router.get("/favicon.ico", Box::new(handler::favicon));
     router.get("/apps.json", Box::new(handler::apps_json));
+    router.get("/numerology.json", Box::new(handler::numerology_json));
     //Assets
     router.get("/image", Box::new(handler::asset));
     router.get("/html", Box::new(handler::asset));
