@@ -5,6 +5,7 @@ $(document).ready(function () {
     let pewAudioFile = '/pew.mp3';
     let pewAudio = new Audio(pewAudioFile);
     let appList = {};
+    let numerologyList = [];
     var connection = null;
     var messageIds = [];
     var currentInvoiceIndex = null;
@@ -110,8 +111,11 @@ $(document).ready(function () {
                     //If there is a difference between actual and stated sats, display it
                     var boostDisplayAmount = numberFormat(boostSats) + " sats";
                     if ((boostSats != boostActualSats) && boostSats > 0 && boostActualSats > 0) {
-                        boostDisplayAmount = '<span class="actual_sats" title="' + numberFormat(boostActualSats) + ' sats received after splits/fees.">' + boostDisplayAmount + '</span>';
+                        boostDisplayAmount = '<span class="more_info" title="' + numberFormat(boostActualSats) + ' sats received after splits/fees.">' + boostDisplayAmount + '</span>';
                     }
+
+                    //Determine the numerology behind the sat amount
+                    boostNumerology = gatherNumerology(boostSats);
 
                     if (!messageIds.includes(boostIndex) && element.action == 2) {
                         let dateTime = new Date(element.time * 1000).toISOString();
@@ -123,7 +127,7 @@ $(document).ready(function () {
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
                             '      <span class="app"><a href="' + appIconHref + '"><img src="' + appIconUrl + '" title="' + boostApp + '" alt="' + boostApp + '"></a></span>' +
-                            '      <h5 class="sats">' + boostDisplayAmount + ' ' + boostSender + '</small></h5>' +
+                            '      <h5 class="sats">' + boostDisplayAmount + ' ' + boostSender + ' ' + boostNumerology + '</small></h5>' +
                             '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + prettyDate(dateTime) + '</time>' +
                             '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
                             boostMessage
@@ -198,6 +202,34 @@ $(document).ready(function () {
                 }
             }
         });
+    }
+
+    //Determine any meaning behind this sat value
+    //(uses boostbot numerology by default: https://github.com/valcanobacon/BoostBots)
+    function gatherNumerology(value) {
+        let numerology = value.toString();
+        let meaning = [];
+
+        // replace numerology with emojis
+        numerologyList.forEach(item => {
+            newNumerology = numerology.replaceAll(new RegExp(item.regex, 'g'), item.emoji);
+
+            if (newNumerology != numerology) {
+                meaning.push(item.name);
+            }
+
+            numerology = newNumerology;
+        });
+
+        // remove unmatched numbers
+        numerology = numerology.replaceAll(new RegExp('[0-9]+', 'g'), '');
+
+        // show meaning in mouse hover
+        if (meaning) {
+            numerology = '<span class="more_info" title="' + meaning.join(', ') + '">' + numerology + '</span>';
+        }
+
+        return numerology;
     }
 
     //Animate some confetti on the page with a given duration interval in milliseconds
@@ -282,11 +314,24 @@ $(document).ready(function () {
         return appList;
     }
 
+    //Get the defined numerology
+    async function getNumerologyList() {
+        numerologyList = await $.ajax({
+            url: "/numerology.json",
+            type: "GET",
+            contentType: "application/json; charset=utf-8",
+            dataType: "json"
+        });
+
+        return numerologyList;
+    }
+
     //Build the UI with the page loads
     async function initPage() {
         //Get starting balance and index number
         getBalance(true);
         await getAppList();
+        await getNumerologyList();
         getIndex();
     }
 

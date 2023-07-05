@@ -1,0 +1,227 @@
+[
+    {
+        "name": "Satchel of Richards Donation x 7",
+        "emoji": "🍆🍆🍆🍆🍆🍆🍆",
+        "regex": "^1111111$"
+    },
+    {
+        "name": "Satchel of Richards Donation x 6",
+        "emoji": "🍆🍆🍆🍆🍆🍆",
+        "regex": "^111111$"
+    },
+    {
+        "name": "Satchel of Richards Donation x 5",
+        "emoji": "🍆🍆🍆🍆🍆",
+        "regex": "^11111$"
+    },
+    {
+        "name": "Satchel of Richards Donation x 4",
+        "emoji": "🍆🍆🍆🍆",
+        "regex": "^1111$"
+    },
+    {
+        "name": "Satchel of Richards Donation x 3",
+        "emoji": "🍆🍆🍆",
+        "regex": "^111$"
+    },
+    {
+        "name": "Satchel of Richards Donation x 2",
+        "emoji": "🍆🍆",
+        "regex": "^11$"
+    },
+    {
+        "name": "Ducks In a Row Donation x 7",
+        "emoji": "🦆🦆🦆🦆🦆🦆🦆",
+        "regex": "^2222222$"
+    },
+    {
+        "name": "Ducks In a Row Donation x 6",
+        "emoji": "🦆🦆🦆🦆🦆🦆",
+        "regex": "^222222$"
+    },
+    {
+        "name": "Ducks In a Row Donation x 5",
+        "emoji": "🦆🦆🦆🦆🦆",
+        "regex": "^22222$"
+    },
+    {
+        "name": "Ducks In a Row Donation x 4",
+        "emoji": "🦆🦆🦆🦆",
+        "regex": "^2222$"
+    },
+    {
+        "name": "Ducks In a Row Donation x 3",
+        "emoji": "🦆🦆🦆",
+        "regex": "^222$"
+    },
+    {
+        "name": "Ducks In a Row Donation x 2",
+        "emoji": "🦆🦆",
+        "regex": "^22$"
+    },
+    {
+        "name": "Countdown Donation x 5",
+        "emoji": "💥💥💥💥💥",
+        "regex": "7654321"
+    },
+    {
+        "name": "Countdown Donation x 4",
+        "emoji": "💥💥💥💥",
+        "regex": "654321"
+    },
+    {
+        "name": "Countdown Donation x 3",
+        "emoji": "💥💥💥",
+        "regex": "54321"
+    },
+    {
+        "name": "Countdown Donation x 2",
+        "emoji": "💥💥",
+        "regex": "4321"
+    },
+    {
+        "name": "Countdown Donation",
+        "emoji": "💥",
+        "regex": "321"
+    },
+    {
+        "name": "Countup Donation x 5",
+        "emoji": "🧛🧛🧛🧛🧛",
+        "regex": "1234567"
+    },
+    {
+        "name": "Countup Donation x 4",
+        "emoji": "🧛🧛🧛🧛",
+        "regex": "123456"
+    },
+    {
+        "name": "Countup Donation x 3",
+        "emoji": "🧛🧛🧛",
+        "regex": "12345"
+    },
+    {
+        "name": "Countup Donation x 2",
+        "emoji": "🧛🧛",
+        "regex": "1234"
+    },
+    {
+        "name": "Countup Donation",
+        "emoji": "🧛",
+        "regex": "123"
+    },
+    {
+        "name": "Bowler Donation x 3 +🦃",
+        "emoji": "🎳🎳🎳🦃",
+        "regex": "^101010$"
+    },
+    {
+        "name": "Bowler Donation x 2",
+        "emoji": "🎳🎳",
+        "regex": "^1010$"
+    },
+    {
+        "name": "Bowler Donation",
+        "emoji": "🎳",
+        "regex": "^10$"
+    },
+    {
+        "name": "Dice Donation",
+        "emoji": "🎲",
+        "regex": "11"
+    },
+    {
+        "name": "Bitcoin donation",
+        "emoji": "🪙",
+        "regex": "21"
+    },
+    {
+        "name": "Magic Number Donation",
+        "emoji": "✨",
+        "regex": "33"
+    },
+    {
+        "name": "Swasslenuff Donation",
+        "emoji": "💋",
+        "regex": "69"
+    },
+    {
+        "name": "Greetings Donation",
+        "emoji": "👋",
+        "regex": "73"
+    },
+    {
+        "name": "Love and Kisses Donation",
+        "emoji": "🥰",
+        "regex": "88"
+    },
+    {
+        "name": "Stoner Donation",
+        "emoji": "✌👽💨",
+        "regex": "420"
+    },
+    {
+        "name": "Devil Donation",
+        "emoji": "😈",
+        "regex": "666"
+    },
+    {
+        "name": "Angel Donation",
+        "emoji": "😇",
+        "regex": "777"
+    },
+    {
+        "name": "America Fuck Yeah Donation",
+        "emoji": "🇺🇸",
+        "regex": "1776"
+    },
+    {
+        "name": "Canada Donation",
+        "emoji": "🇨🇦",
+        "regex": "1867"
+    },
+    {
+        "name": "Boobs Donation",
+        "emoji": "🎱🎱",
+        "regex": "6006"
+    },
+    {
+        "name": "Boobs Donation",
+        "emoji": "🎱🎱",
+        "regex": "8008"
+    },
+    {
+        "name": "Wolf Donation",
+        "emoji": "🐺",
+        "regex": "9653"
+    },
+    {
+        "name": "Boost Donation",
+        "emoji": "🔁",
+        "regex": "30057"
+    },
+    {
+        "name": "Pi Donation x 5",
+        "emoji": "🥧🥧🥧🥧🥧",
+        "regex": "3141592"
+    },
+    {
+        "name": "Pi Donation x 4",
+        "emoji": "🥧🥧🥧🥧",
+        "regex": "314159"
+    },
+    {
+        "name": "Pi Donation x 3",
+        "emoji": "🥧🥧🥧",
+        "regex": "31415"
+    },
+    {
+        "name": "Pi Donation x 2",
+        "emoji": "🥧🥧",
+        "regex": "3141"
+    },
+    {
+        "name": "Pi Donation",
+        "emoji": "🥧",
+        "regex": "314"
+    }
+]
