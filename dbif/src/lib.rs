@@ -4,6 +4,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
+use chrono::DateTime;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeInfoRecord {
@@ -56,6 +57,26 @@ pub struct PaymentRecord {
     pub custom_value: String,
     pub fee_msat: i64,
     pub reply_to_idx: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct WebhookRecord {
+    pub index: u64,
+    pub url: String,
+    pub token: String,
+    pub enabled: bool,
+    pub request_successful: Option<bool>,
+    pub request_timestamp: Option<i64>,
+    pub request_datetime: Option<String>,
+}
+
+impl WebhookRecord {
+    pub fn get_request_timestamp_string(&self) -> Option<String> {
+        match self.request_timestamp {
+            Some(timestamp) => Some(DateTime::from_timestamp(timestamp, 0).unwrap().to_rfc3339()),
+            None => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -250,6 +271,28 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
     }
 
+
+    //Create the sent boosts table
+    match conn.execute(
+        "CREATE TABLE IF NOT EXISTS webhooks (
+             idx integer primary key autoincrement,
+             url text,
+             token text,
+             enabled integer,
+             request_successful integer,
+             request_timestamp integer
+         )",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Webhooks table is ready.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create database webhooks table: [{}].", filepath).into())))
+        }
+    }
+
     Ok(true)
 }
 
@@ -320,7 +363,7 @@ pub fn add_node_info_to_db(filepath: &String, info: NodeInfoRecord) -> Result<bo
 }
 
 //Add an invoice to the database
-pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
+pub fn add_invoice_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     match conn.execute("INSERT INTO boosts (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent) \
@@ -804,6 +847,162 @@ pub fn add_payment_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool,
     if let Some(reply_to_idx) = payment_info.reply_to_idx {
         mark_boost_as_replied(filepath, reply_to_idx)?;
     }
+
+    Ok(true)
+}
+
+pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<Vec<WebhookRecord>, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+    let mut webhooks: Vec<WebhookRecord> = Vec::new();
+
+    let where_enabled = match enabled {
+        Some(true) => "WHERE enabled = 1",
+        Some(false) => "WHERE enabled = 0",
+        None => "",
+    };
+
+    let sqltxt = format!(
+        r#"SELECT
+            idx,
+            url,
+            token,
+            enabled,
+            request_successful,
+            request_timestamp
+        FROM
+            webhooks
+        {}"#,
+        where_enabled,
+    );
+
+    let mut stmt = conn.prepare(sqltxt.as_str())?;
+    let rows = stmt.query_map([], |row| {
+        let datetime = match row.get(5).ok() {
+            Some(ts) => match DateTime::from_timestamp(ts, 0) {
+                Some(ts) => Some(ts.to_rfc3339()),
+                None => None,
+            },
+            None => None,
+        };
+
+        Ok(WebhookRecord {
+            index: row.get(0)?,
+            url: row.get(1)?,
+            token: row.get(2)?,
+            enabled: row.get(3)?,
+            request_successful: row.get(4).ok(),
+            request_timestamp: row.get(5).ok(),
+            request_datetime: datetime,
+        })
+    }).unwrap();
+
+    for row in rows {
+        webhooks.push(row.unwrap());
+    }
+
+    Ok(webhooks)
+}
+
+pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookRecord, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    let mut stmt = conn.prepare(
+        r#"SELECT
+            idx,
+            url,
+            token,
+            enabled,
+            request_successful,
+            request_timestamp
+        FROM
+            webhooks
+        WHERE
+            idx = :idx
+        "#
+    )?;
+
+    let webhook = stmt.query_row(&[(":idx", index.to_string().as_str())], |row| {
+        let timestamp: i64 = row.get(5)?;
+        let datetime = match DateTime::from_timestamp(timestamp, 0) {
+            Some(ts) => Some(ts.to_rfc3339()),
+            None => None
+        };
+
+        Ok(WebhookRecord {
+            index: row.get(0)?,
+            url: row.get(1)?,
+            token: row.get(2)?,
+            enabled: row.get(3)?,
+            request_successful: row.get(4).ok(),
+            request_timestamp: row.get(5).ok(),
+            request_datetime: datetime,
+        })
+    })?;
+
+    Ok(webhook)
+}
+
+pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<u64, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    let index = if webhook.index > 0 {
+        Some(webhook.index)
+    } else {
+        None
+    };
+
+    let mut stmt = conn.prepare(
+        r#"INSERT INTO webhooks (
+            idx,
+            url,
+            token,
+            enabled,
+            request_successful,
+            request_timestamp
+        )
+        VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(idx) DO UPDATE SET
+            url = excluded.url,
+            token = excluded.token,
+            enabled = excluded.enabled
+        RETURNING idx
+        "#,
+    )?;
+
+    let params = params![
+        index,
+        webhook.url,
+        webhook.token,
+        webhook.enabled,
+        webhook.request_successful,
+        webhook.request_timestamp,
+    ];
+
+    let idx = stmt.query_row(params, |row| {
+        let idx: u64 = row.get(0)?;
+        Ok(idx)
+    })?;
+
+    Ok(idx)
+}
+
+pub fn set_webhook_last_request(filepath: &String, index: u64, successful: bool, timestamp: i64) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    conn.execute(
+        r#"UPDATE webhooks SET request_successful = ?2, request_timestamp = ?3 WHERE idx = ?1"#,
+        params![index, successful, timestamp]
+    )?;
+
+    Ok(true)
+
+}
+
+pub fn delete_webhook_from_db(filepath: &String, index: u64) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    conn.execute(r#"DELETE FROM webhooks WHERE idx = ?1"#, params![index])?;
 
     Ok(true)
 }

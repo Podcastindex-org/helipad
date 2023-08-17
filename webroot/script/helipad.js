@@ -359,44 +359,6 @@ $(document).ready(function () {
         }, time);
     }
 
-    //Get the current channel balance from the node
-    function getBalance(init) {
-        //Get the current boost index number
-        $.ajax({
-            url: "/api/v1/balance",
-            type: "GET",
-            contentType: "application/json; charset=utf-8",
-            dataType: "json",
-            error: function (xhr) {
-                if (xhr.status === 403) {
-                    window.location.href = "/login";
-                }
-            },
-            success: function (data) {
-                newBalance = data;
-                //If the data returned wasn't a number then give an error
-                if (typeof newBalance !== "number") {
-                    $('div.balanceDisplay').html('<span title="Error getting balance." class="error">Err</span>');
-                } else {
-                    //Display the balance
-                    $('div.balanceDisplay').html('<span class="balanceLabel">Balance: </span>' + numberFormat(newBalance));
-
-                    //If the balance went up, do some fun stuff
-                    if (newBalance > currentBalanceAmount && !init) {
-                        $('div.balanceDisplay').addClass('bump');
-                        setTimeout(function () {
-                            $('div.balanceDisplay').removeClass('bump');
-                        }, 1200);
-                    }
-
-                    //This is now the current balance
-                    currentBalanceAmount = newBalance;
-                }
-
-            }
-        });
-    }
-
     //Get the current node alias and pubkey
     async function getNodeInfo() {
         nodeInfo = await $.get(`/api/v1/node_info`);
@@ -773,7 +735,6 @@ $(document).ready(function () {
         setConfig();
         renderReplyModal();
         //Get starting balance and index number
-        getBalance(true);
         await getNodeInfo();
         await getAppList();
         await getNumerologyList();
@@ -829,11 +790,9 @@ $(document).ready(function () {
     //Boost and node info checker
     setInterval(async function () {
         if ($('div.outgoing_msg').length === 0) {
-            getBalance(true);
             getIndex();
         } else {
             getBoosts(currentInvoiceIndex, 20, true, false, true);
-            getBalance();
         }
     }, 7000);
 

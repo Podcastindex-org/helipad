@@ -261,6 +261,7 @@ img {
 .titleBar {
     display: flex;
     align-items: baseline;
+    justify-content: space-between;
     margin-top: 10px;
     margin-bottom: 8px;
 }
@@ -355,16 +356,17 @@ ul.navButtons {
     list-style: none;
     column-gap: 1rem;
     margin: 0;
-    margin-left: auto;
-    margin-right: auto;
     padding: 0;
     font-size: 1.125rem;
 }
-ul.navButtons li {
+ul.navButtons li,
+ul.navButtons li a[aria-selected] {
     border-bottom: 2px solid transparent;
+    border-top: 2px solid transparent;
 }
 ul.navButtons li:hover,
-ul.navButtons li.active {
+ul.navButtons li.active,
+ul.navButtons li a.active {
     border-bottom: 2px solid red
 }
 ul.navButtons li:hover a {
@@ -374,9 +376,16 @@ ul.navButtons li:hover a {
 ul.navButtons li a {
     color: #ccc;
 }
-ul.navButtons li.active a {
+ul.navButtons li.active a,
+ul.navButtons li a[aria-selected="true"] {
     color: white;
     font-weight: bold;
+}
+.settings a {
+    color: #ccc;
+}
+.settings a:hover {
+    opacity: .6;
 }
 .rightHeader {
     display: flex;
@@ -432,7 +441,7 @@ ul.navButtons li.active a {
 }
 
 /* Small screens */
-@media only screen and (max-width: 550px) {
+@media only screen and (max-width: 640px) {
     h5, ul.navButtons {
         font-size: 1rem;
     }
