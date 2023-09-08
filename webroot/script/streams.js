@@ -90,6 +90,8 @@ $(document).ready(function () {
                     let boostApp = element.app;
                     let boostPodcast = element.podcast;
                     let boostEpisode = element.episode;
+                    let boostRemotePodcast = element.remote_podcast;
+                    let boostRemoteEpisode = element.remote_episode;
 
                     //Icon
                     let appIcon = appList[boostApp.toLowerCase()] || {};
@@ -129,7 +131,10 @@ $(document).ready(function () {
                             '      <span class="app"><a href="' + appIconHref + '"><img src="' + appIconUrl + '" title="' + boostApp + '" alt="' + boostApp + '"></a></span>' +
                             '      <h5 class="sats">' + boostDisplayAmount + ' ' + boostSender + ' ' + boostNumerology + '</small></h5>' +
                             '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + prettyDate(dateTime) + '</time>' +
-                            '      <small class="podcast_episode">' + boostPodcast + ' - ' + boostEpisode + '</small>' +
+                            '      <small class="podcast_episode">' +
+                            '        ' + boostPodcast + ' - ' + boostEpisode +
+                            '        <span class="remote_item">' + (boostRemoteEpisode ? '(' + boostRemotePodcast + ' - ' + boostRemoteEpisode + ')' : '') + '</span>' +
+                            '      </small>' +
                             boostMessage
                         '    </div>' +
                         '  </div>' +

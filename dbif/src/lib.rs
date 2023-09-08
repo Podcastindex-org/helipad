@@ -2,6 +2,7 @@ use rusqlite::{params, Connection};
 use std::error::Error;
 use std::fmt;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
 
 
@@ -18,6 +19,8 @@ pub struct BoostRecord {
     pub podcast: String,
     pub episode: String,
     pub tlv: String,
+    pub remote_podcast: Option<String>,
+    pub remote_episode: Option<String>,
 }
 
 impl BoostRecord {
@@ -29,6 +32,11 @@ impl BoostRecord {
     //Removes unsafe html interpretable characters from displayable strings
     pub fn escape_for_csv( field: String) -> String {
         return field.replace("\"", "\"\"").replace("\n", " ");
+    }
+
+    //Parses the TLV record into a Value
+    pub fn parse_tlv(&self) -> Result<Value, Box<dyn Error>> {
+        return Ok(serde_json::from_str(self.tlv.as_str())?);
     }
 }
 
@@ -102,17 +110,35 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
              message text,
              podcast text,
              episode text,
-             tlv text
+             tlv text,
+             remote_podcast text,
+             remote_episode text
          )",
         [],
     ) {
         Ok(_) => {
-            println!("Boost table is ready.");
+            println!("Boosts table is ready.");
         }
         Err(e) => {
             eprintln!("{}", e);
             return Err(Box::new(HydraError(format!("Failed to create database boosts table: [{}].", filepath).into())))
         }
+    }
+
+    //Create the boost_remote_items table
+    match conn.execute("ALTER TABLE boosts ADD COLUMN remote_podcast text", []) {
+        Ok(_) => {
+            println!("Boosts remote podcast column added.");
+        }
+        Err(_) => {}
+    }
+
+    //Create the boost_remote_items table
+    match conn.execute("ALTER TABLE boosts ADD COLUMN remote_episode text", []) {
+        Ok(_) => {
+            println!("Boosts remote episode column added.");
+        }
+        Err(_) => {}
     }
 
     //Create the node info table
@@ -158,7 +184,7 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         [],
     ) {
         Ok(_) => {
-            println!("Boost table is ready.");
+            println!("Node info table is ready.");
             Ok(true)
         }
         Err(e) => {
@@ -173,8 +199,8 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
 pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
-    match conn.execute("INSERT INTO boosts (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv) \
-                                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+    match conn.execute("INSERT INTO boosts (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode) \
+                                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                        params![boost.index,
                                        boost.time,
                                        boost.value_msat,
@@ -185,7 +211,9 @@ pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, 
                                        boost.message,
                                        boost.podcast,
                                        boost.episode,
-                                       boost.tlv]
+                                       boost.tlv,
+                                       boost.remote_podcast,
+                                       boost.remote_episode]
     ) {
         Ok(_) => {
             Ok(true)
@@ -218,7 +246,9 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
                                        message, \
                                        podcast, \
                                        episode, \
-                                       tlv \
+                                       tlv, \
+                                       remote_podcast, \
+                                       remote_episode \
                                  FROM boosts \
                                  WHERE action = 2 \
                                    AND idx {} :index \
@@ -240,6 +270,8 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
             podcast: row.get(8)?,
             episode: row.get(9)?,
             tlv: row.get(10)?,
+            remote_podcast: row.get(11).ok(),
+            remote_episode: row.get(12).ok(),
         })
     }).unwrap();
 
@@ -257,6 +289,14 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
                 podcast: BoostRecord::escape_for_html(boost.podcast),
                 episode: BoostRecord::escape_for_html(boost.episode),
                 tlv: BoostRecord::escape_for_html(boost.tlv),
+                remote_podcast: match boost.remote_podcast {
+                    Some(item) => Some(BoostRecord::escape_for_html(item)),
+                    None => None
+                },
+                remote_episode: match boost.remote_episode {
+                    Some(item) => Some(BoostRecord::escape_for_html(item)),
+                    None => None
+                },
                 ..boost
             };
             boosts.push(boost_clean);
@@ -292,7 +332,9 @@ pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: b
                                        message, \
                                        podcast, \
                                        episode, \
-                                       tlv \
+                                       tlv, \
+                                       remote_podcast, \
+                                       remote_episode \
                                  FROM boosts \
                                  WHERE action = 1 \
                                    AND idx {} :index \
@@ -314,6 +356,8 @@ pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: b
             podcast: row.get(8)?,
             episode: row.get(9)?,
             tlv: row.get(10)?,
+            remote_podcast: row.get(11).ok(),
+            remote_episode: row.get(12).ok(),
         })
     }).unwrap();
 
@@ -334,7 +378,7 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
     let max = 1;
 
     //Prepare and execute the query
-    let mut stmt = conn.prepare("SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv \
+    let mut stmt = conn.prepare("SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode \
                                  FROM boosts \
                                  ORDER BY idx DESC LIMIT :max")?;
     let rows = stmt.query_map(&[(":max", max.to_string().as_str())], |row| {
@@ -350,6 +394,8 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
             podcast: row.get(8)?,
             episode: row.get(9)?,
             tlv: row.get(10)?,
+            remote_podcast: row.get(11).ok(),
+            remote_episode: row.get(12).ok(),
         })
     }).unwrap();
 

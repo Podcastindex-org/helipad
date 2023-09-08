@@ -16,7 +16,11 @@ use lnd;
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use dbif::add_wallet_balance_to_db;
+
 // use hyper::http::Request;
+use reqwest;
+use lru::LruCache;
+use std::num::NonZeroUsize;
 
 #[macro_use]
 extern crate configure_me;
@@ -36,6 +40,7 @@ const HELIPAD_STANDARD_PORT: &str = "2112";
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
 const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
+const REMOTE_GUID_CACHE_SIZE: usize = 20;
 
 //Structs ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
@@ -118,6 +123,14 @@ struct RawBoost {
     value_msat: Option<u64>,
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     value_msat_total: Option<u64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PodcastEpisodeGuid {
+    pub podcast_guid: String,
+    pub episode_guid: String,
+    pub podcast: String,
+    pub episode: String,
 }
 
 
@@ -366,6 +379,80 @@ impl Context {
     }
 }
 
+// Fetches remote podcast/episode names by guids using the Podcastindex API and caches results into an LRU cache
+pub async fn fetch_podcast_episode_by_guid(cache: &mut LruCache<String, Option<PodcastEpisodeGuid>>, podcast_guid: String, episode_guid: String) -> Option<PodcastEpisodeGuid> {
+    let key = format!("{}_{}", podcast_guid, episode_guid);
+
+    if let Some(cached_guid) = cache.get(&key) {
+        println!("Remote podcast/episode from cache: {:#?}", cached_guid);
+        return cached_guid.clone(); // already exists in cache
+    }
+
+    match fetch_api_podcast_episode_by_guid(&podcast_guid, &episode_guid).await {
+        Ok(Some(guid)) => {
+            println!("Remote podcast/episode from API: {:#?}", guid);
+            cache.put(key, Some(guid.clone())); // cache to avoid spamming api
+            Some(guid)
+        },
+        Ok(None) => {
+            println!("Remote podcast/episode not found {} {}", podcast_guid, episode_guid);
+            cache.put(key, None); // cache to avoid spamming api
+            None
+        }
+        Err(e) => {
+            eprintln!("Error retrieving remote podcast/episode from API: {:#?}", e);
+            None
+        }
+    }
+}
+
+// Fetches remote podcast/episode names by guids using the Podcastindex API
+pub async fn fetch_api_podcast_episode_by_guid(podcast_guid: &String, episode_guid: &String) -> Result<Option<PodcastEpisodeGuid>, Error> {
+    let query = vec![
+        ("podcastguid", podcast_guid),
+        ("episodeguid", episode_guid)
+    ];
+
+    // call API, get text response, and parse into json
+    let response = reqwest::Client::new()
+        .get("https://api.podcastindex.org/api/1.0/value/byepisodeguid")
+        .query(&query)
+        .send()
+        .await?;
+
+    let result = response.text().await?;
+    let json: Value = serde_json::from_str(&result)?;
+
+    let status = json["status"].as_str().unwrap_or_default();
+
+    if status != "true" {
+        return Ok(None); // not found?
+    }
+
+    let query = match json["query"].as_object() {
+        Some(val) => val,
+        None => { return Ok(None); }
+    };
+
+    let value = match json["value"].as_object() {
+        Some(val) => val,
+        None => { return Ok(None); }
+    };
+
+    let found_podcast_guid = query["podcastguid"].as_str().unwrap_or_default();
+    let found_episode_guid = query["episodeguid"].as_str().unwrap_or_default();
+
+    let found_podcast = value["feedTitle"].as_str().unwrap_or_default();
+    let found_episode = value["title"].as_str().unwrap_or_default();
+
+    return Ok(Some(PodcastEpisodeGuid {
+        podcast_guid: found_podcast_guid.to_string(),
+        episode_guid: found_episode_guid.to_string(),
+        podcast: found_podcast.to_string(),
+        episode: found_episode.to_string(),
+    }))
+}
+
 //The LND poller runs in a thread and pulls new invoices
 async fn lnd_poller(server_config: Config, database_file_path: String) {
     let db_filepath = database_file_path;
@@ -481,6 +568,9 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
         }
     }
 
+    //Instantiate a cache to use when resolving remote podcasts/episode guids
+    let mut remote_cache = LruCache::new(NonZeroUsize::new(REMOTE_GUID_CACHE_SIZE).unwrap());
+
     //The main loop
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
     loop {
@@ -521,6 +611,8 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
                         podcast: "".to_string(),
                         episode: "".to_string(),
                         tlv: "".to_string(),
+                        remote_podcast: None,
+                        remote_episode: None,
                     };
 
                     //Search for podcast boost tlvs
@@ -582,6 +674,20 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
 
                     //Give some output
                     println!("Boost: {:#?}", boost);
+
+                    let tlv = boost.parse_tlv().unwrap_or_default();
+
+                    if tlv["remote_feed_guid"].is_string() && tlv["remote_item_guid"].is_string() {
+                        let remote_feed_guid = tlv["remote_feed_guid"].as_str().unwrap_or_default();
+                        let remote_item_guid = tlv["remote_item_guid"].as_str().unwrap_or_default();
+
+                        let episode_guid = fetch_podcast_episode_by_guid(&mut remote_cache, remote_feed_guid.to_string(), remote_item_guid.to_string()).await;
+
+                        if let Some(guid) = episode_guid {
+                            boost.remote_podcast = Some(guid.podcast);
+                            boost.remote_episode = Some(guid.episode);
+                        }
+                    }
 
                     //Store in the database
                     println!("{:#?}", boost);
