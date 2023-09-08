@@ -130,7 +130,9 @@ $(document).ready(function () {
                             '    <div class="sent_withd_msg">' +
                             '      <span class="app"><a href="' + appIconHref + '"><img src="' + appIconUrl + '" title="' + boostApp + '" alt="' + boostApp + '"></a></span>' +
                             '      <h5 class="sats">' + boostDisplayAmount + ' ' + boostSender + ' ' + boostNumerology + '</small></h5>' +
-                            '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + prettyDate(dateTime) + '</time>' +
+                            '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + 
+                            '        <a href="#" style="color: blue" data-toggle="modal" data-target="#boostInfo">' + prettyDate(dateTime) + '</a>' + 
+                            '      </time>' +
                             '      <small class="podcast_episode">' +
                             '        ' + boostPodcast + ' - ' + boostEpisode +
                             '        <span class="remote_item">' + (boostRemoteEpisode ? '(' + boostRemotePodcast + ' - ' + boostRemoteEpisode + ')' : '') + '</span>' +
@@ -283,7 +285,7 @@ $(document).ready(function () {
         console.log("Updating timestamps...");
         $('time.time_date').each(function (_, el) {
             var $el = $(el);
-            $el.text(prettyDate(new Date($el.attr('datetime'))));
+            $el.find('a').text(prettyDate(new Date($el.attr('datetime'))));
         });
     }
 
@@ -331,12 +333,68 @@ $(document).ready(function () {
         return numerologyList;
     }
 
+    //Render the boost info modal
+    function renderBoostInfo() {
+        const $dialog = $(`
+        <div id="boostInfo" class="modal" tabindex="-1">
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Boost Info</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                  <span aria-hidden="true">&times;</span>
+                </button>
+              </div>
+              <div class="modal-body">
+                <table class="table table-sm table-borderless">
+                  <tbody></tbody>
+                </table>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+              </div>
+            </div>
+          </div>
+        </div>`).appendTo('body');
+
+        $dialog.on('show.bs.modal', function (ev) {
+            const $target = $(ev.relatedTarget);
+            const msgid = $target.closest(".outgoing_msg").data('msgid');
+            const $table = $dialog.find('.modal-body table tbody');
+
+            $table.html('Loading boost...');
+
+            $.getJSON(`/api/v1/boosts?index=${msgid}&count=1&old=true`, (result) => {
+                if (!result[0]) {
+                    return $table.html('Boost not found!');
+                }
+
+                const boost = result[0];
+                let tlv = null;
+
+                try {
+                    tlv = JSON.parse(boost.tlv);
+                }
+                catch (e) {
+                    return $table.html('Unable to parse TLV');
+                }
+
+                $table.empty().append(
+                    Object.keys(tlv).map((key) => (
+                        $('<tr>').append($('<th>').text(key)).append($('<td>').text(tlv[key]))
+                    ))
+                );
+            });
+        });
+    }
+
     //Build the UI with the page loads
     async function initPage() {
         //Get starting balance and index number
         getBalance(true);
         await getAppList();
         await getNumerologyList();
+        renderBoostInfo();
         getIndex();
     }
 
