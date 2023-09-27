@@ -92,6 +92,12 @@ $(document).ready(function () {
                     let boostEpisode = element.episode;
                     let boostRemotePodcast = element.remote_podcast;
                     let boostRemoteEpisode = element.remote_episode;
+                    let boostTlv = null;
+
+                    try {
+                        boostTlv = JSON.parse(element.tlv)
+                    }
+                    catch {}
 
                     //Icon
                     let appIcon = appList[boostApp.toLowerCase()] || {};
@@ -119,6 +125,19 @@ $(document).ready(function () {
                     //Determine the numerology behind the sat amount
                     boostNumerology = gatherNumerology(boostSats);
 
+                    //Generate remote item and link to podcastindex website if one exists
+                    let boostRemoteInfo = '';
+                    if (boostRemoteEpisode) {
+                        boostRemoteInfo = '(' + boostRemotePodcast + ' - ' + boostRemoteEpisode + ')';
+
+                        if (boostTlv && boostTlv.remote_feed_guid) {
+                            boostRemoteInfo = `
+                            <a href="https://podcastindex.org/podcast/${boostTlv.remote_feed_guid}" target="_blank" style="color: blue;">
+                                ${boostRemoteInfo}
+                            </a>`;
+                        }
+                    }
+
                     if (!messageIds.includes(boostIndex) && element.action == 2) {
                         let dateTime = new Date(element.time * 1000).toISOString();
                         $('div.nodata').remove();
@@ -135,7 +154,7 @@ $(document).ready(function () {
                             '      </time>' +
                             '      <small class="podcast_episode">' +
                             '        ' + boostPodcast + ' - ' + boostEpisode +
-                            '        <span class="remote_item">' + (boostRemoteEpisode ? '(' + boostRemotePodcast + ' - ' + boostRemoteEpisode + ')' : '') + '</span>' +
+                            '        <span class="remote_item">' + boostRemoteInfo + '</span>' +
                             '      </small>' +
                             boostMessage
                         '    </div>' +
