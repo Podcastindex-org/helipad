@@ -528,7 +528,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             let mut csv = String::new();
 
             //CSV column name header
-            csv.push_str(format!("count, index, time, value_msat, value_sat, value_msat_total, value_sat_total, action, sender, app, message, podcast, episode\n").as_str());
+            csv.push_str(format!("count,index,time,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode\n").as_str());
 
             //Iterate the boost set
             let mut count: u64 = 1;
@@ -550,7 +550,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 //The main export data formatting
                 csv.push_str(
                     format!(
-                        "{},{},\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
+                        "{},{},\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
                         count,
                         boost.index,
                         boost_time,
@@ -563,7 +563,9 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                         BoostRecord::escape_for_csv(boost.app),
                         BoostRecord::escape_for_csv(boost.message),
                         BoostRecord::escape_for_csv(boost.podcast),
-                        BoostRecord::escape_for_csv(boost.episode)
+                        BoostRecord::escape_for_csv(boost.episode),
+                        BoostRecord::escape_for_csv(boost.remote_podcast.unwrap_or("".to_string())),
+                        BoostRecord::escape_for_csv(boost.remote_episode.unwrap_or("".to_string()))
                     ).as_str()
                 );
 
