@@ -19,6 +19,7 @@ use dbif::add_wallet_balance_to_db;
 
 // use hyper::http::Request;
 use reqwest;
+use reqwest::header::USER_AGENT;
 use lru::LruCache;
 use std::num::NonZeroUsize;
 
@@ -413,9 +414,12 @@ pub async fn fetch_api_podcast_episode_by_guid(podcast_guid: &String, episode_gu
         ("episodeguid", episode_guid)
     ];
 
+    let app_version = env!("CARGO_PKG_VERSION");
+
     // call API, get text response, and parse into json
     let response = reqwest::Client::new()
         .get("https://api.podcastindex.org/api/1.0/value/byepisodeguid")
+        .header(USER_AGENT, format!("Helipad/{}", app_version))
         .query(&query)
         .send()
         .await?;
