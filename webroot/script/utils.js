@@ -178,3 +178,11 @@ const closest = (arr, num) => {
 const numberFormat = (num) => {
     return new Intl.NumberFormat().format(num);
 }
+
+// Capitalize the first letter of each word in a string
+const ucWords = (text) => {
+    if (!text) return text;
+    return text.split(" ").map(word => {
+        return word.substr(0, 1).toUpperCase() + word.substr(1);
+    }).join(" ");
+}

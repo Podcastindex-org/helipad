@@ -12,9 +12,11 @@ $(document).ready(function () {
     var currentBalance = null;
     var currentBalanceAmount = 0;
 
-
-    //Initialize the page
-    initPage();
+    let config = {
+        'listUrl': '/api/v1/boosts',
+        'singularName': 'boost',
+        'pluralName': 'boosts',
+    }
 
     //Get a boost list starting at a particular invoice index
     function getBoosts(startIndex, max, scrollToTop, old, shouldPew) {
@@ -64,7 +66,7 @@ $(document).ready(function () {
         }
 
         //Build the endpoint url
-        var url = '/api/v1/boosts?index=' + boostIndex;
+        var url = `${config.listUrl}?index=${boostIndex}`;
         if (max > 0) {
             url += '&count=' + max;
         }
@@ -138,7 +140,7 @@ $(document).ready(function () {
                         }
                     }
 
-                    if (!messageIds.includes(boostIndex) && element.action == 2) {
+                    if (!messageIds.includes(boostIndex)) {
                         let dateTime = new Date(element.time * 1000).toISOString();
                         $('div.nodata').remove();
 
@@ -199,12 +201,22 @@ $(document).ready(function () {
 
                 //Show a message if still building
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
-                    inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
-                        'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
-                        '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
-                        '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
-                        '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">' + currentInvoiceIndex + '</span>' +
-                        '</div>');
+                    if (config.pluralName == 'boosts') {
+                        inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
+                            'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
+                            '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
+                            '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to send boosts and boostagrams.</a></p>' +
+                            '<div class="lds-dual-ring"></div> Looking for boosts: <span class="invindex">' + currentInvoiceIndex + '</span>' +
+                            '</div>');
+                    }
+                    else if (config.pluralName == 'streams') {
+                        inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
+                            'transactions, or maybe you have not had any satoshis streamed to you yet?</p>' +
+                            '<p>This screen will automatically refresh as satoshis are streamed to you.</p>' +
+                            '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to stream satoshis.</a></p>' +
+                            '<div class="lds-dual-ring"></div> Looking for streams: <span class="invindex">' + currentInvoiceIndex + '</span>' +
+                            '</div>');
+                    }
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
 
@@ -224,7 +236,7 @@ $(document).ready(function () {
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
-                    inbox.append('<div class="loadmore"><a href="#">Show older boosts...</a></div>');
+                    inbox.append('<div class="loadmore"><a href="#">Show older ' + config.pluralName + '...</a></div>');
                 }
             }
         });
@@ -312,7 +324,7 @@ $(document).ready(function () {
     function getIndex() {
         //Get the current boost index number
         $.ajax({
-            url: "/api/v1/index",
+            url: '/api/v1/index',
             type: "GET",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
@@ -354,12 +366,13 @@ $(document).ready(function () {
 
     //Render the boost info modal
     function renderBoostInfo() {
+        const name = ucWords(config.singularName);
         const $dialog = $(`
         <div id="boostInfo" class="modal" tabindex="-1">
           <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
               <div class="modal-header">
-                <h5 class="modal-title">Boost Info</h5>
+                <h5 class="modal-title">${name} Info</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                   <span aria-hidden="true">&times;</span>
                 </button>
@@ -381,11 +394,11 @@ $(document).ready(function () {
             const msgid = $target.closest(".outgoing_msg").data('msgid');
             const $table = $dialog.find('.modal-body table tbody');
 
-            $table.html('Loading boost...');
+            $table.html(`Loading ${config.singularName}...`);
 
-            $.getJSON(`/api/v1/boosts?index=${msgid}&count=1&old=true`, (result) => {
+            $.getJSON(`${config.listUrl}?index=${msgid}&count=1&old=true`, (result) => {
                 if (!result[0]) {
-                    return $table.html('Boost not found!');
+                    return $table.html(`${name} not found!`);
                 }
 
                 const boost = result[0];
@@ -409,6 +422,7 @@ $(document).ready(function () {
 
     //Build the UI with the page loads
     async function initPage() {
+        setConfig();
         //Get starting balance and index number
         getBalance(true);
         await getAppList();
@@ -416,6 +430,24 @@ $(document).ready(function () {
         renderBoostInfo();
         getIndex();
     }
+
+    function setConfig() {
+        const pathname = window.location.pathname;
+
+        if (pathname == "/") {
+            config.listUrl = '/api/v1/boosts';
+            config.singularName = 'boost';
+            config.pluralName = 'boosts';
+        }
+        else if (pathname == "/streams") {
+            config.listUrl = '/api/v1/streams';
+            config.singularName = 'stream';
+            config.pluralName = 'streams';
+        }
+    }
+
+    //Initialize the page
+    initPage();
 
     //Load more messages handler
     $(document).on('click', 'div.loadmore a', function () {
