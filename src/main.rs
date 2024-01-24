@@ -13,6 +13,7 @@ use std::env;
 use drop_root::set_user_group;
 
 use std::path::Path;
+use rand::{distributions::Alphanumeric, Rng}; // 0.8
 
 #[macro_use]
 extern crate configure_me;
@@ -20,6 +21,7 @@ extern crate configure_me;
 
 //Globals ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
+mod cookies;
 mod handler;
 mod router;
 mod lightning;
@@ -53,7 +55,9 @@ pub struct HelipadConfig {
     pub listen_port: String,
     pub macaroon_path: String,
     pub cert_path: String,
-    pub node_address: String
+    pub node_address: String,
+    pub password: String,
+    pub secret: String,
 }
 
 #[derive(Debug)]
@@ -85,6 +89,8 @@ async fn main() {
         macaroon_path: "".to_string(),
         cert_path: "".to_string(),
         node_address: "".to_string(),
+        password: "".to_string(),
+        secret: "".to_string(),
     };
 
     //Bring in the configuration info
@@ -148,6 +154,26 @@ async fn main() {
         }
     }
 
+    //PASSWORD -----
+    //Get the configured password for Helipad
+    let env_password = std::env::var("HELIPAD_PASSWORD");
+    if env_password.is_ok() {
+        helipad_config.password = env_password.unwrap();
+        println!("Found password in environment var(HELIPAD_PASSWORD)");
+    } else if server_config.password.is_some() {
+        helipad_config.password = server_config.password.unwrap();
+        println!("Found password in config file({})", HELIPAD_CONFIG_FILE);
+    }
+
+    //Generate secret for JWT if password set
+    if !helipad_config.password.is_empty() {
+        helipad_config.secret = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(40)
+            .map(char::from)
+            .collect();
+    }
+
     //Get the macaroon and cert files.  Look in the local directory first as an override.
     //If the files are not found in the currect working directory, look for them at their
     //normal LND directory locations
@@ -208,6 +234,8 @@ async fn main() {
 
     //Base
     router.get("/", Box::new(handler::home));
+    router.get("/login", Box::new(handler::login));
+    router.post("/login", Box::new(handler::login));
     router.get("/streams", Box::new(handler::streams));
     router.get("/sent", Box::new(handler::sent));
     router.get("/pew.mp3", Box::new(handler::pewmp3));
@@ -290,10 +318,23 @@ async fn route(
 ) -> Result<Response, Error> {
     let found_handler = router.route(req.uri().path(), req.method());
     let path = req.uri().path().to_owned();
-    let resp = found_handler
+    let ctx = Context::new(app_state, req, &path, found_handler.params, helipad_config.clone());
+
+    if let Some(resp) = handler::login_required(&ctx) {
+        return Ok(resp);
+    }
+
+    let authed = handler::verify_jwt_cookie(&ctx.req, &helipad_config.secret);
+
+    let mut resp = found_handler
         .handler
-        .invoke(Context::new(app_state, req, &path, found_handler.params, helipad_config))
+        .invoke(ctx)
         .await;
+
+    if authed {
+        handler::set_jwt_cookie(&mut resp, &helipad_config.secret);
+    }
+
     Ok(resp)
 }
 

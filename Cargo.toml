@@ -35,6 +35,8 @@ rand = "0.8.5"
 sha2 = "0.10.7"
 data-encoding = "2.4.0"
 email_address = "0.2.4"
+cookie = "0.18.0"
+jsonwebtoken = "9.2.0"
 
 [build-dependencies]
 configure_me_codegen = "0.4.1"

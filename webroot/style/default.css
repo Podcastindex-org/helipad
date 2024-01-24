@@ -7,6 +7,11 @@ html, body {
     margin: auto;
 }
 
+.btn-no-outline:focus {
+    /* no outlines on bootstrap buttons */
+    box-shadow: none;
+}
+
 img {
     max-width: 100%;
 }

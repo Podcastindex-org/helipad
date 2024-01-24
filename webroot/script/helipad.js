@@ -85,6 +85,11 @@ $(document).ready(function () {
             type: "GET",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
+            error: function (xhr) {
+                if (xhr.status === 403) {
+                    window.location.href = "/login";
+                }
+            },
             success: function (data) {
                 data.forEach((element, index) => {
                     let displayedMessageCount = $('div.outgoing_msg').length;
@@ -338,6 +343,11 @@ $(document).ready(function () {
             type: "GET",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
+            error: function (xhr) {
+                if (xhr.status === 403) {
+                    window.location.href = "/login";
+                }
+            },
             success: function (data) {
                 newBalance = data;
                 //If the data returned wasn't a number then give an error
@@ -380,6 +390,11 @@ $(document).ready(function () {
             type: "GET",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
+            error: function (xhr) {
+                if (xhr.status === 403) {
+                    window.location.href = "/login";
+                }
+            },
             success: function (data) {
                 //console.log(data);
                 currentInvoiceIndex = data;

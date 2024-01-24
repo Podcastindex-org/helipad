@@ -1,7 +1,10 @@
 use crate::{Context, Request, Body, Response};
 use crate::lightning;
 use crate::podcastindex;
-use hyper::StatusCode;
+use crate::cookies::CookiesExt;
+use cookie::Cookie;
+use hyper::{Method, StatusCode};
+use hyper::header;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -10,8 +13,11 @@ use std::str;
 use voca_rs::*;
 use handlebars::Handlebars;
 use serde_json::json;
-use chrono::{NaiveDateTime};
+use chrono::{Duration, NaiveDateTime, Utc};
 use dbif::BoostRecord;
+
+use serde::{Deserialize, Serialize};
+use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
 
 //Constants --------------------------------------------------------------------------------------------------
 const WEBROOT_PATH_HTML: &str = "webroot/html";
@@ -31,6 +37,13 @@ impl fmt::Display for HydraError {
 }
 
 impl Error for HydraError {}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct JwtClaims {
+   // sub: String,
+   iat: usize,
+   exp: usize,
+}
 
 //Helper functions
 async fn get_post_params(req: Request<Body>) -> HashMap<String, String> {
@@ -78,11 +91,138 @@ fn options_response(options: String) -> Response {
         .unwrap();
 }
 
+pub fn redirect(url: &str) -> Response {
+    hyper::Response::builder()
+        .status(StatusCode::FOUND)
+        .header("Location", url)
+        .body("".into())
+        .unwrap()
+}
+
+pub fn verify_jwt_cookie(req: &Request<Body>, secret: &String) -> bool {
+    if secret.is_empty() {
+        return false;
+    }
+
+    let cookies = req.cookies();
+
+    if let Some(token) = cookies.get("HELIPAD_JWT").map(Cookie::value) {
+        let message = decode::<JwtClaims>(&token, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256));
+
+        if let Ok(token) = message {
+            let timestamp = Utc::now().timestamp() as usize;
+
+            if token.claims.exp > timestamp {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+pub fn set_jwt_cookie(resp: &mut Response, secret: &String) {
+    let iat = Utc::now().timestamp();
+    let exp = Utc::now()
+        .checked_add_signed(Duration::hours(1))
+        .expect("invalid timestamp")
+        .timestamp();
+
+    let my_claims = JwtClaims {
+        iat: iat as usize,
+        exp: exp as usize,
+    };
+
+    let token = encode(&Header::default(), &my_claims, &EncodingKey::from_secret(secret.as_ref())).unwrap();
+
+    // Build a session cookie.
+    let cookie = Cookie::build(("HELIPAD_JWT", token))
+        .path("/")
+        .secure(false) // Do not require HTTPS.
+        .http_only(true)
+        .same_site(cookie::SameSite::Lax)
+        .build();
+
+    // Set the changed cookies
+    resp.headers_mut().insert(
+        header::SET_COOKIE,
+        header::HeaderValue::from_str(&cookie.to_string()).unwrap()
+    );
+
+}
+
+pub fn login_required(ctx: &Context) -> Option<Response> {
+    if ctx.helipad_config.password.is_empty() {
+        return None;
+    }
+
+    let path = ctx.req.uri().path();
+
+    if path == "/login" || path.starts_with("/script") || path.starts_with("/style") {
+        return None;
+    }
+
+    if verify_jwt_cookie(&ctx.req, &ctx.helipad_config.secret) {
+        return None;
+    }
+
+    let ctype = match ctx.req.headers().get(header::CONTENT_TYPE) {
+        Some(val) => val.to_str().unwrap_or(""),
+        None => "",
+    };
+
+    if ctype.starts_with("application/json") {
+        return Some(text_response("Access forbidden".into(), StatusCode::FORBIDDEN));
+    }
+
+    Some(redirect("/login"))
+}
+
 //Route handlers ---------------------------------------------------------------------------------------------
+
+//Login html
+pub async fn login(ctx: Context) -> Response {
+    if ctx.helipad_config.password.is_empty() {
+        return redirect("/"); // no password required
+    }
+
+    let mut message = "";
+
+    if ctx.req.method() == Method::POST {
+        let post_vars = get_post_params(ctx.req).await;
+
+        if let Some(password) = post_vars.get("password") {
+            if ctx.helipad_config.password == *password {
+                let mut resp = redirect("/");
+                set_jwt_cookie(&mut resp, &ctx.helipad_config.secret);
+                return resp;
+            }
+            else {
+                message = "Bad password";
+            }
+        }
+        else {
+            message = "No password provided";
+        }
+    }
+
+    let params = json!({
+        "version": ctx.state.version,
+        "message": message,
+    });
+
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/html/login.html").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &params).expect("Something went wrong rendering the file");
+
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .body(format!("{}", doc_rendered).into())
+        .unwrap();
+}
 
 //Homepage html
 pub async fn home(ctx: Context) -> Response {
-
     //Get query parameters
     let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
@@ -172,7 +312,7 @@ pub async fn asset(ctx: Context) -> Response {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
     }).unwrap_or_else(HashMap::new);
 
-    println!("** Context: {:#?}", ctx);
+    println!("** Request: {:#?}", ctx.req);
     println!("** Params: {:#?}", _params);
 
     //Set up the response framework
