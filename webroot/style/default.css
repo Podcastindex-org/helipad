@@ -175,10 +175,7 @@ img {
     color: black;
     display: block;
     font-size: 14px;
-    margin: 8px 0 0;
-    float: right;
-    top: -40px;
-    position: relative;
+    margin-bottom: 0.5rem;
 }
 
 .mesgs {
@@ -323,7 +320,15 @@ div.balanceDisplay span.error {
     color:darkred;
 }
 div.balanceDisplay.bump {
-    background-color: #1e7e34;
+    animation: fade-in 2s;
+}
+@keyframes fade-in {
+    0% {
+        background-color: #1e7e34;
+    }
+    100% {
+        background-color: none;
+    }
 }
 div.piIcon {
     padding-top:8px;
@@ -372,6 +377,26 @@ ul.navButtons li.active a {
     display: flex;
     align-items: center;
     justify-self: end;
+}
+
+.send-reply-title,
+#send-reply.loading .send-reply-loading {
+    display: flex;
+    align-items: center;
+}
+
+.send-reply-loading,
+#send-reply.loading .send-reply-title {
+    display: none;
+}
+
+.spinner {
+    width: 1em;
+    height: 1em;
+    border: 0.2em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: lds-dual-ring 1.5s linear infinite;
 }
 
 /* https://loading.io/css/ */

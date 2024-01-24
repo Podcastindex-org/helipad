@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
 
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct BoostRecord {
     pub index: u64,
@@ -21,6 +20,7 @@ pub struct BoostRecord {
     pub tlv: String,
     pub remote_podcast: Option<String>,
     pub remote_episode: Option<String>,
+    pub reply_sent: bool,
     pub payment_info: Option<PaymentRecord>,
 }
 
@@ -43,10 +43,12 @@ impl BoostRecord {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PaymentRecord {
+    pub payment_hash: String,
     pub pubkey: String,
     pub custom_key: u64,
     pub custom_value: String,
     pub fee_msat: i64,
+    pub reply_to_idx: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -134,7 +136,7 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
     }
 
-    //Create the boost_remote_items table
+    //Add additional columns to existing installs
     match conn.execute("ALTER TABLE boosts ADD COLUMN remote_podcast text", []) {
         Ok(_) => {
             println!("Boosts remote podcast column added.");
@@ -142,10 +144,16 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         Err(_) => {}
     }
 
-    //Create the boost_remote_items table
     match conn.execute("ALTER TABLE boosts ADD COLUMN remote_episode text", []) {
         Ok(_) => {
             println!("Boosts remote episode column added.");
+        }
+        Err(_) => {}
+    }
+
+    match conn.execute("ALTER TABLE boosts ADD COLUMN reply_sent integer", []) {
+        Ok(_) => {
+            println!("Boosts reply sent column added.");
         }
         Err(_) => {}
     }
@@ -217,10 +225,12 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
              tlv text,
              remote_podcast text,
              remote_episode text,
+             payment_hash text,
              payment_pubkey text,
              payment_custom_key integer,
              payment_custom_value text,
-             payment_fee_msat integer
+             payment_fee_msat integer,
+             reply_to_idx integer
          )",
         [],
     ) {
@@ -241,8 +251,8 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
 pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
-    match conn.execute("INSERT INTO boosts (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode) \
-                                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+    match conn.execute("INSERT INTO boosts (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent) \
+                                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                        params![boost.index,
                                        boost.time,
                                        boost.value_msat,
@@ -255,7 +265,8 @@ pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, 
                                        boost.episode,
                                        boost.tlv,
                                        boost.remote_podcast,
-                                       boost.remote_episode]
+                                       boost.remote_episode,
+                                       boost.reply_sent]
     ) {
         Ok(_) => {
             Ok(true)
@@ -290,7 +301,8 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
                                        episode, \
                                        tlv, \
                                        remote_podcast, \
-                                       remote_episode \
+                                       remote_episode, \
+                                       reply_sent \
                                  FROM boosts \
                                  WHERE action = 2 \
                                    AND idx {} :index \
@@ -314,6 +326,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
             tlv: row.get(10)?,
             remote_podcast: row.get(11).ok(),
             remote_episode: row.get(12).ok(),
+            reply_sent: row.get(13).unwrap_or(false),
             payment_info: None,
         })
     }).unwrap();
@@ -377,7 +390,8 @@ pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: b
                                        episode, \
                                        tlv, \
                                        remote_podcast, \
-                                       remote_episode \
+                                       remote_episode, \
+                                       reply_sent \
                                  FROM boosts \
                                  WHERE action = 1 \
                                    AND idx {} :index \
@@ -401,6 +415,7 @@ pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: b
             tlv: row.get(10)?,
             remote_podcast: row.get(11).ok(),
             remote_episode: row.get(12).ok(),
+            reply_sent: row.get(13).unwrap_or(false),
             payment_info: None,
         })
     }).unwrap();
@@ -446,7 +461,7 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
     let max = 1;
 
     //Prepare and execute the query
-    let mut stmt = conn.prepare("SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode \
+    let mut stmt = conn.prepare("SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent \
                                  FROM boosts \
                                  ORDER BY idx DESC LIMIT :max")?;
     let rows = stmt.query_map(&[(":max", max.to_string().as_str())], |row| {
@@ -464,6 +479,7 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
             tlv: row.get(10)?,
             remote_podcast: row.get(11).ok(),
             remote_episode: row.get(12).ok(),
+            reply_sent: row.get(13).unwrap_or(false),
             payment_info: None,
         })
     }).unwrap();
@@ -543,10 +559,12 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
             tlv,
             remote_podcast,
             remote_episode,
+            payment_hash,
             payment_pubkey,
             payment_custom_key,
             payment_custom_value,
-            payment_fee_msat
+            payment_fee_msat,
+            reply_to_idx
         FROM
             sent_boosts
         WHERE
@@ -576,11 +594,14 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
             tlv: row.get(10)?,
             remote_podcast: row.get(11).ok(),
             remote_episode: row.get(12).ok(),
+            reply_sent: false,
             payment_info: Some(PaymentRecord {
-                pubkey: row.get(13)?,
-                custom_key: row.get(14)?,
-                custom_value: row.get(15)?,
-                fee_msat: row.get(16)?,
+                payment_hash: row.get(13)?,
+                pubkey: row.get(14)?,
+                custom_key: row.get(15)?,
+                custom_value: row.get(16)?,
+                fee_msat: row.get(17)?,
+                reply_to_idx: row.get(18)?,
             }),
         })
     }).unwrap();
@@ -641,21 +662,42 @@ pub fn get_last_payment_index_from_db(filepath: &String) -> Result<u64, Box<dyn 
 }
 
 //Add a payment (sent boost) to the database
-pub fn add_payment_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
+pub fn add_payment_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
-    let payment_info = match boost.payment_info {
+    let payment_info = match &boost.payment_info {
         Some(info) => info,
         None => {
             return Err(Box::new(HydraError(format!("Missing payment info for sent boost: [{}].", boost.index).into())))
         }
     };
 
-    match conn.execute(
-        "INSERT INTO sent_boosts
-            (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, payment_pubkey, payment_custom_key, payment_custom_value, payment_fee_msat)
+    conn.execute(
+        "INSERT INTO sent_boosts (
+            idx,
+            time,
+            value_msat,
+            value_msat_total,
+            action,
+            sender,
+            app,
+            message,
+            podcast,
+            episode,
+            tlv,
+            remote_podcast,
+            remote_episode,
+            payment_hash,
+            payment_pubkey,
+            payment_custom_key,
+            payment_custom_value,
+            payment_fee_msat,
+            reply_to_idx
+        )
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+        ON CONFLICT(idx) DO UPDATE SET
+            reply_to_idx = COALESCE(reply_to_idx, excluded.reply_to_idx)
         ",
         params![
             boost.index,
@@ -671,18 +713,18 @@ pub fn add_payment_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, 
             boost.tlv,
             boost.remote_podcast,
             boost.remote_episode,
+            payment_info.payment_hash,
             payment_info.pubkey,
             payment_info.custom_key,
             payment_info.custom_value,
             payment_info.fee_msat,
+            payment_info.reply_to_idx,
         ]
-    ) {
-        Ok(_) => {
-            Ok(true)
-        }
-        Err(e) => {
-            eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to add sent boost: [{}].", boost.index).into())))
-        }
+    )?;
+
+    if let Some(reply_to_idx) = payment_info.reply_to_idx {
+        conn.execute("UPDATE boosts SET reply_sent = 1 WHERE idx = ?1", params![reply_to_idx])?;
     }
+
+    Ok(true)
 }
