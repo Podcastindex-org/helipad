@@ -14,6 +14,7 @@ $(document).ready(function () {
 
     let config = {
         'listUrl': '/api/v1/boosts',
+        'indexUrl': '/api/v1/index',
         'singularName': 'boost',
         'pluralName': 'boosts',
     }
@@ -66,13 +67,17 @@ $(document).ready(function () {
         }
 
         //Build the endpoint url
-        var url = `${config.listUrl}?index=${boostIndex}`;
+        let params = {'index': boostIndex};
+
         if (max > 0) {
-            url += '&count=' + max;
+            params.count = max;
         }
+
         if (old) {
-            url += '&old=true';
+            params.old = true;
         }
+
+        let url = config.listUrl + '?' + $.param(params);
 
         $.ajax({
             url: url,
@@ -88,13 +93,12 @@ $(document).ready(function () {
                     let boostActualSats = Math.trunc(element.value_msat / 1000) || 0;
                     let boostIndex = element.index;
                     let boostAction = element.action;
-                    let boostSender = element.sender;
                     let boostApp = element.app;
                     let boostPodcast = element.podcast;
                     let boostEpisode = element.episode;
                     let boostRemotePodcast = element.remote_podcast;
                     let boostRemoteEpisode = element.remote_episode;
-                    let boostTlv = null;
+                    let boostTlv = {};
 
                     try {
                         boostTlv = JSON.parse(element.tlv)
@@ -106,9 +110,13 @@ $(document).ready(function () {
                     let appIconUrl = appIconUrlBase + (appIcon.icon || 'unknown');
                     let appIconHref = appIcon.url || '#';
 
-                    //Sender
-                    if (boostSender.trim() != "") {
-                        boostSender = 'from ' + boostSender;
+                    //Person
+                    let boostPerson = "";
+                    if (config.pluralName == 'sent boosts' && boostTlv.name) {
+                        boostPerson = `sent to ${boostTlv.name}`;
+                    }
+                    else if (element.sender.trim() != "") {
+                        boostPerson = `from ${element.sender}`;
                     }
 
                     //Format the boost message
@@ -150,7 +158,7 @@ $(document).ready(function () {
                             '  <div class="sent_msg">' +
                             '    <div class="sent_withd_msg">' +
                             '      <span class="app"><a href="' + appIconHref + '"><img src="' + appIconUrl + '" title="' + boostApp + '" alt="' + boostApp + '"></a></span>' +
-                            '      <h5 class="sats">' + boostDisplayAmount + ' ' + boostSender + ' ' + boostNumerology + '</small></h5>' +
+                            '      <h5 class="sats">' + boostDisplayAmount + ' ' + boostPerson + ' ' + boostNumerology + '</small></h5>' +
                             '      <time class="time_date" datetime="' + dateTime + '" title="' + dateFormat(dateTime) + '">' + 
                             '        <a href="#" style="color: blue" data-toggle="modal" data-target="#boostInfo">' + prettyDate(dateTime) + '</a>' + 
                             '      </time>' +
@@ -215,6 +223,13 @@ $(document).ready(function () {
                             '<p>This screen will automatically refresh as satoshis are streamed to you.</p>' +
                             '<p><a href="https://podcastindex.org/apps">Check out a Podcasting 2.0 app to stream satoshis.</a></p>' +
                             '<div class="lds-dual-ring"></div> Looking for streams: <span class="invindex">' + currentInvoiceIndex + '</span>' +
+                            '</div>');
+                    }
+                    else if (config.pluralName == 'sent boosts') {
+                        inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
+                            'transactions, or maybe you have not sent any satoshis from your node yet?</p>' +
+                            '<p>This screen will automatically refresh as you send satoshis from your node.</p>' +
+                            '<div class="lds-dual-ring"></div> Looking for sent boosts: <span class="invindex">' + currentInvoiceIndex + '</span>' +
                             '</div>');
                     }
                 }
@@ -324,7 +339,7 @@ $(document).ready(function () {
     function getIndex() {
         //Get the current boost index number
         $.ajax({
-            url: '/api/v1/index',
+            url: config.indexUrl,
             type: "GET",
             contentType: "application/json; charset=utf-8",
             dataType: "json",
@@ -443,6 +458,12 @@ $(document).ready(function () {
             config.listUrl = '/api/v1/streams';
             config.singularName = 'stream';
             config.pluralName = 'streams';
+        }
+        else if (pathname == "/sent") {
+            config.listUrl = '/api/v1/sent';
+            config.indexUrl = '/api/v1/sent_index';
+            config.singularName = 'sent boost';
+            config.pluralName = 'sent boosts';
         }
     }
 

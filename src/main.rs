@@ -43,6 +43,12 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 const REMOTE_GUID_CACHE_SIZE: usize = 20;
 
+// TLV keys (see https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md)
+const TLV_PODCASTING20: u64 = 7629169;
+const TLV_WALLET_KEY: u64 = 696969;
+const TLV_WALLET_ID: u64 = 112111100;
+const TLV_HIVE_ACCOUNT: u64 = 818818;
+
 //Structs ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
 #[derive(Clone, Debug)]
@@ -124,6 +130,10 @@ struct RawBoost {
     value_msat: Option<u64>,
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     value_msat_total: Option<u64>,
+    #[serde(default = "d_blank")]
+    remote_feed_guid: Option<String>,
+    #[serde(default = "d_blank")]
+    remote_item_guid: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -273,6 +283,7 @@ async fn main() {
     //Base
     router.get("/", Box::new(handler::home));
     router.get("/streams", Box::new(handler::streams));
+    router.get("/sent", Box::new(handler::sent));
     router.get("/pew.mp3", Box::new(handler::pewmp3));
     router.get("/favicon.ico", Box::new(handler::favicon));
     router.get("/apps.json", Box::new(handler::apps_json));
@@ -290,8 +301,12 @@ async fn main() {
     router.get("/api/v1/balance", Box::new(handler::api_v1_balance));
     router.options("/api/v1/streams", Box::new(handler::api_v1_streams_options));
     router.get("/api/v1/streams", Box::new(handler::api_v1_streams));
+    router.options("/api/v1/sent", Box::new(handler::api_v1_sent_options));
+    router.get("/api/v1/sent", Box::new(handler::api_v1_sent));
     router.options("/api/v1/index", Box::new(handler::api_v1_index_options));
     router.get("/api/v1/index", Box::new(handler::api_v1_index));
+    router.options("/api/v1/sent_index", Box::new(handler::api_v1_sent_index_options));
+    router.get("/api/v1/sent_index", Box::new(handler::api_v1_sent_index));
     router.get("/csv", Box::new(handler::csv_export_boosts));
 
 
@@ -457,6 +472,78 @@ pub async fn fetch_api_podcast_episode_by_guid(podcast_guid: &String, episode_gu
     }))
 }
 
+async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &Vec<u8>, remote_cache: &mut LruCache<String, Option<PodcastEpisodeGuid>>) {
+    let tlv = std::str::from_utf8(&val).unwrap();
+    println!("TLV: {:#?}", tlv);
+
+    boost.tlv = tlv.to_string();
+
+    let json_result = serde_json::from_str::<RawBoost>(tlv);
+    match json_result {
+        Ok(rawboost) => {
+            //If there was a sat value in the tlv, override the invoice
+            if rawboost.value_msat.is_some() {
+                boost.value_msat = rawboost.value_msat.unwrap() as i64;
+            }
+
+            //Determine an action type for later filtering ability
+            if rawboost.action.is_some() {
+                boost.action = match rawboost.action.unwrap().as_str() {
+                    "stream" => 1, //This indicates a per-minute podcast payment
+                    "boost" => 2,  //This is a manual boost or boost-a-gram
+                    _ => 3,
+                }
+            }
+
+            //Was a sender name given in the tlv?
+            if rawboost.sender_name.is_some() && !rawboost.sender_name.clone().unwrap().is_empty() {
+                boost.sender = rawboost.sender_name.unwrap();
+            }
+
+            //Was there a message in this tlv?
+            if rawboost.message.is_some() {
+                boost.message = rawboost.message.unwrap();
+            }
+
+            //Was an app name given?
+            if rawboost.app_name.is_some() {
+                boost.app = rawboost.app_name.unwrap();
+            }
+
+            //Was a podcast name given?
+            if rawboost.podcast.is_some() {
+                boost.podcast = rawboost.podcast.unwrap();
+            }
+
+            //Episode name?
+            if rawboost.episode.is_some() {
+                boost.episode = rawboost.episode.unwrap();
+            }
+
+            //Look for an original sat value in the tlv
+            if rawboost.value_msat_total.is_some() {
+                boost.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
+            }
+
+            //Fetch podcast/episode name if remote feed/item guid present
+            if rawboost.remote_feed_guid.is_some() && rawboost.remote_item_guid.is_some() {
+                let remote_feed_guid = rawboost.remote_feed_guid.unwrap();
+                let remote_item_guid = rawboost.remote_item_guid.unwrap();
+
+                let episode_guid = fetch_podcast_episode_by_guid(remote_cache, remote_feed_guid, remote_item_guid).await;
+
+                if let Some(guid) = episode_guid {
+                    boost.remote_podcast = Some(guid.podcast);
+                    boost.remote_episode = Some(guid.episode);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+        }
+    }
+}
+
 //The LND poller runs in a thread and pulls new invoices
 async fn lnd_poller(server_config: Config, database_file_path: String) {
     let db_filepath = database_file_path;
@@ -577,6 +664,7 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
 
     //The main loop
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
+    let mut current_payment = dbif::get_last_payment_index_from_db(&db_filepath).unwrap();
     loop {
 
         //Get lnd node channel balance
@@ -617,81 +705,21 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
                         tlv: "".to_string(),
                         remote_podcast: None,
                         remote_episode: None,
+                        payment_info: None,
                     };
 
                     //Search for podcast boost tlvs
                     for htlc in invoice.htlcs {
                         for (idx, val) in htlc.custom_records {
                             //Satoshis.stream record type
-                            if idx == 7629169 {
-                                boost.tlv = std::str::from_utf8(&val).unwrap().to_string();
-                                let tlv = std::str::from_utf8(&val).unwrap();
-                                println!("TLV: {:#?}", tlv);
-                                let json_result = serde_json::from_str::<RawBoost>(tlv);
-                                match json_result {
-                                    Ok(rawboost) => {
-                                        println!("{:#?}", rawboost);
-                                        //If there was a sat value in the tlv, override the invoice
-                                        if rawboost.value_msat.is_some() {
-                                            boost.value_msat = rawboost.value_msat.unwrap() as i64;
-                                        }
-                                        //Determine an action type for later filtering ability
-                                        if rawboost.action.is_some() {
-                                            boost.action = match rawboost.action.unwrap().as_str() {
-                                                "stream" => 1, //This indicates a per-minute podcast payment
-                                                "boost" => 2,  //This is a manual boost or boost-a-gram
-                                                _ => 3,
-                                            }
-                                        }
-                                        //Was a sender name given in the tlv?
-                                        if rawboost.sender_name.is_some() && !rawboost.sender_name.clone().unwrap().is_empty() {
-                                            boost.sender = rawboost.sender_name.unwrap();
-                                        }
-                                        //Was there a message in this tlv?
-                                        if rawboost.message.is_some() {
-                                            boost.message = rawboost.message.unwrap();
-                                        }
-                                        //Was an app name given?
-                                        if rawboost.app_name.is_some() {
-                                            boost.app = rawboost.app_name.unwrap();
-                                        }
-                                        //Was a podcast name given?
-                                        if rawboost.podcast.is_some() {
-                                            boost.podcast = rawboost.podcast.unwrap();
-                                        }
-                                        //Episode name?
-                                        if rawboost.episode.is_some() {
-                                            boost.episode = rawboost.episode.unwrap();
-                                        }
-                                        //Look for an original sat value in the tlv
-                                        if rawboost.value_msat_total.is_some() {
-                                            boost.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
-                                        }
-                                    }
-                                    Err(e) => {
-                                        eprintln!("{}", e);
-                                    }
-                                }
+                            if idx == TLV_PODCASTING20 {
+                                parse_podcast_tlv(&mut boost, &val, &mut remote_cache).await;
                             }
                         }
                     }
 
                     //Give some output
                     println!("Boost: {:#?}", boost);
-
-                    let tlv = boost.parse_tlv().unwrap_or_default();
-
-                    if tlv["remote_feed_guid"].is_string() && tlv["remote_item_guid"].is_string() {
-                        let remote_feed_guid = tlv["remote_feed_guid"].as_str().unwrap_or_default();
-                        let remote_item_guid = tlv["remote_item_guid"].as_str().unwrap_or_default();
-
-                        let episode_guid = fetch_podcast_episode_by_guid(&mut remote_cache, remote_feed_guid.to_string(), remote_item_guid.to_string()).await;
-
-                        if let Some(guid) = episode_guid {
-                            boost.remote_podcast = Some(guid.podcast);
-                            boost.remote_episode = Some(guid.episode);
-                        }
-                    }
 
                     //Store in the database
                     println!("{:#?}", boost);
@@ -709,6 +737,79 @@ async fn lnd_poller(server_config: Config, database_file_path: String) {
         //Make sure we are tracking our position properly
         current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
         println!("Current index: {}", current_index);
+
+        match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false).await {
+            Ok(response) => {
+                for payment in response.payments {
+
+                    for htlc in payment.htlcs {
+
+                        if let Some(route) = htlc.route {
+                            let hopidx = route.hops.len() - 1;
+                            let hop = route.hops[hopidx].clone();
+
+                            if !hop.custom_records.contains_key(&TLV_PODCASTING20) {
+                                continue; // not a boost payment
+                            }
+
+                            //Initialize a boost record
+                            let mut boost = dbif::BoostRecord {
+                                index: payment.payment_index,
+                                time: payment.creation_time_ns / 1000000000,
+                                value_msat: payment.value_msat,
+                                value_msat_total: payment.value_msat,
+                                action: 0,
+                                sender: "".to_string(),
+                                app: "".to_string(),
+                                message: "".to_string(),
+                                podcast: "".to_string(),
+                                episode: "".to_string(),
+                                tlv: "".to_string(),
+                                remote_podcast: None,
+                                remote_episode: None,
+                                payment_info: Some(dbif::PaymentRecord {
+                                    pubkey: hop.pub_key.clone(),
+                                    custom_key: 0,
+                                    custom_value: "".into(),
+                                    fee_msat: payment.fee_msat,
+                                }),
+                            };
+
+                            for (idx, val) in hop.custom_records {
+                                if idx == TLV_PODCASTING20 {
+                                    parse_podcast_tlv(&mut boost, &val, &mut remote_cache).await;
+                                }
+                                else if idx == TLV_WALLET_KEY || idx == TLV_WALLET_ID || idx == TLV_HIVE_ACCOUNT {
+                                    let custom_value = std::str::from_utf8(&val).unwrap().to_string();
+
+                                    boost.payment_info = Some(dbif::PaymentRecord {
+                                        pubkey: hop.pub_key.clone(),
+                                        custom_key: idx,
+                                        custom_value: custom_value,
+                                        fee_msat: payment.fee_msat,
+                                    });
+                                }
+                            }
+
+                            //Give some output
+                            println!("Sent Boost: {:#?}", boost);
+
+                            match dbif::add_payment_to_db(&db_filepath, boost) {
+                                Ok(_) => println!("New payment added."),
+                                Err(e) => eprintln!("Error adding payment: {:#?}", e)
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("lnd::Lnd::list_payments failed: {}", e);
+            }
+        };
+
+        //Make sure we are tracking our position properly
+        current_payment = dbif::get_last_payment_index_from_db(&db_filepath).unwrap();
+        println!("Current payment: {}", current_payment);
 
         tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
     }

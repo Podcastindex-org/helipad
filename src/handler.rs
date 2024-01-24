@@ -67,6 +67,17 @@ pub async fn streams(ctx: Context) -> Response {
         .unwrap();
 }
 
+//Sent html
+pub async fn sent(ctx: Context) -> Response {
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/html/sent.html").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .body(format!("{}", doc_rendered).into())
+        .unwrap();
+}
+
 //Pew-pew audio
 pub async fn pewmp3(_ctx: Context) -> Response {
     let file = fs::read("webroot/extra/pew.mp3").expect("Something went wrong reading the file.");
@@ -431,6 +442,138 @@ pub async fn api_v1_index(_ctx: Context) -> Response {
                 .unwrap();
         }
     };
+}
+
+//API - get the current payment index number
+pub async fn api_v1_sent_index_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
+
+pub async fn api_v1_sent_index(_ctx: Context) -> Response {
+    //Get the last known payment index from the database
+    match dbif::get_last_payment_index_from_db(&_ctx.database_file_path) {
+        Ok(index) => {
+            println!("** get_last_payment_index_from_db() -> [{}]", index);
+            let json_doc_raw = serde_json::to_string_pretty(&index).unwrap();
+            let json_doc: String = strip::strip_tags(&json_doc_raw);
+
+            return hyper::Response::builder()
+                .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(format!("{}", json_doc).into())
+                .unwrap();
+        }
+        Err(e) => {
+            eprintln!("** Error getting current db index: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting current db index.").into())
+                .unwrap();
+        }
+    };
+}
+
+
+//API - serve sent as JSON either in ascending or descending order
+pub async fn api_v1_sent_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
+
+pub async fn api_v1_sent(_ctx: Context) -> Response {
+    //Get query parameters
+    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
+        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
+    }).unwrap_or_else(HashMap::new);
+
+    //Parameter - index (unsigned int)
+    let index: u64;
+    match params.get("index") {
+        Some(supplied_index) => {
+            index = match supplied_index.parse::<u64>() {
+                Ok(index) => {
+                    println!("** Supplied index from call: [{}]", index);
+                    index
+                }
+                Err(_) => {
+                    eprintln!("** Error getting sent boosts: 'index' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        }
+        None => {
+            eprintln!("** Error getting sent boosts: 'index' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
+    //Parameter - boostcount (unsigned int)
+    let boostcount: u64;
+    match params.get("count") {
+        Some(bcount) => {
+            boostcount = match bcount.parse::<u64>() {
+                Ok(boostcount) => {
+                    println!("** Supplied sent boost count from call: [{}]", boostcount);
+                    boostcount
+                }
+                Err(_) => {
+                    eprintln!("** Error getting sent boosts: 'count' param is not a number.\n");
+                    return hyper::Response::builder()
+                        .status(StatusCode::from_u16(400).unwrap())
+                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                        .unwrap();
+                }
+            };
+        }
+        None => {
+            eprintln!("** Error getting sent boosts: 'count' param is not present.\n");
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(400).unwrap())
+                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
+                .unwrap();
+        }
+    };
+
+    //Was the "old" flag used?
+    let mut old = false;
+    match params.get("old") {
+        Some(_) => old = true,
+        None => {}
+    };
+
+    //Get sent boosts from db for returning
+    match dbif::get_payments_from_db(&_ctx.database_file_path, index, boostcount, old, true) {
+        Ok(streams) => {
+            let json_doc_raw = serde_json::to_string_pretty(&streams).unwrap();
+            let json_doc: String = strip::strip_tags(&json_doc_raw);
+
+            return hyper::Response::builder()
+                .status(StatusCode::OK)
+                .header("Access-Control-Allow-Origin", "*")
+                .body(format!("{}", json_doc).into())
+                .unwrap();
+        }
+        Err(e) => {
+            eprintln!("** Error getting sent boosts: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting sent boosts.").into())
+                .unwrap();
+        }
+    }
 }
 
 //CSV export - max is 200 for now so the csv content can be built in memory
