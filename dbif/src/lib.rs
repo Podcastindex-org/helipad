@@ -354,7 +354,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
 
 
 //Get all of the boosts from the database
-pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
@@ -408,12 +408,36 @@ pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: b
     //Parse the results
     for row in rows {
         let boost: BoostRecord = row.unwrap();
-        boosts.push(boost);
+
+        //Some things like text output don't need to be html entity escaped
+        //so only do it if asked for
+        if escape_html {
+            let boost_clean = BoostRecord {
+                sender: BoostRecord::escape_for_html(boost.sender),
+                app: BoostRecord::escape_for_html(boost.app),
+                message: BoostRecord::escape_for_html(boost.message),
+                podcast: BoostRecord::escape_for_html(boost.podcast),
+                episode: BoostRecord::escape_for_html(boost.episode),
+                tlv: BoostRecord::escape_for_html(boost.tlv),
+                remote_podcast: match boost.remote_podcast {
+                    Some(item) => Some(BoostRecord::escape_for_html(item)),
+                    None => None
+                },
+                remote_episode: match boost.remote_episode {
+                    Some(item) => Some(BoostRecord::escape_for_html(item)),
+                    None => None
+                },
+                ..boost
+            };
+            boosts.push(boost_clean);
+        } else {
+            boosts.push(boost);
+        }
+
     }
 
     Ok(boosts)
 }
-
 
 //Get the last boost index number from the database
 pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Error>> {

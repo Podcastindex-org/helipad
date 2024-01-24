@@ -389,7 +389,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
     };
 
     //Get the boosts from db for returning
-    match dbif::get_streams_from_db(&_ctx.database_file_path, index, boostcount, old) {
+    match dbif::get_streams_from_db(&_ctx.database_file_path, index, boostcount, old, true) {
         Ok(streams) => {
             let json_doc_raw = serde_json::to_string_pretty(&streams).unwrap();
             let json_doc: String = strip::strip_tags(&json_doc_raw);
