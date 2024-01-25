@@ -386,36 +386,37 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &Vec<u8>, rem
 
 pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
 
-    //Initialize a boost record
-    let mut boost = dbif::BoostRecord {
-        index: invoice.add_index,
-        time: invoice.settle_date,
-        value_msat: invoice.amt_paid_sat * 1000,
-        value_msat_total: invoice.amt_paid_sat * 1000,
-        action: 0,
-        sender: "".to_string(),
-        app: "".to_string(),
-        message: "".to_string(),
-        podcast: "".to_string(),
-        episode: "".to_string(),
-        tlv: "".to_string(),
-        remote_podcast: None,
-        remote_episode: None,
-        reply_sent: false,
-        payment_info: None,
-    };
-
-    //Search for podcast boost tlvs
     for htlc in invoice.htlcs {
-        for (idx, val) in htlc.custom_records {
-            //Satoshis.stream record type
-            if idx == TLV_PODCASTING20 {
-                parse_podcast_tlv(&mut boost, &val, remote_cache).await;
-            }
+
+        if !htlc.custom_records.contains_key(&TLV_PODCASTING20) {
+            continue; // ignore invoices without a podcasting 2.0 tlv
         }
+
+        //Initialize a boost record
+        let mut boost = dbif::BoostRecord {
+            index: invoice.add_index,
+            time: invoice.settle_date,
+            value_msat: invoice.amt_paid_sat * 1000,
+            value_msat_total: invoice.amt_paid_sat * 1000,
+            action: 0,
+            sender: "".to_string(),
+            app: "".to_string(),
+            message: "".to_string(),
+            podcast: "".to_string(),
+            episode: "".to_string(),
+            tlv: "".to_string(),
+            remote_podcast: None,
+            remote_episode: None,
+            reply_sent: false,
+            payment_info: None,
+        };
+
+        parse_podcast_tlv(&mut boost, &htlc.custom_records[&TLV_PODCASTING20], remote_cache).await;
+
+        return Some(boost);
     }
 
-    Some(boost)
+    return None;
 }
 
 pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
