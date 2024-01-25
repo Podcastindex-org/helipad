@@ -433,6 +433,10 @@ $(document).ready(function () {
 
     //Render the boost info modal
     function renderBoostInfo() {
+        if ($('#boostInfo').length) {
+            return; // already added
+        }
+
         const name = ucWords(config.singularName);
         const $dialog = $(`
         <div id="boostInfo" class="modal" tabindex="-1">
@@ -488,6 +492,10 @@ $(document).ready(function () {
     }
 
     function renderReplyModal() {
+        if ($('#replyModal').length) {
+            return; // already added
+        }
+
         const $dialog = $(`
         <div id="replyModal" class="modal" tabindex="-1">
           <div class="modal-dialog modal-lg modal-dialog-centered">
