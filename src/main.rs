@@ -396,7 +396,9 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
     //The main loop
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
     let mut current_payment = dbif::get_last_payment_index_from_db(&db_filepath).unwrap();
+
     loop {
+        let mut updated = false;
 
         //Get lnd node channel balance
         match lnd::Lnd::channel_balance(&mut lightning).await {
@@ -420,7 +422,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         match lnd::Lnd::list_invoices(&mut lightning, false, current_index.clone(), 500, false).await {
             Ok(response) => {
                 for invoice in response.invoices {
-                    let parsed = lightning::parse_boost_from_invoice(invoice, &mut remote_cache).await;
+                    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
 
                     if let Some(boost) = parsed {
                         //Give some output
@@ -432,6 +434,9 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
                             Err(e) => eprintln!("Error adding invoice: {:#?}", e)
                         }
                     }
+
+                    current_index = invoice.add_index;
+                    updated = true;
                 }
             }
             Err(e) => {
@@ -440,13 +445,12 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         }
 
         //Make sure we are tracking our position properly
-        current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
         println!("Current index: {}", current_index);
 
         match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false).await {
             Ok(response) => {
                 for payment in response.payments {
-                    let parsed = lightning::parse_boost_from_payment(payment, &mut remote_cache).await;
+                    let parsed = lightning::parse_boost_from_payment(payment.clone(), &mut remote_cache).await;
 
                     if let Some(boost) = parsed {
                         //Give some output
@@ -458,6 +462,9 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
                             Err(e) => eprintln!("Error adding payment: {:#?}", e)
                         }
                     }
+
+                    current_payment = payment.payment_index;
+                    updated = true;
                 }
             }
             Err(e) => {
@@ -466,9 +473,11 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         };
 
         //Make sure we are tracking our position properly
-        current_payment = dbif::get_last_payment_index_from_db(&db_filepath).unwrap();
         println!("Current payment: {}", current_payment);
 
-        tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
+        //Sleep only if nothing was updated
+        if !updated {
+            tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
+        }
     }
 }
