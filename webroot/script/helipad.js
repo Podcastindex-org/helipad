@@ -707,7 +707,8 @@ $(document).ready(function () {
     //Boost and node info checker
     setInterval(async function () {
         if ($('div.outgoing_msg').length === 0) {
-            initPage();
+            getBalance(true);
+            getIndex();
         } else {
             getBoosts(currentInvoiceIndex, 20, true, false, true);
             getBalance();
