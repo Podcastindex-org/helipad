@@ -19,6 +19,11 @@ type = "u16"
 doc = "The port to listen on."
 
 [[param]]
+name = "password"
+type = "String"
+doc = "The password to use to access Helipad."
+
+[[param]]
 name = "lnd_url"
 type = "String"
 doc = "The url and port of the LND grpc api."

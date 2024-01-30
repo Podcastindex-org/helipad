@@ -77,14 +77,18 @@
     },
     "podcast index": {
         "icon": "podcastindex",
-        "url": "https:/podcastindex.org/"
+        "url": "https://podcastindex.org/"
     },
     "podcast-index": {
         "icon": "podcastindex",
-        "url": "https:/podcastindex.org/"
+        "url": "https://podcastindex.org/"
     },
     "podcastindex": {
         "icon": "podcastindex",
-        "url": "https:/podcastindex.org/"
+        "url": "https://podcastindex.org/"
+    },
+    "helipad": {
+        "icon": "podcastindex",
+        "url": "https://podcastindex.org/"
     }
 }
