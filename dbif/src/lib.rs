@@ -289,6 +289,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
         ltgt = "<=";
     }
 
+    //Query for boosts and automated boosts
     let sqltxt = format!("SELECT idx, \
                                        time, \
                                        value_msat, \
@@ -304,7 +305,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
                                        remote_episode, \
                                        reply_sent \
                                  FROM boosts \
-                                 WHERE action = 2 \
+                                 WHERE action IN (2, 4) \
                                    AND idx {} :index \
                                  ORDER BY idx DESC \
                                  LIMIT :max", ltgt);
