@@ -78,7 +78,7 @@ fn json_response<T: serde::Serialize>(value: T) -> Response {
     return hyper::Response::builder()
         .status(StatusCode::OK)
         .header("Access-Control-Allow-Origin", "*")
-        .header("Content-Type", "application/json; charset=UTF-8")
+        .header("Content-Type", "application/json")
         .body(format!("{}", json_doc).into())
         .unwrap();
 }
@@ -290,7 +290,7 @@ pub async fn apps_json(_ctx: Context) -> Response {
     let file = fs::read("webroot/extra/apps.json").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
         .status(StatusCode::OK)
-        .header("Content-type", "application/json; charset=utf-8")
+        .header("Content-Type", "application/json")
         .body(hyper::Body::from(file))
         .unwrap();
 }
@@ -300,7 +300,7 @@ pub async fn numerology_json(_ctx: Context) -> Response {
     let file = fs::read("webroot/extra/numerology.json").expect("Something went wrong reading the file.");
     return hyper::Response::builder()
         .status(StatusCode::OK)
-        .header("Content-type", "application/json; charset=utf-8")
+        .header("Content-Type", "application/json")
         .body(hyper::Body::from(file))
         .unwrap();
 }
@@ -389,6 +389,7 @@ pub async fn api_v1_balance(_ctx: Context) -> Response {
             return hyper::Response::builder()
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
+                .header("Content-Type", "application/json")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
         }
@@ -486,6 +487,7 @@ pub async fn api_v1_boosts(_ctx: Context) -> Response {
             return hyper::Response::builder()
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
+                .header("Content-Type", "application/json")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
         }
@@ -584,6 +586,7 @@ pub async fn api_v1_streams(_ctx: Context) -> Response {
             return hyper::Response::builder()
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
+                .header("Content-Type", "application/json")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
         }
@@ -618,6 +621,7 @@ pub async fn api_v1_index(_ctx: Context) -> Response {
             return hyper::Response::builder()
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
+                .header("Content-Type", "application/json")
                 .body(format!("{}", json_doc).into())
                 .unwrap();
         }
