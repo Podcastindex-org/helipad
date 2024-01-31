@@ -249,6 +249,8 @@ async fn main() {
     router.get("/script", Box::new(handler::asset));
     router.get("/extra", Box::new(handler::asset));
     //Api
+    router.options("/api/v1/node_info", Box::new(handler::api_v1_node_info_options));
+    router.get("/api/v1/node_info", Box::new(handler::api_v1_node_info));
     router.options("/api/v1/boosts", Box::new(handler::api_v1_boosts_options));
     router.get("/api/v1/boosts", Box::new(handler::api_v1_boosts));
     router.options("/api/v1/balance", Box::new(handler::api_v1_balance_options));
@@ -263,6 +265,7 @@ async fn main() {
     router.get("/api/v1/sent_index", Box::new(handler::api_v1_sent_index));
     router.options("/api/v1/reply", Box::new(handler::api_v1_reply_options));
     router.post("/api/v1/reply", Box::new(handler::api_v1_reply));
+    router.post("/api/v1/mark_replied", Box::new(handler::api_v1_mark_replied));
     router.get("/csv", Box::new(handler::csv_export_boosts));
 
 
@@ -384,6 +387,16 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
     match lnd::Lnd::get_info(&mut lightning).await {
         Ok(node_info) => {
             println!("LND node info: {:#?}", node_info);
+
+            let record = dbif::NodeInfoRecord {
+                lnd_alias: node_info.alias,
+                node_pubkey: node_info.identity_pubkey,
+                node_version: node_info.version,
+            };
+
+            if dbif::add_node_info_to_db(&db_filepath, record).is_err() {
+                println!("Error updating node info in database.");
+            }
         }
         Err(e) => {
             eprintln!("Error getting LND node info: {:#?}", e);

@@ -11,6 +11,7 @@ $(document).ready(function () {
     var currentInvoiceIndex = null;
     var currentBalance = null;
     var currentBalanceAmount = 0;
+    let nodeInfo = null;
 
     let config = {
         'listUrl': '/api/v1/boosts',
@@ -241,6 +242,8 @@ $(document).ready(function () {
                             // Attach reply data to the message
                             $('div.outgoing_msg[data-msgid=' + boostIndex + ']').data({
                                 'index': boostIndex,
+                                'podcast': boostPodcast,
+                                'episode': boostEpisode,
                                 'replyAddress': boostReplyAddress,
                                 'replySender': element.sender,
                                 'replyCustomKey': boostReplyCustomKey,
@@ -383,6 +386,11 @@ $(document).ready(function () {
 
             }
         });
+    }
+
+    //Get the current node alias and pubkey
+    async function getNodeInfo() {
+        nodeInfo = await $.get(`/api/v1/node_info`);
     }
 
     //Refresh the timestatmps of all the boosts on the list
@@ -542,6 +550,19 @@ $(document).ready(function () {
                       </div>
                     </div>
                   </div>
+                  <div class="form-group row ${window.webln ? '' : 'd-none'}">
+                    <label for="send-from" class="col-sm-2 col-form-label pt-0">Send from:</label>
+                    <div class="col-sm-10">
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="send-from" id="send-from-node" value="node" checked required>
+                        <label class="form-check-label" for="send-from-node">Node</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="send-from" id="send-from-browser" value="browser" required>
+                        <label class="form-check-label" for="send-from-browser">Browser</label>
+                      </div>
+                    </div>
+                  </div>
                   <div class="form-group">
                     <label for="message-text" class="col-form-label">Message:</label>
                     <textarea id="message-text" name="message" class="form-control" style="height: 8em;" maxlength="500"></textarea>
@@ -586,6 +607,18 @@ $(document).ready(function () {
             }
 
             $('#sender-name').val(window.localStorage.getItem('lastSender') || '');
+
+            const lastWallet = window.localStorage.getItem('lastWallet');
+
+            if (lastWallet && window.webln) {
+                $('#send-from-node').prop('checked', lastWallet == 'node')
+                $('#send-from-browser').prop('checked', lastWallet == 'browser')
+            }
+            else {
+                $('#send-from-node').prop('checked', true);
+                $('#send-from-browser').prop('checked', false);
+            }
+
             $('#sat-amt, #message-text').val('');
 
             $('#message-chars').text(
@@ -601,7 +634,7 @@ $(document).ready(function () {
             $('#message-chars').text(this.maxLength - this.value.length);
         });
 
-        $('#send-reply').click(function (event) {
+        $('#send-reply').click(async function (event) {
             // validate form
             const $form = $('#reply-form');
             const valid = $form[0].checkValidity()
@@ -614,26 +647,93 @@ $(document).ready(function () {
 
             // remember sender name for next time
             window.localStorage.setItem('lastSender', $('#sender-name').val());
+            window.localStorage.setItem('lastWallet', $form.find('input[name="send-from"]:checked').val());
 
             // send reply boost
             $('#send-reply').addClass('loading').prop('disabled', true);
 
-            $.post(`/api/v1/reply`, $form.serialize(), function (result) {
-                if (!result.success) {
-                    $('#send-reply').removeClass('loading').prop('disabled', false);
-                    return alert(result.message);
+            if ($('#send-from-browser:checked').length) { //browser boost
+                const index = $form.find('#reply-index').val();
+                const boost = $(`div[data-msgid=${index}]`).data();
+                const reply = {
+                    'sender' : $form.find('#sender-name').val(),
+                    'sats'   : $form.find('#sat-amt').val(),
+                    'message': $form.find('#message-text').val(),
+                };
+
+                try {
+                    await sendBrowserReplyBoost(boost, reply);
+                    await $.post(`/api/v1/mark_replied`, { 'index': index });
+                    renderReplyButton(index, true);
+                    setTimeout(() => $dialog.modal('hide'), 1000);
                 }
+                catch (err) {
+                    alert(err.responseText || err);
+                    $('#send-reply').removeClass('loading').prop('disabled', false);
+                }
+            }
+            else { //node boost
+                $.post(`/api/v1/reply`, $form.serialize()).then(result => {
+                    if (!result.success) {
+                        $('#send-reply').removeClass('loading').prop('disabled', false);
+                        return alert(result.message);
+                    }
 
-                // mark boost as replied
-                const { data: { payment_info: { reply_to_idx } } } = result;
-                renderReplyButton(reply_to_idx, true);
+                    // mark boost as replied
+                    const { data: { payment_info: { reply_to_idx } } } = result;
+                    renderReplyButton(reply_to_idx, true);
 
-                setTimeout(() => $dialog.modal('hide'), 1000);
-            }).fail(function (req) {
-                alert(req.responseText)
-                $('#send-reply').removeClass('loading').prop('disabled', false);
-            });
+                    setTimeout(() => $dialog.modal('hide'), 1000);
+                }).fail(req => {
+                    alert(req.responseText);
+                    $('#send-reply').removeClass('loading').prop('disabled', false);
+                });
+            }
         });
+    }
+
+    async function sendBrowserReplyBoost(boost, reply) {
+        const params = {
+            destination: '',
+            amount: reply.sats,
+            customRecords: {
+                '7629169': JSON.stringify({
+                    'action': 'boost',
+                    'app_name': 'Helipad',
+                    'app_version': $('#helipad-version').text(),
+                    'podcast': boost.podcast,
+                    'episode': boost.episode,
+                    'reply_address': nodeInfo.node_pubkey,
+                    'reply_custom_key': null,
+                    'reply_custom_value': null,
+                    'sender_name': reply.sender || 'Anonymous',
+                    'message':  reply.message || '',
+                    'value_msat': reply.sats * 1000,
+                    'value_msat_total': reply.sats * 1000,
+                }),
+            },
+        };
+
+        if (boost.replyAddress.indexOf('@') !== -1) { // keysend address
+            const keysendInfo = await resolveKeysendAddress(boost.replyAddress);
+
+            params.destination = keysendInfo.pubkey;
+
+            for (let data of keysendInfo.customData) {
+                params.customRecords[data.customKey] = data.customValue;
+            }
+        }
+        else { // normal pubkey/custom value
+            params.destination = boost.replyAddress;
+
+            if (boost.replyCustomKey && boost.replyCustomValue) {
+                params.customRecords[boost.replyCustomKey] = boost.replyCustomValue;
+            }
+        }
+
+        await window.webln.enable();
+
+        return await window.webln.keysend(params);
     }
 
     function renderReplyButton(index, replySent) {
@@ -665,6 +765,7 @@ $(document).ready(function () {
         renderReplyModal();
         //Get starting balance and index number
         getBalance(true);
+        await getNodeInfo();
         await getAppList();
         await getNumerologyList();
         renderBoostInfo();

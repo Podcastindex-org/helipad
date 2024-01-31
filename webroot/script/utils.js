@@ -186,3 +186,30 @@ const ucWords = (text) => {
         return word.substr(0, 1).toUpperCase() + word.substr(1);
     }).join(" ");
 }
+
+// Resolve a keysend address (e.g. somebody@getalby.com) into a pubkey and custom key/value
+const resolveKeysendAddress = async (address) => {
+    if (!address.match(/^[A-Za-z0-9-_+\.]+\@[A-Za-z0-9-_+\.]+$/)) {
+        return; // not a keysend address
+    }
+
+    const [username, hostname] = address.split('@');
+    let keysendInfo;
+
+    try {
+        keysendInfo = await $.get(`https://${hostname}/.well-known/keysend/${username}`);
+    }
+    catch (err) {
+        if (err.status == 404) {
+            throw new Error(`Keysend address does not exist: ${address}`);
+        }
+
+        throw new Error(`Error connecting to server to lookup keysend address`);
+    }
+
+    if (keysendInfo.status == 'ERROR') {
+        throw new Error(`Error resolving keysend address ${address}: ${keysendInfo.reason}`);
+    }
+
+    return keysendInfo;
+}

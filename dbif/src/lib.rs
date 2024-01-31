@@ -6,6 +6,13 @@ use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct NodeInfoRecord {
+    pub lnd_alias: String,
+    pub node_pubkey: String,
+    pub node_version: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct BoostRecord {
     pub index: u64,
     pub time: i64,
@@ -246,6 +253,71 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
     Ok(true)
 }
 
+pub fn get_node_info_from_db(filepath: &String) -> Result<NodeInfoRecord, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    //Prepare and execute the query
+    let mut stmt = conn.prepare("
+        SELECT
+            lnd_alias,
+            node_pubkey,
+            node_version
+        FROM
+            node_info
+        WHERE
+            idx = 1
+    ")?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok(NodeInfoRecord {
+            lnd_alias: row.get(0)?,
+            node_pubkey: row.get(1)?,
+            node_version: row.get(2)?,
+        })
+    })?;
+
+    // Return first record if found
+    for row in rows {
+        return Ok(row?);
+    }
+
+    // else return empty record
+    Ok(NodeInfoRecord {
+        lnd_alias: "".into(),
+        node_pubkey: "".into(),
+        node_version: "".into(),
+    })
+}
+
+//Add an invoice to the database
+pub fn add_node_info_to_db(filepath: &String, info: NodeInfoRecord) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    match conn.execute("
+        INSERT INTO node_info
+            (idx, lnd_alias, node_pubkey, node_version)
+        VALUES
+            (1, ?1, ?2, ?3)
+        ON CONFLICT(idx) DO UPDATE SET
+            lnd_alias = excluded.lnd_alias,
+            node_pubkey = excluded.node_pubkey,
+            node_version = excluded.node_version
+        ",
+        params![
+            info.lnd_alias,
+            info.node_pubkey,
+            info.node_version,
+        ]
+    ) {
+        Ok(_) => {
+            Ok(true)
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError("Failed to add node info".into())))
+        }
+    }
+}
 
 //Add an invoice to the database
 pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, Box<dyn Error>> {
@@ -278,6 +350,12 @@ pub fn add_invoice_to_db(filepath: &String, boost: BoostRecord) -> Result<bool, 
     }
 }
 
+//Set the boost as replied to
+pub fn mark_boost_as_replied(filepath: &String, index: u64) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+    conn.execute("UPDATE boosts SET reply_sent = 1 WHERE idx = ?1", params![index])?;
+    Ok(true)
+}
 
 //Get all of the boosts from the database
 pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
@@ -724,7 +802,7 @@ pub fn add_payment_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool,
     )?;
 
     if let Some(reply_to_idx) = payment_info.reply_to_idx {
-        conn.execute("UPDATE boosts SET reply_sent = 1 WHERE idx = ?1", params![reply_to_idx])?;
+        mark_boost_as_replied(filepath, reply_to_idx)?;
     }
 
     Ok(true)
