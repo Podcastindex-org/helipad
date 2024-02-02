@@ -918,6 +918,12 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
         url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
     }).unwrap_or_else(HashMap::new);
 
+    //Parameter - list (String)
+    let list = match params.get("list") {
+        Some(name) => name,
+        None => "boosts",
+    };
+
     //Parameter - index (unsigned int)
     let index: u64;
     match params.get("index") {
@@ -1000,8 +1006,20 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
         None => {}
     };
 
-    //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, false) {
+    //Get the boosts/streams/sent from db for returning
+    let results;
+
+    if list == "streams" {
+        results = dbif::get_streams_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, false);
+    }
+    else if list == "sent" {
+        results = dbif::get_payments_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, false);
+    }
+    else { // boosts
+        results = dbif::get_boosts_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, false);
+    }
+
+    match results {
         Ok(boosts) => {
             let mut csv = String::new();
 
@@ -1060,7 +1078,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 .status(StatusCode::OK)
                 .header("Access-Control-Allow-Origin", "*")
                 .header("Content-type", "text/plain; charset=utf-8")
-                .header("Content-Disposition", "attachment; filename=\"boosts.csv\"")
+                .header("Content-Disposition", format!("attachment; filename=\"{}.csv\"", list))
                 .body(format!("{}", csv).into())
                 .unwrap();
         }

@@ -292,19 +292,28 @@ $(document).ready(function () {
                 }
                 $('div.nodata span.invindex').text(currentInvoiceIndex);
 
-                var bcount = $('div.outgoing_msg:first').data('msgid') - $('div.outgoing_msg:last').data('msgid');
+                let list = config.pluralName;
+                if (config.pluralName == 'sent boosts') {
+                    list = 'sent';
+                }
+
+                let bcount = $('div.outgoing_msg').length;
                 if (typeof bcount !== "number") {
                     bcount = 9999;
                 }
 
                 //Update the csv export link
-                var csvindex = $('div.outgoing_msg:first').data('msgid');
+                let csvindex = $('div.outgoing_msg:first').data('msgid');
                 if (typeof csvindex !== "number") {
                     csvindex = currentInvoiceIndex;
                 }
 
-                var endex = csvindex - bcount;
-                $('span.csv a').attr('href', '/csv?index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
+                let endex = $('div.outgoing_msg:last').data('msgid');
+                if (typeof csvindex !== "number") {
+                    endex = 1;
+                }
+
+                $('span.csv a').attr('href', '/csv?list=' + list + '&index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
 
                 //Load more link
                 if ($('div.outgoing_msg').length > 0 && $('div.loadmore').length == 0 && (boostIndex > 1 || noIndex)) {
