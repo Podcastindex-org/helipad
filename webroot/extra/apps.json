@@ -90,5 +90,17 @@
     "helipad": {
         "icon": "podcastindex",
         "url": "https://podcastindex.org/"
+    },
+    "truefans": {
+        "icon": "truefans",
+        "url": "https://truefans.fm"
+    },
+    "podcastguru": {
+        "icon": "podcastguru",
+        "url": "https://podcastguru.io"
+    },
+    "ln beats": {
+        "icon": "lnbeats",
+        "url": "https://lnbeats.com"
     }
 }
