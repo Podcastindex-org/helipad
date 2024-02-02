@@ -366,6 +366,27 @@ pub async fn asset(ctx: Context) -> Response {
     }
 }
 
+//API - give back node info
+pub async fn api_v1_node_info_options(_ctx: Context) -> Response {
+    return hyper::Response::builder()
+        .status(StatusCode::from_u16(204).unwrap())
+        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        .body(format!("").into())
+        .unwrap();
+}
+
+pub async fn api_v1_node_info(_ctx: Context) -> Response {
+    match dbif::get_node_info_from_db(&_ctx.helipad_config.database_file_path) {
+        Ok(info) => {
+            json_response(info)
+        }
+        Err(e) => {
+            eprintln!("** Error getting node info: {}.\n", e);
+            server_error_response("** Error getting node info.".into())
+        }
+    }
+}
+
 //API - give back the node balance
 pub async fn api_v1_balance_options(_ctx: Context) -> Response {
     return hyper::Response::builder()
@@ -858,6 +879,35 @@ pub async fn api_v1_reply(_ctx: Context) -> Response {
     json_response(json!({
         "success": true,
         "data": boost,
+    }))
+}
+
+pub async fn api_v1_mark_replied(_ctx: Context) -> Response {
+    let post_vars = get_post_params(_ctx.req).await;
+
+    //Parameter - index (unsigned int)
+    let index = match post_vars.get("index") {
+        Some(index) => match index.parse::<u64>() {
+            Ok(index) => index,
+            Err(_) => {
+                eprintln!("** Error parsing reply params: 'index' param is not a number.\n");
+                return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
+            }
+        },
+        None => {
+            return client_error_response("** No index specified.".to_string());
+        },
+    };
+
+    let result = dbif::mark_boost_as_replied(&_ctx.helipad_config.database_file_path, index);
+
+    if let Err(e) = result {
+        eprintln!("** Error marking boost as replied: {}", e);
+        return server_error_response(format!("** Error marking boost as replied: {}", e))
+    }
+
+    json_response(json!({
+        "success": true,
     }))
 }
 
