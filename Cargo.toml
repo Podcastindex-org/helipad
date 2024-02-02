@@ -1,6 +1,6 @@
 [package]
 name = "helipad"
-version = "0.1.10"
+version = "0.1.11-beta2"
 edition = "2018"
 build = "build.rs"
 
