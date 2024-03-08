@@ -13,7 +13,7 @@ use std::str;
 use voca_rs::*;
 use handlebars::Handlebars;
 use serde_json::json;
-use chrono::{Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use dbif::BoostRecord;
 
 use serde::{Deserialize, Serialize};
@@ -124,7 +124,7 @@ pub fn verify_jwt_cookie(req: &Request<Body>, secret: &String) -> bool {
 pub fn set_jwt_cookie(resp: &mut Response, secret: &String) {
     let iat = Utc::now().timestamp();
     let exp = Utc::now()
-        .checked_add_signed(Duration::hours(1))
+        .checked_add_signed(TimeDelta::try_hours(1).unwrap())
         .expect("invalid timestamp")
         .timestamp();
 
@@ -1030,7 +1030,7 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
             let mut count: u64 = 1;
             for boost in boosts {
                 //Parse out a friendly date
-                let dt = NaiveDateTime::from_timestamp(boost.time, 0);
+                let dt = DateTime::from_timestamp(boost.time, 0).expect(&format!("Unable to parse boost time: {}", boost.time));
                 let boost_time = dt.format("%e %b %Y %H:%M:%S UTC").to_string();
 
                 //Translate to sats

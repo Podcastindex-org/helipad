@@ -28,7 +28,7 @@ lnd-rs = { path = "lnd-rs" }
 voca_rs = "1.14.0"
 configure_me = "0.4.0"
 handlebars = "4.2.1"
-chrono = "0.4.19"
+chrono = "0.4.35"
 reqwest = "0.11.20"
 lru = "0.11.1"
 rand = "0.8.5"
