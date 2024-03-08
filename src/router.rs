@@ -61,6 +61,13 @@ impl Router {
             .add(path, handler)
     }
 
+    pub fn delete(&mut self, path: &str, handler: Box<dyn Handler>) {
+        self.method_map
+            .entry(Method::DELETE)
+            .or_insert_with(InternalRouter::new)
+            .add(path, handler)
+    }
+
     pub fn route(&self, path: &str, method: &Method) -> RouterMatch<'_> {
         if let Some(Match { handler, params }) = self
             .method_map

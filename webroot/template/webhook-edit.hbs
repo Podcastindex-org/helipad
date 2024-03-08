@@ -1,0 +1,54 @@
+<form 
+  {{#if webhook.index}}
+  hx-post="/api/v1/webhooks/{{ webhook.index }}"
+  {{else}}
+  hx-post="/api/v1/webhooks/add"
+  {{/if}}
+  hx-target="#webhooks"
+  hx-swap="innerHTML"
+  hx-on::send-error="alert('Unable to contact Helipad')"
+  hx-on::response-error="alert(`${event.detail.error}\n${event.detail.xhr.responseText}`)"
+  hx-on::after-request="(event.detail.xhr.status == 200) && $(this).closest('.modal').modal('hide')"
+>
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header">
+      {{#if webhook.index}}
+        <h5 class="modal-title">Edit Webhook</h5>
+      {{else}}
+        <h5 class="modal-title">Add Webhook</h5>
+      {{/if}}
+      <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="edit-wh-url">URL</label>
+        <input name="url" type="text" class="form-control" id="edit-wh-url" value="{{ webhook.url }}">
+      </div>
+      <div class="form-group">
+        <label for="edit-wh-auth">Authorization token</label>
+        <input name="token" type="text" class="form-control" id="edit-wh-auth" aria-describedby="edit-wh-auth-help" value="{{ webhook.token }}">
+        <small id="edit-wh-auth-help" class="form-text text-muted">This will be passed in the <em>Authorization: Bearer</em> header to your URL.</small>
+      </div>
+      <div class="form-group form-check">
+        <input
+          name="enabled"
+          type="checkbox"
+          class="form-check-input"
+          id="edit-wh-enabled"
+          value="true"
+          {{#unless webhook}} checked{{/unless}}
+          {{#if webhook.enabled}} checked{{/if}}
+        >
+        <label class="form-check-label" for="edit-wh-enabled">Enabled</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </div>
+  </div>
+</div>
+</form>

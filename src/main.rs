@@ -15,6 +15,11 @@ use drop_root::set_user_group;
 use std::path::Path;
 use rand::{distributions::Alphanumeric, Rng}; // 0.8
 
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
+use reqwest::redirect::Policy;
+
+use chrono::Utc;
+
 #[macro_use]
 extern crate configure_me;
 
@@ -238,6 +243,7 @@ async fn main() {
     router.post("/login", Box::new(handler::login));
     router.get("/streams", Box::new(handler::streams));
     router.get("/sent", Box::new(handler::sent));
+    router.get("/settings", Box::new(handler::settings));
     router.get("/pew.mp3", Box::new(handler::pewmp3));
     router.get("/favicon.ico", Box::new(handler::favicon));
     router.get("/apps.json", Box::new(handler::apps_json));
@@ -266,6 +272,10 @@ async fn main() {
     router.options("/api/v1/reply", Box::new(handler::api_v1_reply_options));
     router.post("/api/v1/reply", Box::new(handler::api_v1_reply));
     router.post("/api/v1/mark_replied", Box::new(handler::api_v1_mark_replied));
+    router.get("/api/v1/webhooks", Box::new(handler::api_v1_webhooks));
+    router.get("/api/v1/webhooks/:idx", Box::new(handler::api_v1_webhook_edit));
+    router.post("/api/v1/webhooks/:idx", Box::new(handler::api_v1_webhook_save));
+    router.delete("/api/v1/webhooks/:idx", Box::new(handler::api_v1_webhook_delete));
     router.get("/csv", Box::new(handler::csv_export_boosts));
 
 
@@ -439,13 +449,16 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
 
                     if let Some(boost) = parsed {
                         //Give some output
-                        println!("Boost: {:#?}", boost);
+                        println!("Boost: {:#?}", &boost);
 
                         //Store in the database
-                        match dbif::add_invoice_to_db(&db_filepath, boost) {
+                        match dbif::add_invoice_to_db(&db_filepath, &boost) {
                             Ok(_) => println!("New invoice added."),
                             Err(e) => eprintln!("Error adding invoice: {:#?}", e)
                         }
+
+                        //Send out webhooks (if any)
+                        send_webhooks(&db_filepath, &boost).await;
                     }
 
                     current_index = invoice.add_index;
@@ -491,6 +504,57 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         //Sleep only if nothing was updated
         if !updated {
             tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
+        }
+    }
+}
+
+async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
+    let webhooks = match dbif::get_webhooks_from_db(&db_filepath, Some(true)) {
+        Ok(wh) => wh,
+        Err(_) => {
+            return;
+        }
+    };
+
+    for webhook in webhooks {
+        let mut headers = HeaderMap::new();
+
+        headers.insert(CONTENT_TYPE, HeaderValue::from_str("application/json").unwrap());
+
+        let user_agent = format!("Helipad/{}", env!("CARGO_PKG_VERSION"));
+        headers.insert(USER_AGENT, HeaderValue::from_str(user_agent.as_str()).unwrap());
+
+        if webhook.token != "" {
+            let token = format!("Bearer {}", webhook.token);
+            headers.insert(AUTHORIZATION, HeaderValue::from_str(&token).unwrap());
+        }
+
+        let client = reqwest::Client::builder()
+            .redirect(Policy::limited(5))
+            .build()
+            .unwrap();
+
+        let json = serde_json::to_string_pretty(&boost).unwrap();
+        let response = client
+            .post(&webhook.url)
+            .body(json)
+            .headers(headers)
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await;
+
+        let timestamp = Utc::now().timestamp();
+        let successful = response.is_ok();
+
+        match response {
+            Ok(resp) => println!("Webhook sent to {}: {}", webhook.url, resp),
+            Err(e) => eprintln!("Webhook Error: {}", e),
+        };
+
+        if let Err(e) = dbif::set_webhook_last_request(&db_filepath, webhook.index, successful, timestamp) {
+            eprintln!("Error setting webhook last request status: {}", e);
         }
     }
 }

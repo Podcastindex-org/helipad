@@ -14,10 +14,11 @@ use voca_rs::*;
 use handlebars::Handlebars;
 use serde_json::json;
 use chrono::{DateTime, TimeDelta, Utc};
-use dbif::BoostRecord;
+use dbif::{BoostRecord, WebhookRecord};
 
 use serde::{Deserialize, Serialize};
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
+use url::Url;
 
 //Constants --------------------------------------------------------------------------------------------------
 const WEBROOT_PATH_HTML: &str = "webroot/html";
@@ -217,6 +218,7 @@ pub async fn login(ctx: Context) -> Response {
 
     return hyper::Response::builder()
         .status(StatusCode::OK)
+        .header("Content-type", "text/html; charset=utf-8")
         .body(format!("{}", doc_rendered).into())
         .unwrap();
 }
@@ -233,6 +235,7 @@ pub async fn home(ctx: Context) -> Response {
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
+        .header("Content-type", "text/html; charset=utf-8")
         .body(format!("{}", doc_rendered).into())
         .unwrap();
 }
@@ -250,6 +253,7 @@ pub async fn streams(ctx: Context) -> Response {
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
+        .header("Content-type", "text/html; charset=utf-8")
         .body(format!("{}", doc_rendered).into())
         .unwrap();
 }
@@ -261,6 +265,19 @@ pub async fn sent(ctx: Context) -> Response {
     let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
     return hyper::Response::builder()
         .status(StatusCode::OK)
+        .header("Content-type", "text/html; charset=utf-8")
+        .body(format!("{}", doc_rendered).into())
+        .unwrap();
+}
+
+//Streams html
+pub async fn settings(ctx: Context) -> Response {
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/html/settings.html").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-type", "text/html; charset=utf-8")
         .body(format!("{}", doc_rendered).into())
         .unwrap();
 }
@@ -909,6 +926,165 @@ pub async fn api_v1_mark_replied(_ctx: Context) -> Response {
     json_response(json!({
         "success": true,
     }))
+}
+
+async fn webhook_list_response(db_filepath: &String) -> Response {
+    let webhooks = match dbif::get_webhooks_from_db(&db_filepath, None) {
+        Ok(wh) => wh,
+        Err(e) => {
+            eprintln!("** Error getting webhooks: {}.\n", e);
+            return hyper::Response::builder()
+                .status(StatusCode::from_u16(500).unwrap())
+                .body(format!("** Error getting webhooks.").into())
+                .unwrap();
+        }
+    };
+
+    println!("** get_webhooks_from_db()");
+
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/template/webhook-list.hbs").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json!({"webhooks": webhooks})).expect("Something went wrong rendering the file");
+
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Content-Type", "text/html; charset=utf-8")
+        .body(doc_rendered.into())
+        .unwrap();
+}
+
+pub async fn api_v1_webhooks(ctx: Context) -> Response {
+    webhook_list_response(&ctx.helipad_config.database_file_path).await
+}
+
+pub async fn api_v1_webhook_edit(ctx: Context) -> Response {
+    let index = match ctx.params.find("idx") {
+        Some("add") => 0,
+        Some(idx) => idx.parse().unwrap(),
+        None => {
+            return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
+        }
+    };
+
+    let mut json = json!({
+        "webhook": {},
+    });
+
+    if index > 0 {
+        let webhook = match dbif::load_webhook_from_db(&ctx.helipad_config.database_file_path, index) {
+            Ok(wh) => wh,
+            Err(e) => {
+                eprintln!("** Error getting webhooks: {}.\n", e);
+                return hyper::Response::builder()
+                    .status(StatusCode::from_u16(500).unwrap())
+                    .body(format!("** Error getting webhooks.").into())
+                    .unwrap();
+            }
+        };
+
+        json = json!({
+            "webhook": webhook,
+        });
+    }
+
+    println!("** load_webhook_from_db({})", index);
+
+    let reg = Handlebars::new();
+    let doc = fs::read_to_string("webroot/template/webhook-edit.hbs").expect("Something went wrong reading the file.");
+    let doc_rendered = reg.render_template(&doc, &json).expect("Something went wrong rendering the file");
+
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .header("Access-Control-Allow-Origin", "*")
+        .header("Content-Type", "text/html; charset=utf-8")
+        .body(doc_rendered.into())
+        .unwrap();
+}
+
+pub async fn api_v1_webhook_save(ctx: Context) -> Response {
+    let db_filepath = ctx.helipad_config.database_file_path;
+
+    let index = match ctx.params.find("idx") {
+        Some("add") => 0,
+        Some(idx) => idx.parse().unwrap(),
+        None => {
+            return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
+        }
+    };
+
+    let post_vars = get_post_params(ctx.req).await;
+    let url = post_vars.get("url");
+
+    if url.is_none() {
+        return client_error_response("** url missing.".into());
+    }
+
+    if let Err(e) = Url::parse(url.unwrap()) {
+        return client_error_response(format!("** bad value for url: {}", e).into());
+    }
+
+    let token = post_vars.get("token");
+
+    if token.is_none() {
+        return client_error_response("** bad value for token.".into());
+    }
+
+    let enabled = post_vars.get("enabled");
+
+    let enabled = match enabled {
+        None => false,
+        Some(enable) => match enable.parse() {
+            Ok(parsed) => parsed,
+            Err(e) => {
+                 return client_error_response(format!("** bad value for enabled: {}", e).into());
+            }
+        }
+    };
+
+    let webhook = WebhookRecord {
+        index: index,
+        url: url.unwrap().to_string(),
+        token: token.unwrap().to_string(),
+        enabled: enabled,
+        request_successful: None,
+        request_timestamp: None,
+        request_datetime: None,
+    };
+
+    let idx = match dbif::save_webhook_to_db(&db_filepath, &webhook) {
+        Ok(idx) => idx,
+        Err(e) => {
+            eprintln!("** Error saving webhook: {}.\n", e);
+            return server_error_response("** Error saving webhook.".into());
+        }
+    };
+
+    println!("** save_webhook_from_db({})", idx);
+
+    webhook_list_response(&db_filepath).await
+}
+
+pub async fn api_v1_webhook_delete(ctx: Context) -> Response {
+    let index = match ctx.params.find("idx") {
+        Some(idx) => idx.parse().unwrap(),
+        None => {
+            return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
+        }
+    };
+
+    if let Err(e) = dbif::delete_webhook_from_db(&ctx.helipad_config.database_file_path, index) {
+        eprintln!("** Error deleting webhook: {}.\n", e);
+        return server_error_response("** Error deleting webhook.".into());
+    }
+
+    println!("** delete_webhook_from_db({})", index);
+
+    return hyper::Response::builder()
+        .status(StatusCode::OK)
+        .header("Access-Control-Allow-Origin", "*")
+        .body("".into())
+        .unwrap();
 }
 
 //CSV export - max is 200 for now so the csv content can be built in memory
