@@ -14,7 +14,7 @@ use axum_extra::{
 use chrono::{DateTime, TimeDelta, Utc};
 use crate::{AppState, lightning, podcastindex};
 use dbif::{BoostRecord, WebhookRecord};
-use handlebars::Handlebars;
+use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -674,8 +674,20 @@ async fn webhook_list_response(db_filepath: &String) -> Response {
 
     println!("** get_webhooks_from_db()");
 
-    let reg = Handlebars::new();
+    let mut reg = Handlebars::new();
     let doc = fs::read_to_string("webroot/template/webhook-list.hbs").expect("Something went wrong reading the file.");
+
+    reg.register_helper("timestamp", Box::new(|h: &handlebars::Helper, _: &handlebars::Handlebars, _: &handlebars::Context, _: &mut handlebars::RenderContext, out: &mut dyn handlebars::Output| -> handlebars::HelperResult {
+        let param = h.param(0).unwrap();
+        let timestamp = param.value().render().parse::<i64>().unwrap();
+
+        if let Some(ts) = DateTime::from_timestamp(timestamp, 0) {
+            let _ = out.write(&ts.to_rfc3339());
+        }
+
+        Ok(())
+    }));
+
     let doc_rendered = reg.render_template(&doc, &json!({"webhooks": webhooks})).expect("Something went wrong rendering the file");
 
     Html(doc_rendered).into_response()
@@ -775,7 +787,6 @@ pub async fn api_v1_webhook_save(
         enabled: enabled,
         request_successful: None,
         request_timestamp: None,
-        request_datetime: None,
     };
 
     let idx = match dbif::save_webhook_to_db(&db_filepath, &webhook) {

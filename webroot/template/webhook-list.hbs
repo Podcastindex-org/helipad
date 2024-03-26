@@ -12,11 +12,11 @@
   <tr class="webhook" data-index="{{ index }}" hx-on::oob-after-swap="alert('swapped')">
     <td>{{ url }}</td>
     <td class="d-none d-md-table-cell">
-      {{#unless request_datetime }}--{{/unless}}
-      {{#if request_datetime }}
+      {{#unless request_timestamp }}--{{/unless}}
+      {{#if request_timestamp }}
           {{#if request_successful }}✔{{/if}}
           {{#unless request_successful }}❌{{/unless}}
-          {{ request_datetime }}
+          {{timestamp request_timestamp}}
       {{/if}}
     </td>
     <td class="d-none d-sm-table-cell">

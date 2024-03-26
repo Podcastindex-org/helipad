@@ -67,13 +67,15 @@ pub struct WebhookRecord {
     pub enabled: bool,
     pub request_successful: Option<bool>,
     pub request_timestamp: Option<i64>,
-    pub request_datetime: Option<String>,
 }
 
 impl WebhookRecord {
     pub fn get_request_timestamp_string(&self) -> Option<String> {
         match self.request_timestamp {
-            Some(timestamp) => Some(DateTime::from_timestamp(timestamp, 0).unwrap().to_rfc3339()),
+            Some(timestamp) => match DateTime::from_timestamp(timestamp, 0) {
+                Some(ts) => Some(ts.to_rfc3339()),
+                None => None,
+            },
             None => None,
         }
     }
@@ -877,14 +879,6 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
 
     let mut stmt = conn.prepare(sqltxt.as_str())?;
     let rows = stmt.query_map([], |row| {
-        let datetime = match row.get(5).ok() {
-            Some(ts) => match DateTime::from_timestamp(ts, 0) {
-                Some(ts) => Some(ts.to_rfc3339()),
-                None => None,
-            },
-            None => None,
-        };
-
         Ok(WebhookRecord {
             index: row.get(0)?,
             url: row.get(1)?,
@@ -892,7 +886,6 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             enabled: row.get(3)?,
             request_successful: row.get(4).ok(),
             request_timestamp: row.get(5).ok(),
-            request_datetime: datetime,
         })
     }).unwrap();
 
@@ -922,12 +915,6 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
     )?;
 
     let webhook = stmt.query_row(&[(":idx", index.to_string().as_str())], |row| {
-        let timestamp: i64 = row.get(5)?;
-        let datetime = match DateTime::from_timestamp(timestamp, 0) {
-            Some(ts) => Some(ts.to_rfc3339()),
-            None => None
-        };
-
         Ok(WebhookRecord {
             index: row.get(0)?,
             url: row.get(1)?,
@@ -935,7 +922,6 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             enabled: row.get(3)?,
             request_successful: row.get(4).ok(),
             request_timestamp: row.get(5).ok(),
-            request_datetime: datetime,
         })
     })?;
 
