@@ -1,8 +1,8 @@
 <form 
   {{#if webhook.index}}
-  hx-post="/api/v1/webhooks/{{ webhook.index }}"
+  hx-post="/settings/webhooks/{{ webhook.index }}"
   {{else}}
-  hx-post="/api/v1/webhooks/add"
+  hx-post="/settings/webhooks/add"
   {{/if}}
   hx-target="#webhooks"
   hx-swap="innerHTML"

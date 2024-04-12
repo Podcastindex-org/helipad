@@ -230,6 +230,11 @@ async fn main() {
         .route("/apps.json", get(handler::apps_json))
         .route("/numerology.json", get(handler::numerology_json))
 
+        .route("/settings/webhooks", get(handler::webhook_settings_list))
+        .route("/settings/webhooks/:idx", get(handler::webhook_settings_load))
+        .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
+        .route("/settings/webhooks/:idx", delete(handler::webhook_settings_delete))
+
         //Api
         .route("/api/v1/node_info", options(handler::api_v1_node_info_options))
         .route("/api/v1/node_info", get(handler::api_v1_node_info))
@@ -255,11 +260,6 @@ async fn main() {
         .route("/api/v1/reply", options(handler::api_v1_reply_options))
         .route("/api/v1/reply", post(handler::api_v1_reply))
         .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
-
-        .route("/api/v1/webhooks", get(handler::api_v1_webhooks))
-        .route("/api/v1/webhooks/:idx", get(handler::api_v1_webhook_edit))
-        .route("/api/v1/webhooks/:idx", post(handler::api_v1_webhook_save))
-        .route("/api/v1/webhooks/:idx", delete(handler::api_v1_webhook_delete))
 
         .route("/csv", get(handler::csv_export_boosts))
 

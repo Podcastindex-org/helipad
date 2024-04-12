@@ -693,7 +693,7 @@ async fn webhook_list_response(db_filepath: &String) -> Response {
     Html(doc_rendered).into_response()
 }
 
-pub async fn api_v1_webhooks(State(state): State<AppState>) -> Response {
+pub async fn webhook_settings_list(State(state): State<AppState>) -> Response {
     webhook_list_response(&state.helipad_config.database_file_path).await
 }
 
@@ -713,7 +713,7 @@ pub struct WebhookEditResponse {
     webhook: Option<WebhookRecord>,
 }
 
-pub async fn api_v1_webhook_edit(
+pub async fn webhook_settings_load(
     Path(idx): Path<String>,
     State(state): State<AppState>
 ) -> Response {
@@ -759,7 +759,7 @@ pub struct WebhookSaveForm {
     enabled: Option<bool>,
 }
 
-pub async fn api_v1_webhook_save(
+pub async fn webhook_settings_save(
     State(state): State<AppState>,
     Path(idx): Path<String>,
     Form(form): Form<WebhookSaveForm>,
@@ -802,7 +802,7 @@ pub async fn api_v1_webhook_save(
     webhook_list_response(&db_filepath).await
 }
 
-pub async fn api_v1_webhook_delete(
+pub async fn webhook_settings_delete(
     State(state): State<AppState>,
     Path(idx): Path<String>
 ) -> impl IntoResponse {
