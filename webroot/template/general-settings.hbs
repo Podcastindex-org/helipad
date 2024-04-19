@@ -1,0 +1,85 @@
+<form
+  hx-post="/settings/general"
+  hx-encoding="multipart/form-data"
+  hx-target="#general-settings-div"
+  hx-on::send-error="alert('Unable to contact Helipad')"
+  hx-on::response-error="alert(`${event.detail.error}\n${event.detail.xhr.responseText}`)"
+>
+  <div class="form-group">
+    <b>Boosts</b>
+  </div>
+
+  <div class="form-group">
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="show-received-sats" name="show_received_sats" value="true"{{#if settings.show_received_sats}} checked{{/if}}>
+      <label class="form-check-label" for="show-received-sats" style="user-select: none">Show sats received rather than total boost amount</label>
+    </div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="show-split-percentage" name="show_split_percentage" value="true"{{#if settings.show_split_percentage}} checked{{/if}}>
+      <label class="form-check-label" for="show-split-percentage" style="user-select: none">Show split percentage calculated from total boost amount</label>
+    </div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="hide-boosts" name="hide_boosts" value="true"{{#if settings.hide_boosts}} checked{{/if}}>
+      <label class="form-check-label" for="hide-boosts" style="user-select: none">Hide boost amounts below</label>
+      <div class="form-inline mt-2">
+        <input class="form-control form-control-sm bg-dark text-light w-auto" type="number" id="hide-boosts-below" name="hide_boosts_below" placeholder="sats" value="{{ settings.hide_boosts_below }}"{{#if settings.hide_boosts}} required{{/if}}>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <b>Sounds</b>
+  </div>
+  <div class="form-group">
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" id="play-pew" name="play_pew" value="true"{{#if settings.play_pew}} checked{{/if}}>
+      <label class="form-check-label" for="play-pew" style="user-select: none">Play a sound whenever a new boost is received</label>
+    </div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="custom-pew" name="custom_pew" value="true"{{#if settings.custom_pew_file}} checked{{/if}}>
+      <label class="form-check-label" for="custom-pew" style="user-select: none">Use a custom sound for new boosts</label>
+      {{#if settings.custom_pew_file}}
+      <div id="custom-pew-existing" class="border border-light bg-dark px-2 py-1 my-2">
+        <button type="button" class="btn btn-sm btn-danger" onclick="$('#custom-pew-new').removeClass('d-none'),$(this.parentNode).remove()">🗙</button>
+        {{settings.custom_pew_file}}
+        <a href="#" onclick="(new Audio('/sound?name={{ settings.custom_pew_file }}')).play(); return false" class="align-text-top">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-volume-up" viewBox="0 0 16 16">
+            <path d="M11.536 14.01A8.47 8.47 0 0 0 14.026 8a8.47 8.47 0 0 0-2.49-6.01l-.708.707A7.48 7.48 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303z"/>
+            <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.48 5.48 0 0 1 11.025 8a5.48 5.48 0 0 1-1.61 3.89z"/>
+            <path d="M10.025 8a4.5 4.5 0 0 1-1.318 3.182L8 10.475A3.5 3.5 0 0 0 9.025 8c0-.966-.392-1.841-1.025-2.475l.707-.707A4.5 4.5 0 0 1 10.025 8M7 4a.5.5 0 0 0-.812-.39L3.825 5.5H1.5A.5.5 0 0 0 1 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 7 12zM4.312 6.39 6 5.04v5.92L4.312 9.61A.5.5 0 0 0 4 9.5H2v-3h2a.5.5 0 0 0 .312-.11"/>
+          </svg>
+        </a>
+        <input type="hidden" name="custom_pew_existing" value="true">
+      </div>
+      {{/if}}
+      <div id="custom-pew-new" class="{{#if settings.custom_pew_file}}d-none{{/if}}">
+        <input id="custom-pew-file" class="form-control form-control-sm bg-dark text-light mt-2" type="file" name="custom_pew_file" accept=".mp3">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-group mt-4">
+    <button id="save-btn" type="submit" class="btn btn-md btn-success">
+      {{#if saved}}Saved!{{else}}Save Settings{{/if}}
+    </button>
+  </div>
+</form>
+
+<script type="text/javascript">
+document.querySelector('#hide-boosts').addEventListener('change', ev => {
+   const input = document.querySelector('#hide-boosts-below')
+   input.required = ev.target.checked
+   input.value = (ev.target.checked) ? input.value : ''
+})
+document.querySelector('#hide-boosts-below').addEventListener('keyup', ev => {
+    document.querySelector('#hide-boosts').checked = ev.target.value != ''
+})
+document.querySelector('#custom-pew-file').addEventListener('change', ev => {
+   document.querySelector('#custom-pew').checked = true
+})
+{{#if saved}}
+setTimeout(() => {
+  document.querySelector('#save-btn').innerHTML = 'Save Settings';
+}, 3000)
+{{/if}}
+</script>

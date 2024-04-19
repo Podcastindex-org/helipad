@@ -1,0 +1,30 @@
+<form
+  hx-post="/settings/numerology/reset"
+  hx-target="#numerology"
+  hx-swap="innerHTML"
+  hx-on::send-error="alert('Unable to contact Helipad')"
+  hx-on::response-error="alert(`${event.detail.error}\n${event.detail.xhr.responseText}`)"
+  hx-on::after-request="(event.detail.xhr.status == 200) && $(this).closest('.modal').modal('hide') && $('.inbox_msg').prop('scrollTop', 0)"
+>
+<div class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title">Reset numerology to defaults</h5>
+      <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+        <span aria-hidden="true">&times;</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p>
+        This will remove all custom numerologies you've created and reset the list back to defaults.
+        <br><br>
+        Are you sure you want to do this?
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" data-dismiss="modal">No, keep them</button>
+      <button type="submit" class="btn btn-danger">Yes, reset to defaults</button>
+    </div>
+  </div>
+</div>
+</form>

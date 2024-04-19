@@ -413,6 +413,16 @@ ul.navButtons li a[aria-selected="true"] {
     animation: lds-dual-ring 1.5s linear infinite;
 }
 
+#emoji-picker span {
+    cursor: pointer;
+    user-select: none;
+    font-size: 1.75rem;
+}
+
+#emoji-picker span:hover {
+    background-color: #ccc;
+}
+
 /* https://loading.io/css/ */
 .lds-dual-ring {
     display: inline-block;
