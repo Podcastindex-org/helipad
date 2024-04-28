@@ -1,24 +1,20 @@
 //Modules ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
-use hyper::{
-    body::to_bytes,
-    service::{make_service_fn, service_fn},
-    Body, Request, Server,
+use axum::{
+    middleware,
+    routing::{get, post, options, delete},
+    Router,
 };
-use route_recognizer::Params;
-use router::Router;
-use std::sync::Arc;
-use hyper::server::conn::AddrStream;
-use std::env;
-use drop_root::set_user_group;
 
-use std::path::Path;
+use chrono::Utc;
+use drop_root::set_user_group;
 use rand::{distributions::Alphanumeric, Rng}; // 0.8
 
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
 use reqwest::redirect::Policy;
 
-use chrono::Utc;
+use std::env;
+use std::path::Path;
 
 #[macro_use]
 extern crate configure_me;
@@ -26,14 +22,9 @@ extern crate configure_me;
 
 //Globals ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
-mod cookies;
 mod handler;
-mod router;
 mod lightning;
 mod podcastindex;
-
-type Response = hyper::Response<hyper::Body>;
-type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
@@ -49,8 +40,7 @@ const REMOTE_GUID_CACHE_SIZE: usize = 20;
 //------------------------------------------------------------------------------------------------------------
 #[derive(Clone, Debug)]
 pub struct AppState {
-    pub state_thing: String,
-    pub remote_ip: String,
+    pub helipad_config: HelipadConfig,
     pub version: String,
 }
 
@@ -63,16 +53,6 @@ pub struct HelipadConfig {
     pub node_address: String,
     pub password: String,
     pub secret: String,
-}
-
-#[derive(Debug)]
-pub struct Context {
-    pub state: AppState,
-    pub req: Request<Body>,
-    pub path: String,
-    pub params: Params,
-    pub helipad_config: HelipadConfig,
-    body_bytes: Option<hyper::body::Bytes>,
 }
 
 //Configure_me
@@ -233,74 +213,76 @@ async fn main() {
     //get the latest invoices and store them in the database.
     tokio::spawn(lnd_poller(helipad_config.clone()));
 
+    //App State
+    let state = AppState {
+        helipad_config: helipad_config.clone(),
+        version: version.to_string(),
+    };
+
     //Router
-    let some_state = "state".to_string();
-    let mut router: Router = Router::new();
+    let app = Router::new()
+        .route("/", get(handler::home))
+        .route("/streams", get(handler::streams))
+        .route("/sent", get(handler::sent))
+        .route("/settings", get(handler::settings))
+        .route("/pew.mp3", get(handler::pewmp3))
+        .route("/favicon.ico", get(handler::favicon))
+        .route("/apps.json", get(handler::apps_json))
+        .route("/numerology.json", get(handler::numerology_json))
 
-    //Base
-    router.get("/", Box::new(handler::home));
-    router.get("/login", Box::new(handler::login));
-    router.post("/login", Box::new(handler::login));
-    router.get("/streams", Box::new(handler::streams));
-    router.get("/sent", Box::new(handler::sent));
-    router.get("/settings", Box::new(handler::settings));
-    router.get("/pew.mp3", Box::new(handler::pewmp3));
-    router.get("/favicon.ico", Box::new(handler::favicon));
-    router.get("/apps.json", Box::new(handler::apps_json));
-    router.get("/numerology.json", Box::new(handler::numerology_json));
-    //Assets
-    router.get("/image", Box::new(handler::asset));
-    router.get("/html", Box::new(handler::asset));
-    router.get("/style", Box::new(handler::asset));
-    router.get("/script", Box::new(handler::asset));
-    router.get("/extra", Box::new(handler::asset));
-    //Api
-    router.options("/api/v1/node_info", Box::new(handler::api_v1_node_info_options));
-    router.get("/api/v1/node_info", Box::new(handler::api_v1_node_info));
-    router.options("/api/v1/boosts", Box::new(handler::api_v1_boosts_options));
-    router.get("/api/v1/boosts", Box::new(handler::api_v1_boosts));
-    router.options("/api/v1/balance", Box::new(handler::api_v1_balance_options));
-    router.get("/api/v1/balance", Box::new(handler::api_v1_balance));
-    router.options("/api/v1/streams", Box::new(handler::api_v1_streams_options));
-    router.get("/api/v1/streams", Box::new(handler::api_v1_streams));
-    router.options("/api/v1/sent", Box::new(handler::api_v1_sent_options));
-    router.get("/api/v1/sent", Box::new(handler::api_v1_sent));
-    router.options("/api/v1/index", Box::new(handler::api_v1_index_options));
-    router.get("/api/v1/index", Box::new(handler::api_v1_index));
-    router.options("/api/v1/sent_index", Box::new(handler::api_v1_sent_index_options));
-    router.get("/api/v1/sent_index", Box::new(handler::api_v1_sent_index));
-    router.options("/api/v1/reply", Box::new(handler::api_v1_reply_options));
-    router.post("/api/v1/reply", Box::new(handler::api_v1_reply));
-    router.post("/api/v1/mark_replied", Box::new(handler::api_v1_mark_replied));
-    router.get("/api/v1/webhooks", Box::new(handler::api_v1_webhooks));
-    router.get("/api/v1/webhooks/:idx", Box::new(handler::api_v1_webhook_edit));
-    router.post("/api/v1/webhooks/:idx", Box::new(handler::api_v1_webhook_save));
-    router.delete("/api/v1/webhooks/:idx", Box::new(handler::api_v1_webhook_delete));
-    router.get("/csv", Box::new(handler::csv_export_boosts));
+        //Api
+        .route("/api/v1/node_info", options(handler::api_v1_node_info_options))
+        .route("/api/v1/node_info", get(handler::api_v1_node_info))
 
+        .route("/api/v1/boosts", options(handler::api_v1_boosts_options))
+        .route("/api/v1/boosts", get(handler::api_v1_boosts))
 
-    let shared_router = Arc::new(router);
-    let hp_config = helipad_config.clone();
-    let new_service = make_service_fn(move |conn: &AddrStream| {
-        let app_state = AppState {
-            state_thing: some_state.clone(),
-            remote_ip: conn.remote_addr().to_string().clone(),
-            version: version.to_string(),
-        };
+        .route("/api/v1/balance", options(handler::api_v1_balance_options))
+        .route("/api/v1/balance", get(handler::api_v1_balance))
 
-        let helipad_config = hp_config.clone();
-        let router_capture = shared_router.clone();
-        async {
-            Ok::<_, Error>(service_fn(move |req| {
-                route(router_capture.clone(), req, app_state.clone(), helipad_config.clone())
-            }))
-        }
-    });
+        .route("/api/v1/streams", options(handler::api_v1_streams_options))
+        .route("/api/v1/streams", get(handler::api_v1_streams))
+
+        .route("/api/v1/sent", options(handler::api_v1_sent_options))
+        .route("/api/v1/sent", get(handler::api_v1_sent))
+
+        .route("/api/v1/index", options(handler::api_v1_index_options))
+        .route("/api/v1/index", get(handler::api_v1_index))
+
+        .route("/api/v1/sent_index", options(handler::api_v1_sent_index_options))
+        .route("/api/v1/sent_index", get(handler::api_v1_sent_index))
+
+        .route("/api/v1/reply", options(handler::api_v1_reply_options))
+        .route("/api/v1/reply", post(handler::api_v1_reply))
+        .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
+
+        .route("/api/v1/webhooks", get(handler::api_v1_webhooks))
+        .route("/api/v1/webhooks/:idx", get(handler::api_v1_webhook_edit))
+        .route("/api/v1/webhooks/:idx", post(handler::api_v1_webhook_save))
+        .route("/api/v1/webhooks/:idx", delete(handler::api_v1_webhook_delete))
+
+        .route("/csv", get(handler::csv_export_boosts))
+
+        .route_layer(middleware::from_fn_with_state(state.clone(), handler::auth_middleware))
+
+        // Auth-free routes
+
+        .route("/login", get(handler::login).post(handler::handle_login))
+
+        //Assets
+        .route("/image", get(handler::asset))
+        .route("/html", get(handler::asset))
+        .route("/style", get(handler::asset))
+        .route("/script", get(handler::asset))
+        .route("/extra", get(handler::asset))
+
+        .with_state(state);
 
     let binding = format!("0.0.0.0:{}", &listen_port);
-    let addr = binding.parse().expect("address creation works");
-    let server = Server::bind(&addr).serve(new_service);
-    println!("\nHelipad is listening on http://{}", addr);
+    let listener = tokio::net::TcpListener::bind(&binding).await.unwrap();
+
+    println!("\nHelipad is listening on http://{}", binding);
+    axum::serve(listener, app).await.unwrap();
 
     //If a "run as" user is set in the "HELIPAD_RUN_AS" environment variable, then switch to that user
     //and drop root privileges after we've bound to the low range socket
@@ -318,61 +300,6 @@ async fn main() {
         Err(_) => {
             eprintln!("ALERT: Use the HELIPAD_RUNAS_USER env var to avoid running as root.");
         }
-    }
-
-    let _ = server.await;
-}
-
-async fn route(
-    router: Arc<Router>,
-    req: Request<hyper::Body>,
-    app_state: AppState,
-    helipad_config: HelipadConfig,
-) -> Result<Response, Error> {
-    let found_handler = router.route(req.uri().path(), req.method());
-    let path = req.uri().path().to_owned();
-    let ctx = Context::new(app_state, req, &path, found_handler.params, helipad_config.clone());
-
-    if let Some(resp) = handler::login_required(&ctx) {
-        return Ok(resp);
-    }
-
-    let authed = handler::verify_jwt_cookie(&ctx.req, &helipad_config.secret);
-
-    let mut resp = found_handler
-        .handler
-        .invoke(ctx)
-        .await;
-
-    if authed {
-        handler::set_jwt_cookie(&mut resp, &helipad_config.secret);
-    }
-
-    Ok(resp)
-}
-
-impl Context {
-    pub fn new(state: AppState, reqbody: Request<Body>, path: &str, params: Params, helipad_config: HelipadConfig) -> Context {
-        Context {
-            state: state,
-            req: reqbody,
-            path: path.to_string(),
-            params: params,
-            helipad_config: helipad_config,
-            body_bytes: None,
-        }
-    }
-
-    pub async fn body_json<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error> {
-        let body_bytes = match self.body_bytes {
-            Some(ref v) => v,
-            _ => {
-                let body = to_bytes(self.req.body_mut()).await?;
-                self.body_bytes = Some(body);
-                self.body_bytes.as_ref().expect("body_bytes was set above")
-            }
-        };
-        Ok(serde_json::from_slice(&body_bytes)?)
     }
 }
 

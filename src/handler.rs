@@ -1,23 +1,24 @@
-use crate::{Context, Request, Body, Response};
-use crate::lightning;
-use crate::podcastindex;
-use crate::cookies::CookiesExt;
-use cookie::Cookie;
-use hyper::{Method, StatusCode};
-use hyper::header;
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
-use std::fs;
-use std::str;
-use voca_rs::*;
-use handlebars::Handlebars;
-use serde_json::json;
-use chrono::{DateTime, TimeDelta, Utc};
-use dbif::{BoostRecord, WebhookRecord};
+// use crate::{Context, Request, Body, Response};
+use axum::{
+    body::Body,
+    extract::{Form, Path, Query, Request, State},
+    http::{header, StatusCode, Uri},
+    middleware::Next,
+    response::{Html, Json, Redirect, IntoResponse, Response},
+};
 
-use serde::{Deserialize, Serialize};
+use axum_extra::{
+    extract::cookie::{CookieJar, Cookie},
+};
+
+use chrono::{DateTime, TimeDelta, Utc};
+use crate::{AppState, lightning, podcastindex};
+use dbif::{BoostRecord, WebhookRecord};
+use handlebars::Handlebars;
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::{fs, str};
 use url::Url;
 
 //Constants --------------------------------------------------------------------------------------------------
@@ -28,17 +29,6 @@ const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
 
 
 //Structs and Enums ------------------------------------------------------------------------------------------
-#[derive(Debug)]
-struct HydraError(String);
-
-impl fmt::Display for HydraError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Fatal error: {}", self.0)
-    }
-}
-
-impl Error for HydraError {}
-
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
    // sub: String,
@@ -46,83 +36,38 @@ struct JwtClaims {
    exp: usize,
 }
 
-//Helper functions
-async fn get_post_params(req: Request<Body>) -> HashMap<String, String> {
-    let full_body = hyper::body::to_bytes(req.into_body()).await.unwrap();
-    let body_str = str::from_utf8(&full_body).unwrap();
-    let body_params = url::form_urlencoded::parse(body_str.as_bytes());
-
-    return body_params
-        .map(|(key, value)| (key.into_owned(), value.into_owned()))
-        .collect();
-}
-
-fn client_error_response(message: String) -> Response {
-    text_response(message, StatusCode::BAD_REQUEST)
-}
-
-fn server_error_response(message: String) -> Response {
-    text_response(message, StatusCode::SERVICE_UNAVAILABLE)
-}
-
-fn text_response(message: String, code: StatusCode) -> Response {
-    return hyper::Response::builder()
-        .status(code)
-        .body(message.into())
-        .unwrap();
-}
-
-fn json_response<T: serde::Serialize>(value: T) -> Response {
-    let json_doc_raw = serde_json::to_string_pretty(&value).unwrap();
-    let json_doc: String = strip::strip_tags(&json_doc_raw);
-
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Content-Type", "application/json")
-        .body(format!("{}", json_doc).into())
-        .unwrap();
-}
-
-fn options_response(options: String) -> Response {
-    return hyper::Response::builder()
-        .status(StatusCode::NO_CONTENT)
-        .header("Access-Control-Allow-Methods", options)
-        .body(format!("").into())
-        .unwrap();
-}
-
-pub fn redirect(url: &str) -> Response {
-    hyper::Response::builder()
-        .status(StatusCode::FOUND)
-        .header("Location", url)
-        .body("".into())
-        .unwrap()
-}
-
-pub fn verify_jwt_cookie(req: &Request<Body>, secret: &String) -> bool {
+pub fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> bool {
     if secret.is_empty() {
-        return false;
+        return false; // no secret
     }
 
-    let cookies = req.cookies();
-
-    if let Some(token) = cookies.get("HELIPAD_JWT").map(Cookie::value) {
-        let message = decode::<JwtClaims>(&token, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256));
-
-        if let Ok(token) = message {
-            let timestamp = Utc::now().timestamp() as usize;
-
-            if token.claims.exp > timestamp {
-                return true;
-            }
+    let jwt = match jar.get("HELIPAD_JWT") {
+        Some(jwt) => jwt.value_trimmed(),
+        None => {
+            eprintln!("No HELIPAD_JWT cookie found");
+            return false; // no cookie
         }
+    };
+
+    let token = match decode::<JwtClaims>(&jwt, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256)) {
+        Ok(token) => token,
+        Err(_) => {
+            eprintln!("Unable to decode HELIPAD_JWT cookie");
+            return false;
+        }
+    };
+
+    let timestamp = Utc::now().timestamp() as usize;
+
+    if token.claims.exp <= timestamp {
+        eprintln!("Expired HELIPAD_JWT cookie");
+        return false; // expired
     }
 
-    false
+    true
 }
 
-pub fn set_jwt_cookie(resp: &mut Response, secret: &String) {
+pub fn new_jwt_cookie(jar: CookieJar, secret: String) -> CookieJar {
     let iat = Utc::now().timestamp();
     let exp = Utc::now()
         .checked_add_signed(TimeDelta::try_hours(1).unwrap())
@@ -134,209 +79,180 @@ pub fn set_jwt_cookie(resp: &mut Response, secret: &String) {
         exp: exp as usize,
     };
 
-    let token = encode(&Header::default(), &my_claims, &EncodingKey::from_secret(secret.as_ref())).unwrap();
+    let jwt = encode(&Header::default(), &my_claims, &EncodingKey::from_secret(secret.as_ref())).unwrap();
 
-    // Build a session cookie.
-    let cookie = Cookie::build(("HELIPAD_JWT", token))
+    let cookie = Cookie::build(("HELIPAD_JWT", jwt))
         .path("/")
         .secure(false) // Do not require HTTPS.
         .http_only(true)
         .same_site(cookie::SameSite::Lax)
         .build();
 
-    // Set the changed cookies
-    resp.headers_mut().insert(
-        header::SET_COOKIE,
-        header::HeaderValue::from_str(&cookie.to_string()).unwrap()
-    );
-
+    // Add cookie to jar and return
+    jar.add(cookie)
 }
 
-pub fn login_required(ctx: &Context) -> Option<Response> {
-    if ctx.helipad_config.password.is_empty() {
-        return None;
+pub async fn auth_middleware(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    req: Request,
+    next: Next,
+) -> Response {
+
+    if state.helipad_config.password.is_empty() {
+        return next.run(req).await; // no password required
     }
 
-    let path = ctx.req.uri().path();
+    let path = req.uri().path();
 
     if path == "/login" || path.starts_with("/script") || path.starts_with("/style") {
-        return None;
+        return next.run(req).await; // no password required for certain paths
     }
 
-    if verify_jwt_cookie(&ctx.req, &ctx.helipad_config.secret) {
-        return None;
+    if verify_jwt_cookie(&jar, &state.helipad_config.secret) {
+        // valid jwt: refresh and add to response
+        let resp = next.run(req).await;
+        let cookie = new_jwt_cookie(jar, state.helipad_config.secret);
+        return (cookie, resp).into_response();
     }
 
-    let ctype = match ctx.req.headers().get(header::CONTENT_TYPE) {
+    let ctype = match req.headers().get(header::CONTENT_TYPE) {
         Some(val) => val.to_str().unwrap_or(""),
         None => "",
     };
 
+    // login required
     if ctype.starts_with("application/json") {
-        return Some(text_response("Access forbidden".into(), StatusCode::FORBIDDEN));
+        return (StatusCode::FORBIDDEN, "Access forbidden").into_response(); // json response
     }
 
-    Some(redirect("/login"))
+    Redirect::to("/login").into_response() // redirect to login
 }
 
-//Route handlers ---------------------------------------------------------------------------------------------
-
 //Login html
-pub async fn login(ctx: Context) -> Response {
-    if ctx.helipad_config.password.is_empty() {
-        return redirect("/"); // no password required
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoginForm {
+    password: String,
+}
+
+pub async fn login(State(state): State<AppState>) -> Response {
+    if state.helipad_config.password.is_empty() {
+        return Redirect::to("/").into_response(); // no password required
     }
 
-    let mut message = "";
+    HtmlTemplate("webroot/html/login.html", json!({"message": ""})).into_response()
+}
 
-    if ctx.req.method() == Method::POST {
-        let post_vars = get_post_params(ctx.req).await;
+pub async fn handle_login(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Form(post_vars): Form<LoginForm>,
+) -> Response {
 
-        if let Some(password) = post_vars.get("password") {
-            if ctx.helipad_config.password == *password {
-                let mut resp = redirect("/");
-                set_jwt_cookie(&mut resp, &ctx.helipad_config.secret);
-                return resp;
-            }
-            else {
-                message = "Bad password";
-            }
-        }
-        else {
-            message = "No password provided";
-        }
+    if state.helipad_config.password == *post_vars.password {
+        // valid password: set cookie and redirect
+        let cookie = new_jwt_cookie(jar, state.helipad_config.secret);
+        let resp = Redirect::to("/");
+        return (cookie, resp).into_response();
     }
 
-    let params = json!({
-        "version": ctx.state.version,
-        "message": message,
-    });
+    HtmlTemplate("webroot/html/login.html", json!({
+        "version": state.version,
+        "message": "Bad password",
+    })).into_response()
+}
 
-    let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/login.html").expect("Something went wrong reading the file.");
-    let doc_rendered = reg.render_template(&doc, &params).expect("Something went wrong rendering the file");
 
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "text/html; charset=utf-8")
-        .body(format!("{}", doc_rendered).into())
-        .unwrap();
+struct HtmlTemplate<'a, T>(&'a str, T);
+
+impl<T> IntoResponse for HtmlTemplate<'_, T>
+where
+    T: Serialize,
+{
+    fn into_response(self) -> Response {
+        let reg = Handlebars::new();
+
+        let doc = match fs::read_to_string(self.0) {
+            Ok(doc) => doc,
+            Err(_) => {
+                return (StatusCode::BAD_REQUEST, "Unable to open template file").into_response();
+            }
+        };
+
+        let doc_rendered = match reg.render_template(&doc, &self.1) {
+            Ok(rendered) => rendered,
+            Err(_) => {
+                return (StatusCode::BAD_REQUEST, "Unable to render template").into_response();
+            }
+        };
+
+        Html(doc_rendered).into_response()
+    }
 }
 
 //Homepage html
-pub async fn home(ctx: Context) -> Response {
-    //Get query parameters
-    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
-
-    let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/home.html").expect("Something went wrong reading the file.");
-    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "text/html; charset=utf-8")
-        .body(format!("{}", doc_rendered).into())
-        .unwrap();
+pub async fn home(State(state): State<AppState>) -> Response {
+    HtmlTemplate("webroot/html/home.html", &json!({"version": state.version})).into_response()
 }
 
 //Streams html
-pub async fn streams(ctx: Context) -> Response {
-
-    //Get query parameters
-    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
-
-    let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/streams.html").expect("Something went wrong reading the file.");
-    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "text/html; charset=utf-8")
-        .body(format!("{}", doc_rendered).into())
-        .unwrap();
+pub async fn streams(State(state): State<AppState>) -> Response {
+    HtmlTemplate("webroot/html/streams.html", &json!({"version": state.version})).into_response()
 }
 
 //Sent html
-pub async fn sent(ctx: Context) -> Response {
-    let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/sent.html").expect("Something went wrong reading the file.");
-    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "text/html; charset=utf-8")
-        .body(format!("{}", doc_rendered).into())
-        .unwrap();
+pub async fn sent(State(state): State<AppState>) -> Response {
+    HtmlTemplate("webroot/html/sent.html", &json!({"version": state.version})).into_response()
 }
 
 //Streams html
-pub async fn settings(ctx: Context) -> Response {
-    let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/html/settings.html").expect("Something went wrong reading the file.");
-    let doc_rendered = reg.render_template(&doc, &json!({"version": ctx.state.version})).expect("Something went wrong rendering the file");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "text/html; charset=utf-8")
-        .body(format!("{}", doc_rendered).into())
-        .unwrap();
+pub async fn settings(State(state): State<AppState>) -> Response {
+    HtmlTemplate("webroot/html/settings.html", &json!({"version": state.version})).into_response()
 }
 
 //Pew-pew audio
-pub async fn pewmp3(_ctx: Context) -> Response {
-    let file = fs::read("webroot/extra/pew.mp3").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "audio/mpeg")
-        .body(hyper::Body::from(file))
-        .unwrap();
+pub async fn pewmp3() -> Response {
+    let file = fs::read("webroot/extra/pew.mp3").expect("Unable to read file");
+    ([(header::CONTENT_TYPE, "audio/mpeg")], file).into_response()
 }
 
 //Favicon icon
-pub async fn favicon(_ctx: Context) -> Response {
-    let file = fs::read("webroot/extra/favicon.ico").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-type", "image/x-icon")
-        .body(hyper::Body::from(file))
-        .unwrap();
+pub async fn favicon() -> Response {
+    let file = fs::read("webroot/extra/favicon.ico").expect("Unable to read file");
+    ([(header::CONTENT_TYPE, "image/png")], file).into_response()
 }
 
 //Apps definitions file
-pub async fn apps_json(_ctx: Context) -> Response {
-    let file = fs::read("webroot/extra/apps.json").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(hyper::Body::from(file))
-        .unwrap();
+pub async fn apps_json() -> Response {
+    let file = fs::read("webroot/extra/apps.json").expect("Unable to read file");
+    ([(header::CONTENT_TYPE, "application/json")], file).into_response()
 }
 
 //Numerology definitions file
-pub async fn numerology_json(_ctx: Context) -> Response {
-    let file = fs::read("webroot/extra/numerology.json").expect("Something went wrong reading the file.");
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(hyper::Body::from(file))
-        .unwrap();
+pub async fn numerology_json() -> Response {
+    let file = fs::read("webroot/extra/numerology.json").expect("Unable to read file");
+    ([(header::CONTENT_TYPE, "application/json")], file).into_response()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AssetParams {
+    name: String,
 }
 
 //Serve a web asset by name from webroot subfolder according to it's requested type
-pub async fn asset(ctx: Context) -> Response {
-    //Get query parameters
-    let _params: HashMap<String, String> = ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
-
-    println!("** Request: {:#?}", ctx.req);
-    println!("** Params: {:#?}", _params);
+pub async fn asset(
+    Query(params): Query<AssetParams>,
+    uri: Uri,
+) -> Response {
+    println!("** Uri: {:#?}", uri);
+    println!("** Params: {:#?}", params);
 
     //Set up the response framework
     let file_path;
     let content_type;
     let file_extension;
-    match ctx.path.as_str() {
+
+    match uri.path() {
         "/html" => {
             file_path = WEBROOT_PATH_HTML;
             content_type = "text/html";
@@ -358,466 +274,284 @@ pub async fn asset(ctx: Context) -> Response {
             file_extension = "js";
         }
         _ => {
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** Invalid asset type requested (ex. /images?name=filename.").into())
-                .unwrap();
+            return (StatusCode::BAD_REQUEST, "** Invalid asset type requested (ex. /images?name=filename.").into_response();
         }
     };
 
     //Attempt to serve the file
-    if let Some(filename) = _params.get("name") {
-        let file_to_serve = format!("{}/{}.{}", file_path, filename, file_extension);
-        println!("** Serving file: [{}]", file_to_serve);
-        let file = fs::read(file_to_serve.as_str()).expect("Something went wrong reading the file.");
-        return hyper::Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-type", content_type)
-            .body(hyper::Body::from(file))
-            .unwrap();
-    } else {
-        return hyper::Response::builder()
-            .status(StatusCode::from_u16(500).unwrap())
-            .body(format!("** No file specified.").into())
-            .unwrap();
-    }
+    let file_to_serve = format!("{}/{}.{}", file_path, params.name, file_extension);
+    println!("** Serving file: [{}]", file_to_serve);
+    let file = fs::read(file_to_serve.as_str()).expect("Something went wrong reading the file.");
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, content_type)],
+        Body::from(file)
+    ).into_response()
 }
 
 //API - give back node info
-pub async fn api_v1_node_info_options(_ctx: Context) -> Response {
-    return hyper::Response::builder()
-        .status(StatusCode::from_u16(204).unwrap())
-        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        .body(format!("").into())
-        .unwrap();
+pub async fn api_v1_node_info_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_node_info(_ctx: Context) -> Response {
-    match dbif::get_node_info_from_db(&_ctx.helipad_config.database_file_path) {
+pub async fn api_v1_node_info(State(state): State<AppState>) -> Response {
+    match dbif::get_node_info_from_db(&state.helipad_config.database_file_path) {
         Ok(info) => {
-            json_response(info)
+            Json(info).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting node info: {}.\n", e);
-            server_error_response("** Error getting node info.".into())
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting node info.").into_response()
         }
     }
 }
 
 //API - give back the node balance
-pub async fn api_v1_balance_options(_ctx: Context) -> Response {
-    return hyper::Response::builder()
-        .status(StatusCode::from_u16(204).unwrap())
-        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        .body(format!("").into())
-        .unwrap();
+pub async fn api_v1_balance_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_balance(_ctx: Context) -> Response {
-    //Get query parameters
-    let _params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
+pub async fn api_v1_balance(State(state): State<AppState>) -> Response {
 
     //Get the boosts from db for returning
-    match dbif::get_wallet_balance_from_db(&_ctx.helipad_config.database_file_path) {
+    match dbif::get_wallet_balance_from_db(&state.helipad_config.database_file_path) {
         Ok(balance) => {
-            let json_doc = serde_json::to_string_pretty(&balance).unwrap();
-
-            return hyper::Response::builder()
-                .status(StatusCode::OK)
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-Type", "application/json")
-                .body(format!("{}", json_doc).into())
-                .unwrap();
+            Json(balance).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting balance: {}.\n", e);
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting balance.").into())
-                .unwrap();
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting balance.").into_response()
         }
     }
 }
 
 //API - serve boosts as JSON either in ascending or descending order
-pub async fn api_v1_boosts_options(_ctx: Context) -> Response {
-    return hyper::Response::builder()
-        .status(StatusCode::from_u16(204).unwrap())
-        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        .body(format!("").into())
-        .unwrap();
+pub async fn api_v1_boosts_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_boosts(_ctx: Context) -> Response {
-    //Get query parameters
-    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BoostParams {
+    index: u64,
+    count: u64,
+    old: Option<bool>,
+}
 
-    //Parameter - index (unsigned int)
-    let index: u64;
-    match params.get("index") {
-        Some(supplied_index) => {
-            index = match supplied_index.parse::<u64>() {
-                Ok(index) => {
-                    println!("** Supplied index from call: [{}]", index);
-                    index
-                }
-                Err(_) => {
-                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {
-            eprintln!("** Error getting boosts: 'index' param is not present.\n");
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
-                .unwrap();
-        }
-    };
+impl Default for BoostParams {
+    fn default() -> Self {
+        Self { index: 0, count: 0, old: Some(false) }
+    }
+}
 
-    //Parameter - boostcount (unsigned int)
-    let boostcount: u64;
-    match params.get("count") {
-        Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied boostcount from call: [{}]", boostcount);
-                    boostcount
-                }
-                Err(_) => {
-                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {
-            eprintln!("** Error getting boosts: 'count' param is not present.\n");
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
-                .unwrap();
-        }
-    };
+pub async fn api_v1_boosts(
+    Query(params): Query<BoostParams>,
+    State(state): State<AppState>,
+) -> Response {
+
+    let index = params.index;
+    let boostcount = params.count;
 
     //Was the "old" flag used?
     let mut old = false;
-    match params.get("old") {
+    match params.old {
         Some(_) => old = true,
         None => {}
     };
 
-    //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, true) {
-        Ok(boosts) => {
-            let json_doc = serde_json::to_string_pretty(&boosts).unwrap();
+    println!("** Supplied index from call: [{}]", index);
+    println!("** Supplied boost count from call: [{}]", boostcount);
 
-            return hyper::Response::builder()
-                .status(StatusCode::OK)
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-Type", "application/json")
-                .body(format!("{}", json_doc).into())
-                .unwrap();
+    //Get the boosts from db for returning
+    match dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true) {
+        Ok(boosts) => {
+            Json(boosts).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting boosts: {}.\n", e);
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting boosts.").into())
-                .unwrap();
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts.").into_response()
         }
     }
 }
 
 //API - serve streams as JSON either in ascending or descending order
-pub async fn api_v1_streams_options(_ctx: Context) -> Response {
-    return hyper::Response::builder()
-        .status(StatusCode::from_u16(204).unwrap())
-        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        .body(format!("").into())
-        .unwrap();
+pub async fn api_v1_streams_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_streams(_ctx: Context) -> Response {
-    //Get query parameters
-    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
+pub async fn api_v1_streams(
+    params: Option<Query<BoostParams>>,
+    State(state): State<AppState>
+) -> Response {
+    let Query(params) = params.unwrap_or_default();
 
-    //Parameter - index (unsigned int)
-    let index: u64;
-    match params.get("index") {
-        Some(supplied_index) => {
-            index = match supplied_index.parse::<u64>() {
-                Ok(index) => {
-                    println!("** Supplied index from call: [{}]", index);
-                    index
-                }
-                Err(_) => {
-                    eprintln!("** Error getting streams: 'index' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {
-            eprintln!("** Error getting streams: 'index' param is not present.\n");
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
-                .unwrap();
-        }
-    };
-
-    //Parameter - boostcount (unsigned int)
-    let boostcount: u64;
-    match params.get("count") {
-        Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied stream count from call: [{}]", boostcount);
-                    boostcount
-                }
-                Err(_) => {
-                    eprintln!("** Error getting streams: 'count' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {
-            eprintln!("** Error getting streams: 'count' param is not present.\n");
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
-                .unwrap();
-        }
-    };
+    let index = params.index;
+    let boostcount = params.count;
 
     //Was the "old" flag used?
     let mut old = false;
-    match params.get("old") {
+    match params.old {
         Some(_) => old = true,
         None => {}
     };
 
-    //Get the boosts from db for returning
-    match dbif::get_streams_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, true) {
-        Ok(streams) => {
-            let json_doc_raw = serde_json::to_string_pretty(&streams).unwrap();
-            let json_doc: String = strip::strip_tags(&json_doc_raw);
+    println!("** Supplied index from call: [{}]", index);
+    println!("** Supplied stream count from call: [{}]", boostcount);
 
-            return hyper::Response::builder()
-                .status(StatusCode::OK)
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-Type", "application/json")
-                .body(format!("{}", json_doc).into())
-                .unwrap();
+    //Get the boosts from db for returning
+    match dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true) {
+        Ok(streams) => {
+            Json(streams).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting streams: {}.\n", e);
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting streams.").into())
-                .unwrap();
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting streams.").into_response()
         }
     }
 }
 
 //API - get the current invoice index number
-pub async fn api_v1_index_options(_ctx: Context) -> Response {
-    return hyper::Response::builder()
-        .status(StatusCode::from_u16(204).unwrap())
-        .header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        .body(format!("").into())
-        .unwrap();
+pub async fn api_v1_index_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_index(_ctx: Context) -> Response {
+pub async fn api_v1_index(State(state): State<AppState>) -> Response {
 
     //Get the last known invoice index from the database
-    match dbif::get_last_boost_index_from_db(&_ctx.helipad_config.database_file_path) {
+    match dbif::get_last_boost_index_from_db(&state.helipad_config.database_file_path) {
         Ok(index) => {
             println!("** get_last_boost_index_from_db() -> [{}]", index);
-            let json_doc_raw = serde_json::to_string_pretty(&index).unwrap();
-            let json_doc: String = strip::strip_tags(&json_doc_raw);
-
-            return hyper::Response::builder()
-                .status(StatusCode::OK)
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-Type", "application/json")
-                .body(format!("{}", json_doc).into())
-                .unwrap();
+            Json(index).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting current db index: {}.\n", e);
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting current db index.").into())
-                .unwrap();
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting current db index.").into_response()
         }
-    };
+    }
 }
 
 //API - get the current payment index number
-pub async fn api_v1_sent_index_options(_ctx: Context) -> Response {
-    options_response("GET, OPTIONS".into())
+pub async fn api_v1_sent_index_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_sent_index(_ctx: Context) -> Response {
+pub async fn api_v1_sent_index(State(state): State<AppState>) -> Response {
     //Get the last known payment index from the database
-    match dbif::get_last_payment_index_from_db(&_ctx.helipad_config.database_file_path) {
+    match dbif::get_last_payment_index_from_db(&state.helipad_config.database_file_path) {
         Ok(index) => {
             println!("** get_last_payment_index_from_db() -> [{}]", index);
-            json_response(index)
+            Json(index).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting current db index: {}.\n", e);
-            server_error_response("** Error getting current db index.".into())
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting current sent index.").into_response()
         }
     }
 }
 
 //API - serve sent as JSON either in ascending or descending order
-pub async fn api_v1_sent_options(_ctx: Context) -> Response {
-    options_response("GET, OPTIONS".into())
+pub async fn api_v1_sent_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_sent(_ctx: Context) -> Response {
-    //Get query parameters
-    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
+pub async fn api_v1_sent(
+    params: Option<Query<BoostParams>>,
+    State(state): State<AppState>
+) -> Response {
+    let Query(params) = params.unwrap_or_default();
 
-    //Parameter - index (unsigned int)
-    let index = match params.get("index") {
-        Some(supplied_index) => {
-            match supplied_index.parse::<u64>() {
-                Ok(index) => {
-                    println!("** Supplied index from call: [{}]", index);
-                    index
-                }
-                Err(_) => {
-                    eprintln!("** Error getting sent boosts: 'index' param is not a number.\n");
-                    return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
-                }
-            }
-        }
-        None => {
-            eprintln!("** Error getting sent boosts: 'index' param is not present.\n");
-            return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into())
-        }
+    let index = params.index;
+    let boostcount = params.count;
+
+    //Was the "old" flag used?
+    let mut old = false;
+    match params.old {
+        Some(_) => old = true,
+        None => {}
     };
 
-    //Parameter - boostcount (unsigned int)
-    let boostcount = match params.get("count") {
-        Some(bcount) => {
-            match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied sent boost count from call: [{}]", boostcount);
-                    boostcount
-                }
-                Err(_) => {
-                    eprintln!("** Error getting sent boosts: 'count' param is not a number.\n");
-                    return client_error_response("** 'count' is a required parameter and must be an unsigned integer.".into())
-                }
-            }
-        }
-        None => {
-            eprintln!("** Error getting sent boosts: 'count' param is not present.\n");
-            return client_error_response("** 'count' is a required parameter and must be an unsigned integer.".into())
-        }
-    };
-
-    //Parameter - old (bool)
-    let old = match params.get("old") {
-        Some(old_val) => match old_val.parse::<bool>() {
-            Ok(val) => val,
-            Err(_) => false,
-        },
-        None => false,
-    };
+    println!("** Supplied index from call: [{}]", index);
+    println!("** Supplied sent boost count from call: [{}]", boostcount);
 
     //Get sent boosts from db for returning
-    match dbif::get_payments_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, true) {
+    match dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true) {
         Ok(sent_boosts) => {
-            json_response(sent_boosts)
+            Json(sent_boosts).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting sent boosts: {}.\n", e);
-            server_error_response("** Error getting sent boosts.".into())
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting sent boosts.").into_response()
         }
     }
 }
 
-pub async fn api_v1_reply_options(_ctx: Context) -> Response {
-    options_response("POST, OPTIONS".to_string())
+pub async fn api_v1_reply_options() -> impl IntoResponse {
+    (
+        StatusCode::NO_CONTENT,
+        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
+        ""
+    )
 }
 
-pub async fn api_v1_reply(_ctx: Context) -> Response {
-    let post_vars = get_post_params(_ctx.req).await;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReplyForm {
+    index: u64,
+    sats: u64,
+    sender: Option<String>,
+    message: Option<String>,
+}
 
-    //Parameter - index (unsigned int)
-    let index = match post_vars.get("index") {
-        Some(index) => match index.parse::<u64>() {
-            Ok(index) => index,
-            Err(_) => {
-                eprintln!("** Error parsing reply params: 'index' param is not a number.\n");
-                return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
-            }
-        },
-        None => {
-            return client_error_response("** No index specified.".to_string());
-        },
-    };
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReplyResponse {
+    success: bool,
+    data: BoostRecord,
+}
 
-    //Parameter - sats (unsigned int)
-    let sats = match post_vars.get("sats") {
-        Some(sats) => match sats.parse::<u64>() {
-            Ok(sats) => sats,
-            Err(_) => {
-                eprintln!("** Error parsing reply params: 'sats' param is not a number.\n");
-                return client_error_response("** 'sats' is a required parameter and must be an unsigned integer.".into());
-            }
-        },
-        None => {
-            return client_error_response("** No sats specified.".to_string());
-        },
-    };
+pub async fn api_v1_reply(
+    State(state): State<AppState>,
+    Form(params): Form<ReplyForm>,
+) -> Response {
+    let index = params.index;
+    let sats = params.sats;
+    let sender = params.sender.unwrap_or("Anonymous".into());
+    let message = params.message.unwrap_or("".into());
 
-    let sender = match post_vars.get("sender") {
-        Some(name) => name,
-        None => "Anonymous"
-    };
-
-    let message = match post_vars.get("message") {
-        Some(msg) => msg,
-        None => ""
-    };
-
-    let boosts = match dbif::get_boosts_from_db(&_ctx.helipad_config.database_file_path, index, 1, true, true) {
+    let boosts = match dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, 1, true, true) {
         Ok(items) => items,
         Err(_) => {
-            return server_error_response("** Error finding boost index.".to_string());
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error finding boost index.").into_response();
         }
     };
 
     if boosts.is_empty() {
-        return server_error_response("** Unknown boost index.".to_string());
+        return (StatusCode::INTERNAL_SERVER_ERROR, "** Unknown boost index.").into_response();
     }
 
     let boost = &boosts[0];
@@ -831,16 +565,16 @@ pub async fn api_v1_reply(_ctx: Context) -> Response {
     };
 
     if pub_key == "" {
-        return client_error_response("** No reply_address found in boost".to_string());
+        return (StatusCode::BAD_REQUEST, "** No reply_address found in boost").into_response();
     }
 
     if custom_key.is_some() && custom_value.is_none() {
-        return client_error_response("** No reply_custom_value found in boost".to_string());
+        return (StatusCode::BAD_REQUEST, "** No reply_custom_value found in boost").into_response();
     }
 
     let reply_tlv = json!({
         "app_name": "Helipad",
-        "app_version": _ctx.state.version,
+        "app_version": state.version,
         "podcast": tlv["podcast"].as_str().unwrap_or_default(),
         "episode": tlv["episode"].as_str().unwrap_or_default(),
         "name": tlv["sender_name"].as_str().unwrap_or_default(),
@@ -851,11 +585,11 @@ pub async fn api_v1_reply(_ctx: Context) -> Response {
         "value_msat_total": sats * 1000,
     });
 
-    let helipad_config = _ctx.helipad_config.clone();
+    let helipad_config = state.helipad_config.clone();
     let lightning = match lightning::connect_to_lnd(helipad_config.node_address, helipad_config.cert_path, helipad_config.macaroon_path).await {
         Some(lndconn) => lndconn,
         None => {
-            return server_error_response("** Error connecting to LND.".to_string())
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error connecting to LND.").into_response();
         }
     };
 
@@ -863,7 +597,7 @@ pub async fn api_v1_reply(_ctx: Context) -> Response {
         Ok(payment) => payment,
         Err(e) => {
             eprintln!("** Error sending boost: {}", e);
-            return server_error_response(format!("** Error sending boost: {}", e))
+            return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error sending boost: {}", e)).into_response();
         }
     };
 
@@ -873,7 +607,7 @@ pub async fn api_v1_reply(_ctx: Context) -> Response {
         Some(boost) => boost,
         None => {
             eprintln!("** Error parsing sent boost");
-            return server_error_response("** Error parsing sent boost".into())
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error parsing sent boost").into_response();
         }
     };
 
@@ -888,44 +622,45 @@ pub async fn api_v1_reply(_ctx: Context) -> Response {
     println!("Sent Boost: {:#?}", boost);
 
     //Store in the database
-    match dbif::add_payment_to_db(&_ctx.helipad_config.database_file_path, &boost) {
+    match dbif::add_payment_to_db(&state.helipad_config.database_file_path, &boost) {
         Ok(_) => println!("New sent boost added."),
         Err(e) => eprintln!("Error adding sent boost: {:#?}", e)
     }
 
-    json_response(json!({
-        "success": true,
-        "data": boost,
-    }))
+    Json(ReplyResponse {
+        success: true,
+        data: boost,
+    }).into_response()
 }
 
-pub async fn api_v1_mark_replied(_ctx: Context) -> Response {
-    let post_vars = get_post_params(_ctx.req).await;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MarkRepliedForm {
+    index: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MarkRepliedResponse {
+    success: bool,
+}
+
+pub async fn api_v1_mark_replied(
+    State(state): State<AppState>,
+    Form(params): Form<MarkRepliedForm>,
+) -> Response {
 
     //Parameter - index (unsigned int)
-    let index = match post_vars.get("index") {
-        Some(index) => match index.parse::<u64>() {
-            Ok(index) => index,
-            Err(_) => {
-                eprintln!("** Error parsing reply params: 'index' param is not a number.\n");
-                return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
-            }
-        },
-        None => {
-            return client_error_response("** No index specified.".to_string());
-        },
-    };
+    let index = params.index;
 
-    let result = dbif::mark_boost_as_replied(&_ctx.helipad_config.database_file_path, index);
+    let result = dbif::mark_boost_as_replied(&state.helipad_config.database_file_path, index);
 
     if let Err(e) = result {
         eprintln!("** Error marking boost as replied: {}", e);
-        return server_error_response(format!("** Error marking boost as replied: {}", e))
+        return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error marking boost as replied: {}", e)).into_response();
     }
 
-    json_response(json!({
-        "success": true,
-    }))
+    Json(MarkRepliedResponse {
+        success: true,
+    }).into_response()
 }
 
 async fn webhook_list_response(db_filepath: &String) -> Response {
@@ -933,10 +668,7 @@ async fn webhook_list_response(db_filepath: &String) -> Response {
         Ok(wh) => wh,
         Err(e) => {
             eprintln!("** Error getting webhooks: {}.\n", e);
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting webhooks.").into())
-                .unwrap();
+            return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error getting webhooks.")).into_response();
         }
     };
 
@@ -946,106 +678,100 @@ async fn webhook_list_response(db_filepath: &String) -> Response {
     let doc = fs::read_to_string("webroot/template/webhook-list.hbs").expect("Something went wrong reading the file.");
     let doc_rendered = reg.render_template(&doc, &json!({"webhooks": webhooks})).expect("Something went wrong rendering the file");
 
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Content-Type", "text/html; charset=utf-8")
-        .body(doc_rendered.into())
-        .unwrap();
+    Html(doc_rendered).into_response()
 }
 
-pub async fn api_v1_webhooks(ctx: Context) -> Response {
-    webhook_list_response(&ctx.helipad_config.database_file_path).await
+pub async fn api_v1_webhooks(State(state): State<AppState>) -> Response {
+    webhook_list_response(&state.helipad_config.database_file_path).await
 }
 
-pub async fn api_v1_webhook_edit(ctx: Context) -> Response {
-    let index = match ctx.params.find("idx") {
-        Some("add") => 0,
-        Some(idx) => idx.parse().unwrap(),
-        None => {
-            return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
-        }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WebhookEditParams {
+    idx: String,
+}
+
+impl Default for WebhookEditParams {
+    fn default() -> Self {
+        Self { idx: String::from("") }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WebhookEditResponse {
+    webhook: Option<WebhookRecord>,
+}
+
+pub async fn api_v1_webhook_edit(
+    Path(idx): Path<String>,
+    State(state): State<AppState>
+) -> Response {
+    // let Query(params) = params.unwrap_or_default();
+
+    let index = match idx.as_str() {
+        "add" => 0,
+        idx => idx.parse().unwrap(),
     };
 
-    let mut json = json!({
-        "webhook": {},
-    });
+    let mut result = WebhookEditResponse{
+        webhook: None,
+    };
 
     if index > 0 {
-        let webhook = match dbif::load_webhook_from_db(&ctx.helipad_config.database_file_path, index) {
+        let webhook = match dbif::load_webhook_from_db(&state.helipad_config.database_file_path, index) {
             Ok(wh) => wh,
             Err(e) => {
-                eprintln!("** Error getting webhooks: {}.\n", e);
-                return hyper::Response::builder()
-                    .status(StatusCode::from_u16(500).unwrap())
-                    .body(format!("** Error getting webhooks.").into())
-                    .unwrap();
+                eprintln!("** Error loading webhook: {}.\n", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error loading webhook.")).into_response();
             }
         };
 
-        json = json!({
-            "webhook": webhook,
-        });
+        result = WebhookEditResponse{
+            webhook: Some(webhook),
+        };
     }
 
     println!("** load_webhook_from_db({})", index);
 
-    let reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/template/webhook-edit.hbs").expect("Something went wrong reading the file.");
-    let doc_rendered = reg.render_template(&doc, &json).expect("Something went wrong rendering the file");
-
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Content-Type", "text/html; charset=utf-8")
-        .body(doc_rendered.into())
-        .unwrap();
+    HtmlTemplate("webroot/template/webhook-edit.hbs", &result).into_response()
 }
 
-pub async fn api_v1_webhook_save(ctx: Context) -> Response {
-    let db_filepath = ctx.helipad_config.database_file_path;
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WebhookSaveParams {
+    idx: String,
+}
 
-    let index = match ctx.params.find("idx") {
-        Some("add") => 0,
-        Some(idx) => idx.parse().unwrap(),
-        None => {
-            return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
-        }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WebhookSaveForm {
+    url: String,
+    token: String,
+    enabled: Option<bool>,
+}
+
+pub async fn api_v1_webhook_save(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+    Form(form): Form<WebhookSaveForm>,
+) -> Response {
+    let db_filepath = state.helipad_config.database_file_path;
+
+    let index = match idx.as_str() {
+        "add" => 0,
+        idx => idx.parse().unwrap(),
     };
 
-    let post_vars = get_post_params(ctx.req).await;
-    let url = post_vars.get("url");
-
-    if url.is_none() {
-        return client_error_response("** url missing.".into());
+    if let Err(e) = Url::parse(form.url.as_str()) {
+        return (StatusCode::BAD_REQUEST, format!("** bad value for url: {}", e)).into_response();
     }
 
-    if let Err(e) = Url::parse(url.unwrap()) {
-        return client_error_response(format!("** bad value for url: {}", e).into());
-    }
-
-    let token = post_vars.get("token");
-
-    if token.is_none() {
-        return client_error_response("** bad value for token.".into());
-    }
-
-    let enabled = post_vars.get("enabled");
-
-    let enabled = match enabled {
+    let enabled = match form.enabled {
+        Some(v) => v,
         None => false,
-        Some(enable) => match enable.parse() {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                 return client_error_response(format!("** bad value for enabled: {}", e).into());
-            }
-        }
     };
 
     let webhook = WebhookRecord {
         index: index,
-        url: url.unwrap().to_string(),
-        token: token.unwrap().to_string(),
+        url: form.url,
+        token: form.token,
         enabled: enabled,
         request_successful: None,
         request_timestamp: None,
@@ -1056,7 +782,7 @@ pub async fn api_v1_webhook_save(ctx: Context) -> Response {
         Ok(idx) => idx,
         Err(e) => {
             eprintln!("** Error saving webhook: {}.\n", e);
-            return server_error_response("** Error saving webhook.".into());
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error saving webhook.").into_response();
         }
     };
 
@@ -1065,134 +791,85 @@ pub async fn api_v1_webhook_save(ctx: Context) -> Response {
     webhook_list_response(&db_filepath).await
 }
 
-pub async fn api_v1_webhook_delete(ctx: Context) -> Response {
-    let index = match ctx.params.find("idx") {
-        Some(idx) => idx.parse().unwrap(),
-        None => {
-            return client_error_response("** 'index' is a required parameter and must be an unsigned integer.".into());
-        }
-    };
+pub async fn api_v1_webhook_delete(
+    State(state): State<AppState>,
+    Path(idx): Path<String>
+) -> impl IntoResponse {
 
-    if let Err(e) = dbif::delete_webhook_from_db(&ctx.helipad_config.database_file_path, index) {
+    let index = idx.parse().unwrap();
+
+    if let Err(e) = dbif::delete_webhook_from_db(&state.helipad_config.database_file_path, index) {
         eprintln!("** Error deleting webhook: {}.\n", e);
-        return server_error_response("** Error deleting webhook.".into());
+        return (StatusCode::INTERNAL_SERVER_ERROR, "** Error deleting webhook.");
     }
 
     println!("** delete_webhook_from_db({})", index);
 
-    return hyper::Response::builder()
-        .status(StatusCode::OK)
-        .header("Access-Control-Allow-Origin", "*")
-        .body("".into())
-        .unwrap();
+    (StatusCode::OK, "")
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CsvParams {
+    list: Option<String>,
+    index: u64,
+    count: u64,
+    old: Option<bool>,
+    end: Option<u64>,
+}
+
+impl Default for CsvParams {
+    fn default() -> Self {
+        Self { list: Some(String::from("boosts")), index: 0, count: 0, old: None, end: None }
+    }
 }
 
 //CSV export - max is 200 for now so the csv content can be built in memory
-pub async fn csv_export_boosts(_ctx: Context) -> Response {
-    //Get query parameters
-    let params: HashMap<String, String> = _ctx.req.uri().query().map(|v| {
-        url::form_urlencoded::parse(v.as_bytes()).into_owned().collect()
-    }).unwrap_or_else(HashMap::new);
-
+pub async fn csv_export_boosts(
+    State(state): State<AppState>,
+    Query(params): Query<CsvParams>,
+) -> Response {
     //Parameter - list (String)
-    let list = match params.get("list") {
+    let list = match params.list {
         Some(name) => name,
-        None => "boosts",
+        None => "boosts".to_string(),
     };
 
     //Parameter - index (unsigned int)
-    let index: u64;
-    match params.get("index") {
-        Some(supplied_index) => {
-            index = match supplied_index.parse::<u64>() {
-                Ok(index) => {
-                    println!("** Supplied index from call: [{}]", index);
-                    index
-                }
-                Err(_) => {
-                    eprintln!("** Error getting boosts: 'index' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {
-            eprintln!("** Error getting boosts: 'index' param is not present.\n");
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'index' is a required parameter and must be an unsigned integer.").into())
-                .unwrap();
-        }
-    };
+    let index = params.index;
 
     //Parameter - boostcount (unsigned int)
-    let boostcount: u64;
-    match params.get("count") {
-        Some(bcount) => {
-            boostcount = match bcount.parse::<u64>() {
-                Ok(boostcount) => {
-                    println!("** Supplied boostcount from call: [{}]", boostcount);
-                    boostcount
-                }
-                Err(_) => {
-                    eprintln!("** Error getting boosts: 'count' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {
-            eprintln!("** Error getting boosts: 'count' param is not present.\n");
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(400).unwrap())
-                .body(format!("** 'count' is a required parameter and must be an unsigned integer.").into())
-                .unwrap();
-        }
-    };
+    let boostcount = params.count;
 
     //Was the "old" flag used?
-    let mut old = false;
-    match params.get("old") {
-        Some(_) => old = true,
-        None => {}
+    let old = match params.old {
+        Some(_) => true,
+        None => false,
     };
 
     //Was a stop index given?
-    let mut endex: u64 = 0;
-    match params.get("end") {
-        Some(endexnum) => {
-            endex = match endexnum.parse::<u64>() {
-                Ok(endex) => {
-                    println!("** Supplied endex from call: [{}]", endex);
-                    endex
-                }
-                Err(_) => {
-                    eprintln!("** Error getting boosts: 'endex' param is not a number.\n");
-                    return hyper::Response::builder()
-                        .status(StatusCode::from_u16(400).unwrap())
-                        .body(format!("** 'endex' parameter must be an integer.").into())
-                        .unwrap();
-                }
-            };
-        }
-        None => {}
+    let endex = match params.end {
+        Some(endexnum) => endexnum,
+        None => 0,
     };
+
+    println!("** Supplied index from call: [{}]", index);
+    println!("** Supplied boostcount from call: [{}]", boostcount);
+
+    if endex > 0 {
+        println!("** Supplied endex from call: [{}]", endex);
+    }
 
     //Get the boosts/streams/sent from db for returning
     let results;
 
     if list == "streams" {
-        results = dbif::get_streams_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, false);
+        results = dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false);
     }
     else if list == "sent" {
-        results = dbif::get_payments_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, false);
+        results = dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false);
     }
     else { // boosts
-        results = dbif::get_boosts_from_db(&_ctx.helipad_config.database_file_path, index, boostcount, old, false);
+        results = dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false);
     }
 
     match results {
@@ -1250,20 +927,18 @@ pub async fn csv_export_boosts(_ctx: Context) -> Response {
                 }
             }
 
-            return hyper::Response::builder()
-                .status(StatusCode::OK)
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Content-type", "text/plain; charset=utf-8")
-                .header("Content-Disposition", format!("attachment; filename=\"{}.csv\"", list))
-                .body(format!("{}", csv).into())
-                .unwrap();
+            return (
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, "text/plain; charset=utf-8".to_string()),
+                    (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}.csv\"", list))
+                ],
+                csv
+            ).into_response();
         }
         Err(e) => {
             eprintln!("** Error getting boosts: {}.\n", e);
-            return hyper::Response::builder()
-                .status(StatusCode::from_u16(500).unwrap())
-                .body(format!("** Error getting boosts.").into())
-                .unwrap();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts.").into_response();
         }
     }
 }
