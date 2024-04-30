@@ -230,6 +230,11 @@ async fn main() {
         .route("/apps.json", get(handler::apps_json))
         .route("/numerology.json", get(handler::numerology_json))
 
+        .route("/settings/webhooks", get(handler::webhook_settings_list))
+        .route("/settings/webhooks/:idx", get(handler::webhook_settings_load))
+        .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
+        .route("/settings/webhooks/:idx", delete(handler::webhook_settings_delete))
+
         //Api
         .route("/api/v1/node_info", options(handler::api_v1_node_info_options))
         .route("/api/v1/node_info", get(handler::api_v1_node_info))
@@ -255,11 +260,6 @@ async fn main() {
         .route("/api/v1/reply", options(handler::api_v1_reply_options))
         .route("/api/v1/reply", post(handler::api_v1_reply))
         .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
-
-        .route("/api/v1/webhooks", get(handler::api_v1_webhooks))
-        .route("/api/v1/webhooks/:idx", get(handler::api_v1_webhook_edit))
-        .route("/api/v1/webhooks/:idx", post(handler::api_v1_webhook_save))
-        .route("/api/v1/webhooks/:idx", delete(handler::api_v1_webhook_delete))
 
         .route("/csv", get(handler::csv_export_boosts))
 
@@ -414,6 +414,9 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
                             Ok(_) => println!("New payment added."),
                             Err(e) => eprintln!("Error adding payment: {:#?}", e)
                         }
+
+                        //Send out webhooks (if any)
+                        send_webhooks(&db_filepath, &boost).await;
                     }
 
                     current_payment = payment.payment_index;
@@ -444,6 +447,18 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
     };
 
     for webhook in webhooks {
+        if boost.payment_info.is_some() && !webhook.on_sent {
+            continue; // sent
+        }
+
+        if boost.action == 1 && !webhook.on_stream {
+            continue; // stream
+        }
+
+        if (boost.action == 2 || boost.action == 4) && !webhook.on_boost {
+            continue; // boost or auto
+        }
+
         let mut headers = HeaderMap::new();
 
         headers.insert(CONTENT_TYPE, HeaderValue::from_str("application/json").unwrap());

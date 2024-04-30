@@ -14,7 +14,7 @@ use axum_extra::{
 use chrono::{DateTime, TimeDelta, Utc};
 use crate::{AppState, lightning, podcastindex};
 use dbif::{BoostRecord, WebhookRecord};
-use handlebars::Handlebars;
+use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -674,14 +674,26 @@ async fn webhook_list_response(db_filepath: &String) -> Response {
 
     println!("** get_webhooks_from_db()");
 
-    let reg = Handlebars::new();
+    let mut reg = Handlebars::new();
     let doc = fs::read_to_string("webroot/template/webhook-list.hbs").expect("Something went wrong reading the file.");
+
+    reg.register_helper("timestamp", Box::new(|h: &handlebars::Helper, _: &handlebars::Handlebars, _: &handlebars::Context, _: &mut handlebars::RenderContext, out: &mut dyn handlebars::Output| -> handlebars::HelperResult {
+        let param = h.param(0).unwrap();
+        let timestamp = param.value().render().parse::<i64>().unwrap();
+
+        if let Some(ts) = DateTime::from_timestamp(timestamp, 0) {
+            let _ = out.write(&ts.to_rfc3339());
+        }
+
+        Ok(())
+    }));
+
     let doc_rendered = reg.render_template(&doc, &json!({"webhooks": webhooks})).expect("Something went wrong rendering the file");
 
     Html(doc_rendered).into_response()
 }
 
-pub async fn api_v1_webhooks(State(state): State<AppState>) -> Response {
+pub async fn webhook_settings_list(State(state): State<AppState>) -> Response {
     webhook_list_response(&state.helipad_config.database_file_path).await
 }
 
@@ -701,7 +713,7 @@ pub struct WebhookEditResponse {
     webhook: Option<WebhookRecord>,
 }
 
-pub async fn api_v1_webhook_edit(
+pub async fn webhook_settings_load(
     Path(idx): Path<String>,
     State(state): State<AppState>
 ) -> Response {
@@ -744,10 +756,13 @@ pub struct WebhookSaveParams {
 pub struct WebhookSaveForm {
     url: String,
     token: String,
+    on_boost: Option<bool>,
+    on_stream: Option<bool>,
+    on_sent: Option<bool>,
     enabled: Option<bool>,
 }
 
-pub async fn api_v1_webhook_save(
+pub async fn webhook_settings_save(
     State(state): State<AppState>,
     Path(idx): Path<String>,
     Form(form): Form<WebhookSaveForm>,
@@ -763,19 +778,16 @@ pub async fn api_v1_webhook_save(
         return (StatusCode::BAD_REQUEST, format!("** bad value for url: {}", e)).into_response();
     }
 
-    let enabled = match form.enabled {
-        Some(v) => v,
-        None => false,
-    };
-
     let webhook = WebhookRecord {
         index: index,
         url: form.url,
         token: form.token,
-        enabled: enabled,
+        on_boost: form.on_boost.unwrap_or(false),
+        on_stream: form.on_stream.unwrap_or(false),
+        on_sent: form.on_sent.unwrap_or(false),
+        enabled: form.enabled.unwrap_or(false),
         request_successful: None,
         request_timestamp: None,
-        request_datetime: None,
     };
 
     let idx = match dbif::save_webhook_to_db(&db_filepath, &webhook) {
@@ -791,7 +803,7 @@ pub async fn api_v1_webhook_save(
     webhook_list_response(&db_filepath).await
 }
 
-pub async fn api_v1_webhook_delete(
+pub async fn webhook_settings_delete(
     State(state): State<AppState>,
     Path(idx): Path<String>
 ) -> impl IntoResponse {

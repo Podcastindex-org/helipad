@@ -85,11 +85,11 @@
                 <div class="tab-pane fade show active" id="webhooks-content" role="tabpanel" aria-labelledby="webhooks-tab">
                   <b>Webhooks</b>
                   <div>When a boost is received, send an HTTP POST request to the following URLs:</div>
-                  <table id="webhooks" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/api/v1/webhooks" hx-trigger="intersect">
+                  <table id="webhooks" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/webhooks" hx-trigger="intersect">
                   </table>
                   <button
                       class="btn btn-md btn-primary"
-                      hx-get="/api/v1/webhooks/add"
+                      hx-get="/settings/webhooks/add"
                       hx-target="#modals-here"
                       hx-trigger="click"
                       data-bs-toggle="modal"
