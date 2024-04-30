@@ -756,6 +756,9 @@ pub struct WebhookSaveParams {
 pub struct WebhookSaveForm {
     url: String,
     token: String,
+    on_boost: Option<bool>,
+    on_stream: Option<bool>,
+    on_sent: Option<bool>,
     enabled: Option<bool>,
 }
 
@@ -775,16 +778,14 @@ pub async fn webhook_settings_save(
         return (StatusCode::BAD_REQUEST, format!("** bad value for url: {}", e)).into_response();
     }
 
-    let enabled = match form.enabled {
-        Some(v) => v,
-        None => false,
-    };
-
     let webhook = WebhookRecord {
         index: index,
         url: form.url,
         token: form.token,
-        enabled: enabled,
+        on_boost: form.on_boost.unwrap_or(false),
+        on_stream: form.on_stream.unwrap_or(false),
+        on_sent: form.on_sent.unwrap_or(false),
+        enabled: form.enabled.unwrap_or(false),
         request_successful: None,
         request_timestamp: None,
     };

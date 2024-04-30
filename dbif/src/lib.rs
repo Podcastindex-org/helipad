@@ -64,6 +64,9 @@ pub struct WebhookRecord {
     pub index: u64,
     pub url: String,
     pub token: String,
+    pub on_boost: bool,
+    pub on_stream: bool,
+    pub on_sent: bool,
     pub enabled: bool,
     pub request_successful: Option<bool>,
     pub request_timestamp: Option<i64>,
@@ -280,6 +283,9 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
              idx integer primary key autoincrement,
              url text,
              token text,
+             on_boost integer,
+             on_stream integer,
+             on_sent integer,
              enabled integer,
              request_successful integer,
              request_timestamp integer
@@ -868,6 +874,9 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             idx,
             url,
             token,
+            on_boost,
+            on_stream,
+            on_sent,
             enabled,
             request_successful,
             request_timestamp
@@ -883,9 +892,12 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             index: row.get(0)?,
             url: row.get(1)?,
             token: row.get(2)?,
-            enabled: row.get(3)?,
-            request_successful: row.get(4).ok(),
-            request_timestamp: row.get(5).ok(),
+            on_boost: row.get(3)?,
+            on_stream: row.get(4)?,
+            on_sent: row.get(5)?,
+            enabled: row.get(6)?,
+            request_successful: row.get(7).ok(),
+            request_timestamp: row.get(8).ok(),
         })
     }).unwrap();
 
@@ -904,6 +916,9 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             idx,
             url,
             token,
+            on_boost,
+            on_stream,
+            on_sent,
             enabled,
             request_successful,
             request_timestamp
@@ -919,9 +934,12 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             index: row.get(0)?,
             url: row.get(1)?,
             token: row.get(2)?,
-            enabled: row.get(3)?,
-            request_successful: row.get(4).ok(),
-            request_timestamp: row.get(5).ok(),
+            on_boost: row.get(3)?,
+            on_stream: row.get(4)?,
+            on_sent: row.get(5)?,
+            enabled: row.get(6)?,
+            request_successful: row.get(7).ok(),
+            request_timestamp: row.get(8).ok(),
         })
     })?;
 
@@ -942,15 +960,21 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
             idx,
             url,
             token,
+            on_boost,
+            on_stream,
+            on_sent,
             enabled,
             request_successful,
             request_timestamp
         )
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6)
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
         ON CONFLICT(idx) DO UPDATE SET
             url = excluded.url,
             token = excluded.token,
+            on_boost = excluded.on_boost,
+            on_stream = excluded.on_stream,
+            on_sent = excluded.on_sent,
             enabled = excluded.enabled
         RETURNING idx
         "#,
@@ -960,6 +984,9 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
         index,
         webhook.url,
         webhook.token,
+        webhook.on_boost,
+        webhook.on_stream,
+        webhook.on_sent,
         webhook.enabled,
         webhook.request_successful,
         webhook.request_timestamp,

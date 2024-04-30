@@ -414,6 +414,9 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
                             Ok(_) => println!("New payment added."),
                             Err(e) => eprintln!("Error adding payment: {:#?}", e)
                         }
+
+                        //Send out webhooks (if any)
+                        send_webhooks(&db_filepath, &boost).await;
                     }
 
                     current_payment = payment.payment_index;
@@ -444,6 +447,18 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
     };
 
     for webhook in webhooks {
+        if boost.payment_info.is_some() && !webhook.on_sent {
+            continue; // sent
+        }
+
+        if boost.action == 1 && !webhook.on_stream {
+            continue; // stream
+        }
+
+        if (boost.action == 2 || boost.action == 4) && !webhook.on_boost {
+            continue; // boost or auto
+        }
+
         let mut headers = HeaderMap::new();
 
         headers.insert(CONTENT_TYPE, HeaderValue::from_str("application/json").unwrap());

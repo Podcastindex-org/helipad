@@ -32,20 +32,38 @@
         <input name="token" type="text" class="form-control" id="edit-wh-auth" aria-describedby="edit-wh-auth-help" value="{{ webhook.token }}">
         <small id="edit-wh-auth-help" class="form-text text-muted">This will be passed in the <em>Authorization: Bearer</em> header to your URL.</small>
       </div>
-      <div class="form-group form-check">
+      <div class="form-group">
+        <label for="edit-wh-auth">Trigger on</label>
+
+        <div class="form-check">
+          <input id="edit-wh-on-boost" name="on_boost" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_boost}} checked{{/if}}{{#unless webhook}} checked{{/unless}}>
+          <label class="form-check-label" for="edit-wh-on-boost">New boosts</label>
+        </div>
+
+        <div class="form-check">
+          <input id="edit-wh-on-stream" name="on_stream" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_stream}} checked{{/if}}>
+          <label class="form-check-label" for="edit-wh-on-stream">New streams</label>
+        </div>
+
+        <div class="form-check">
+          <input id="edit-wh-on-sent" name="on_sent" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_sent}} checked{{/if}}>
+          <label class="form-check-label" for="edit-wh-on-sent">New sent boosts</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div class="form-check flex-fill">
         <input
+          id="edit-wh-enabled"
           name="enabled"
           type="checkbox"
           class="form-check-input"
-          id="edit-wh-enabled"
           value="true"
           {{#unless webhook}} checked{{/unless}}
           {{#if webhook.enabled}} checked{{/if}}
         >
         <label class="form-check-label" for="edit-wh-enabled">Enabled</label>
       </div>
-    </div>
-    <div class="modal-footer">
       <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
       <button type="submit" class="btn btn-primary">Save changes</button>
     </div>
