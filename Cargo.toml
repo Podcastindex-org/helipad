@@ -27,9 +27,11 @@ data-encoding = "2.4.0"
 email_address = "0.2.4"
 cookie = "0.18.0"
 jsonwebtoken = "9.2.0"
-axum = "0.7.5"
+axum = { version = "0.7.5", features = ["multipart"] }
 axum-macros = "0.4.1"
 axum-extra = { version = "0.9.3", features = ["cookie"] }
+axum_typed_multipart = "0.11.0"
+tempfile = "3.10.1"
 
 [build-dependencies]
 configure_me_codegen = "0.4.1"

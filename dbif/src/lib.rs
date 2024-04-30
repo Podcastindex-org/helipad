@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Error::QueryReturnedNoRows};
 use std::error::Error;
 use std::fmt;
 use serde::{Deserialize, Serialize};
@@ -59,6 +59,16 @@ pub struct PaymentRecord {
     pub reply_to_idx: Option<u64>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NumerologyRecord {
+    pub index: u64,
+    pub amount: u64,
+    pub equality: String,
+    pub emoji: Option<String>,
+    pub sound_file: Option<String>,
+    pub description: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WebhookRecord {
     pub index: u64,
@@ -82,6 +92,16 @@ impl WebhookRecord {
             None => None,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SettingsRecord {
+    pub show_received_sats: bool,
+    pub show_split_percentage: bool,
+    pub hide_boosts: bool,
+    pub hide_boosts_below: Option<u64>,
+    pub play_pew: bool,
+    pub custom_pew_file: Option<String>,
 }
 
 #[derive(Debug)]
@@ -112,7 +132,6 @@ fn connect_to_database(init: bool, filepath: &String) -> Result<Connection, Box<
     }
 }
 
-
 //Set permissions on the database file
 fn set_database_file_permissions(filepath: &str) -> Result<bool, Box<dyn Error>> {
 
@@ -136,6 +155,17 @@ fn set_database_file_permissions(filepath: &str) -> Result<bool, Box<dyn Error>>
     }
 }
 
+fn table_exists(conn: &Connection, table_name: &str) -> Result<bool, Box<dyn Error>> {
+    //Prepare and execute the query
+    let mut stmt = conn.prepare(r#"SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"#)?;
+    let rows = stmt.query_map(params![table_name], |_| Ok(true))?;
+
+    for _ in rows {
+        return Ok(true);
+    }
+
+    Ok(false)
+}
 
 //Create or update a new database file if needed
 pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
@@ -276,8 +306,58 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
     }
 
+    //Create the numerology table
+    let numerology_exists = table_exists(&conn, "numerology")?;
 
-    //Create the sent boosts table
+    match conn.execute(
+        "CREATE TABLE IF NOT EXISTS numerology (
+             idx integer primary key,
+             equality text not null,
+             amount integer not null,
+             emoji text,
+             sound_file text,
+             description text
+         )",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Numerology table is ready.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create database numerology table: [{}].", filepath).into())))
+        }
+    }
+
+    if !numerology_exists {
+        if insert_default_numerology(&conn)? {
+            println!("Default numerology added.");
+        }
+    }
+
+    //Create the settings table
+    match conn.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+             idx integer primary key autoincrement,
+             show_received_sats integer not null,
+             show_split_percentage integer not null,
+             hide_boosts integer not null,
+             hide_boosts_below integer,
+             play_pew integer not null,
+             custom_pew_file text
+         )",
+        [],
+    ) {
+        Ok(_) => {
+            println!("Settings table is ready.");
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError(format!("Failed to create database settings table: [{}].", filepath).into())))
+        }
+    }
+
+    //Create the webhooks table
     match conn.execute(
         "CREATE TABLE IF NOT EXISTS webhooks (
              idx integer primary key autoincrement,
@@ -298,6 +378,77 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         Err(e) => {
             eprintln!("{}", e);
             return Err(Box::new(HydraError(format!("Failed to create database webhooks table: [{}].", filepath).into())))
+        }
+    }
+
+    Ok(true)
+}
+
+pub fn insert_default_numerology(conn: &Connection) -> Result<bool, Box<dyn Error>> {
+    let queries = vec![
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Satchel of Richards Donation x 7', '🍆🍆🍆🍆🍆🍆🍆', '1111111', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Satchel of Richards Donation x 6', '🍆🍆🍆🍆🍆🍆', '111111', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Satchel of Richards Donation x 5', '🍆🍆🍆🍆🍆', '11111', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Satchel of Richards Donation x 4', '🍆🍆🍆🍆', '1111', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Satchel of Richards Donation x 3', '🍆🍆🍆', '111', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Satchel of Richards Donation x 2', '🍆🍆', '11', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Ducks In a Row Donation x 7', '🦆🦆🦆🦆🦆🦆🦆', '2222222', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Ducks In a Row Donation x 6', '🦆🦆🦆🦆🦆🦆', '222222', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Ducks In a Row Donation x 5', '🦆🦆🦆🦆🦆', '22222', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Ducks In a Row Donation x 4', '🦆🦆🦆🦆', '2222', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Ducks In a Row Donation x 3', '🦆🦆🦆', '222', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Ducks In a Row Donation x 2', '🦆🦆', '22', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Swan Donation x 7', '🦢🦢🦢🦢🦢🦢🦢', '5555555', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Swan Donation x 6', '🦢🦢🦢🦢🦢🦢', '555555', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Swan Donation x 5', '🦢🦢🦢🦢🦢', '55555', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Swan Donation x 4', '🦢🦢🦢🦢', '5555', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Swan Donation x 3', '🦢🦢🦢', '555', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Swan Donation x 2', '🦢🦢', '55', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countdown Donation x 5', '💥💥💥💥💥', '7654321', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countdown Donation x 4', '💥💥💥💥', '654321', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countdown Donation x 3', '💥💥💥', '54321', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countdown Donation x 2', '💥💥', '4321', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countdown Donation', '💥', '321', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countup Donation x 5', '🧛🧛🧛🧛🧛', '1234567', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countup Donation x 4', '🧛🧛🧛🧛', '123456', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countup Donation x 3', '🧛🧛🧛', '12345', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countup Donation x 2', '🧛🧛', '1234', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Countup Donation', '🧛', '123', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Bowler Donation x 3 +🦃', '🎳🎳🎳🦃', '101010', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Bowler Donation x 2', '🎳🎳', '1010', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Bowler Donation', '🎳', '10', '=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Dice Donation', '🎲', '11', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Bitcoin donation', '🪙', '21', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Magic Number Donation', '✨', '33', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Swasslenuff Donation', '💋', '69', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Greetings Donation', '👋', '73', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Love and Kisses Donation', '🥰', '88', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Stoner Donation', '✌👽💨', '420', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Devil Donation', '😈', '666', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Angel Donation', '😇', '777', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('America Fuck Yeah Donation', '🇺🇸', '1776', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Canada Donation', '🇨🇦', '1867', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Boobs Donation', '🎱🎱', '6006', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Boobs Donation', '🎱🎱', '8008', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Wolf Donation', '🐺', '9653', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Boost Donation', '🔁', '30057', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Pi Donation x 5', '🥧🥧🥧🥧🥧', '3141592', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Pi Donation x 4', '🥧🥧🥧🥧', '314159', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Pi Donation x 3', '🥧🥧🥧', '31415', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Pi Donation x 2', '🥧🥧', '3141', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Pi Donation', '🥧', '314', '=~')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Poo donation', '💩', '9', '<')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Lit donation 100k', '🔥', '100000', '>=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Lit donation 50k', '🔥', '50000', '>=')",
+        "INSERT INTO numerology (description, emoji, amount, equality) VALUES ('Lit donation 10k', '🔥', '10000', '>=')",
+    ];
+
+    for query in queries {
+        let result = conn.execute(query, []);
+
+        if let Err(e) = result {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError("Failed to insert default numerology".into())))
         }
     }
 
@@ -1016,6 +1167,220 @@ pub fn delete_webhook_from_db(filepath: &String, index: u64) -> Result<bool, Box
     let conn = connect_to_database(false, filepath)?;
 
     conn.execute(r#"DELETE FROM webhooks WHERE idx = ?1"#, params![index])?;
+
+    Ok(true)
+}
+
+pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    let mut stmt = conn.prepare(
+        r#"SELECT
+             show_received_sats,
+             show_split_percentage,
+             hide_boosts,
+             hide_boosts_below,
+             play_pew,
+             custom_pew_file
+        FROM
+            settings
+        WHERE
+            idx = 1
+        "#
+    )?;
+
+    let result = stmt.query_row([], |row| {
+        Ok(SettingsRecord {
+            show_received_sats: row.get(0)?,
+            show_split_percentage: row.get(1)?,
+            hide_boosts: row.get(2)?,
+            hide_boosts_below: row.get(3).ok(),
+            play_pew: row.get(4)?,
+            custom_pew_file: row.get(5).ok(),
+        })
+    });
+
+    match result {
+        Ok(s) => Ok(s),
+        Err(QueryReturnedNoRows) => Ok(SettingsRecord {
+            show_received_sats: false,
+            show_split_percentage: false,
+            hide_boosts: false,
+            hide_boosts_below: None,
+            play_pew: true,
+            custom_pew_file: None,
+        }),
+        Err(e) => Err(Box::new(e)),
+    }
+}
+
+pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    match conn.execute(
+        r#"INSERT INTO settings (
+            idx,
+            show_received_sats,
+            show_split_percentage,
+            hide_boosts,
+            hide_boosts_below,
+            play_pew,
+            custom_pew_file
+        )
+        VALUES
+            (1, ?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(idx) DO UPDATE SET
+            show_received_sats = excluded.show_received_sats,
+            show_split_percentage = excluded.show_split_percentage,
+            hide_boosts = excluded.hide_boosts,
+            hide_boosts_below = excluded.hide_boosts_below,
+            play_pew = excluded.play_pew,
+            custom_pew_file = excluded.custom_pew_file
+        "#,
+        params![
+            settings.show_received_sats,
+            settings.show_split_percentage,
+            settings.hide_boosts,
+            settings.hide_boosts_below,
+            settings.play_pew,
+            settings.custom_pew_file,
+        ]
+    ) {
+        Ok(_) => {
+            Ok(true)
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError("Failed to save settings".into())))
+        }
+    }
+}
+
+pub fn get_numerology_from_db(filepath: &String) -> Result<Vec<NumerologyRecord>, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+    let mut results: Vec<NumerologyRecord> = Vec::new();
+
+    let mut stmt = conn.prepare(
+        r#"SELECT
+            idx,
+            amount,
+            equality,
+            emoji,
+            sound_file,
+            description
+        FROM
+            numerology
+        "#
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(NumerologyRecord {
+            index: row.get(0)?,
+            amount: row.get(1)?,
+            equality: row.get(2)?,
+            emoji: row.get(3).ok(),
+            sound_file: row.get(4).ok(),
+            description: row.get(5).ok(),
+        })
+    }).unwrap();
+
+    for row in rows {
+        results.push(row.unwrap());
+    }
+
+    Ok(results)
+}
+
+pub fn load_numerology_from_db(filepath: &String, index: u64) -> Result<NumerologyRecord, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    let mut stmt = conn.prepare(
+        r#"SELECT
+            idx,
+            amount,
+            equality,
+            emoji,
+            sound_file,
+            description
+        FROM
+            numerology
+        WHERE
+            idx = :idx
+        "#
+    )?;
+
+    let result = stmt.query_row(&[(":idx", index.to_string().as_str())], |row| {
+        Ok(NumerologyRecord {
+            index: row.get(0)?,
+            amount: row.get(1)?,
+            equality: row.get(2)?,
+            emoji: row.get(3).ok(),
+            sound_file: row.get(4).ok(),
+            description: row.get(5).ok(),
+        })
+    })?;
+
+    Ok(result)
+}
+
+pub fn save_numerology_to_db(filepath: &String, numero: &NumerologyRecord) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    let index = if numero.index > 0 {
+        Some(numero.index)
+    } else {
+        None
+    };
+
+    match conn.execute(
+        r#"INSERT INTO numerology (
+            idx,
+            amount,
+            equality,
+            emoji,
+            sound_file,
+            description
+        )
+        VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(idx) DO UPDATE SET
+            amount = excluded.amount,
+            equality = excluded.equality,
+            emoji = excluded.emoji,
+            sound_file = excluded.sound_file,
+            description = excluded.description
+        "#,
+        params![
+            index,
+            numero.amount,
+            numero.equality,
+            numero.emoji,
+            numero.sound_file,
+            numero.description
+        ]
+    ) {
+        Ok(_) => {
+            Ok(true)
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            return Err(Box::new(HydraError("Failed to save numerology".into())))
+        }
+    }
+}
+
+pub fn delete_numerology_from_db(filepath: &String, index: u64) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    conn.execute(r#"DELETE FROM numerology WHERE idx = ?1"#, params![index])?;
+
+    Ok(true)
+}
+
+pub fn reset_numerology_in_db(filepath: &String) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    conn.execute(r#"DELETE FROM numerology"#, [])?;
+    insert_default_numerology(&conn)?;
 
     Ok(true)
 }

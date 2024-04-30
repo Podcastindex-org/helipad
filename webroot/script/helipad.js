@@ -2,8 +2,7 @@ $(document).ready(function () {
     let messages = $('div.mesgs');
     let inbox = messages.find('div.msg_history');
     let appIconUrlBase = '/image?name=';
-    let pewAudioFile = '/pew.mp3';
-    let pewAudio = new Audio(pewAudioFile);
+    let pewAudio = new Audio();
     let appList = {};
     let numerologyList = [];
     var connection = null;
@@ -12,6 +11,7 @@ $(document).ready(function () {
     var currentBalance = null;
     var currentBalanceAmount = 0;
     let nodeInfo = null;
+    let settings = null;
 
     let config = {
         'listUrl': '/api/v1/boosts',
@@ -42,7 +42,6 @@ $(document).ready(function () {
         $('div.outgoing_msg').map(function () {
             messageIds.push($(this).data('msgid'));
         });
-        // console.log(messageIds);
 
         //Params
         if (typeof startIndex === "number") {
@@ -111,6 +110,10 @@ $(document).ready(function () {
                     let boostReplyCustomKey;
                     let boostReplyCustomValue;
 
+                    if (settings.hide_boosts && boostSats < settings.hide_boosts_below && config.pluralName != 'streams') {
+                        return; // boost amount lower than minimum
+                    }
+
                     try {
                         boostTlv = JSON.parse(element.tlv)
                         boostReplyAddress = boostTlv.reply_address;
@@ -140,10 +143,29 @@ $(document).ready(function () {
                             '      <p>' + boostMessage + '</p>';
                     }
 
+                    //Show sat amount and more info
+                    let boostDisplayAmount = numberFormat(boostSats) + " sats";
+                    let boostMoreInfo = numberFormat(boostActualSats) + " sats received after splits/fees.";
+
+                    if (settings.show_received_sats) {
+                        boostDisplayAmount = numberFormat(boostActualSats) + " sats received";
+                        boostMoreInfo = numberFormat(boostSats) + " total sats sent.";
+                    }
+
                     //If there is a difference between actual and stated sats, display it
-                    var boostDisplayAmount = numberFormat(boostSats) + " sats";
                     if ((boostSats != boostActualSats) && boostSats > 0 && boostActualSats > 0) {
-                        boostDisplayAmount = '<span class="more_info" title="' + numberFormat(boostActualSats) + ' sats received after splits/fees.">' + boostDisplayAmount + '</span>';
+                        boostDisplayAmount = '<span class="more_info" title="' + boostMoreInfo + '">' + boostDisplayAmount + '</span>';
+                    }
+
+                    let boostSplitPercentage = '';
+                    if (settings.show_split_percentage) {
+                        split = Math.round(100 * boostSats / boostActualSats) / 100;
+                        if (settings.show_received_sats) {
+                            boostSplitPercentage = ' <small>(' + split + '% of ' + numberFormat(boostSats) + ' sats)</small>';
+                        }
+                        else {
+                            boostSplitPercentage = ' <small>(' + split + '% split)</small>';
+                        }
                     }
 
                     //Show clock icon for automated boosts
@@ -196,7 +218,7 @@ $(document).ready(function () {
                                 </div>
                               </div>
                               <h5 class="sats">
-                                ${boostDisplayAmount} ${boostPerson} ${boostNumerology}
+                                ${boostDisplayAmount} ${boostPerson} ${boostNumerology} ${boostSplitPercentage}
                               </h5>
                               <small class="podcast_episode">
                                 ${boostPodcast} - ${boostEpisode}
@@ -257,9 +279,9 @@ $(document).ready(function () {
                         messageIds.push(boostIndex);
                         messageIds = messageIds.sort((a, b) => a - b);
 
-                        if (shouldPew && config.effects) {
+                        if (shouldPew && config.effects && settings.play_pew) {
                             //Pew pew pew!
-                            pewAudio.play();
+                            playPew(boostSats);
                         }
                     }
                 });
@@ -324,31 +346,81 @@ $(document).ready(function () {
     }
 
     //Determine any meaning behind this sat value
-    //(uses boostbot numerology by default: https://github.com/valcanobacon/BoostBots)
-    function gatherNumerology(value) {
-        let numerology = value.toString();
-        let meaning = [];
+    function parseNumerology(value) {
+        const numerology = []
+        const substitutions = []
 
-        // replace numerology with emojis
+        let textValue = value.toString()
+
+        // loop through numerology and capture matches
         numerologyList.forEach(item => {
-            newNumerology = numerology.replaceAll(new RegExp(item.regex, 'g'), item.emoji);
-
-            if (newNumerology != numerology) {
-                meaning.push(item.name);
+            if (item.equality == '<' && value < item.amount) {
+                numerology.push(item)
             }
+            else if (item.equality == '>=' && value >= item.amount) {
+                numerology.push(item)
+            }
+            else if (item.equality == '=' && value == item.amount) {
+                numerology.push(item)
+                textValue = ''
+            }
+            else if (item.equality == '=~') {
+                const regex = new RegExp(item.amount, 'g')
 
-            numerology = newNumerology;
-        });
+                for (let match of textValue.matchAll(regex)) {
+                    // replace match with X's to prevent further matches
+                    const replace = match[0].replaceAll(new RegExp('[0-9]', 'g'), 'X')
+                    textValue = textValue.replace(match[0], replace)
 
-        // remove unmatched numbers
-        numerology = numerology.replaceAll(new RegExp('[0-9]+', 'g'), '');
+                    // keep track of where this was matched in the value
+                    substitutions[match.index] = item
+
+                    // add gap to fill in later
+                    numerology.push(null)
+                }
+            }
+        })
+
+        // fill in substitutions in order of where they appear in the value
+        let subs = Object.values(substitutions)
+
+        numerology.forEach((item, idx) => {
+            numerology[idx] = item || subs.shift()
+        })
+
+        return numerology
+    };
+
+    //Get the emojis that correspond to the donation amount
+    function gatherNumerology(value) {
+        const matches = parseNumerology(value);
+        const emojis = matches.map(num => num.emoji);
+        const descriptions = matches.map(num => num.description);
 
         // show meaning in mouse hover
-        if (meaning) {
-            numerology = '<span class="more_info" title="' + meaning.join(', ') + '">' + numerology + '</span>';
+        if (emojis) {
+            numerology = '<span class="more_info" title="' + descriptions.join(', ') + '">' + emojis.join('') + '</span>';
         }
 
         return numerology;
+    }
+
+    //Play the pew sound that corresponds with the donation amount
+    function playPew(value) {
+        // find the first pew with a sound file
+        const pews = parseNumerology(value).filter(num => num.sound_file)
+
+        if (pews.length) {
+            pewAudio.src = `/sound?name=${pews[0].sound_file}`
+        }
+        else if (settings.custom_pew_file) {
+            pewAudio.src = `/sound?name=${settings.custom_pew_file}`;
+        }
+        else {
+            pewAudio.src = '/pew.mp3'; // default
+        }
+
+        pewAudio.play();
     }
 
     //Animate some confetti on the page with a given duration interval in milliseconds
@@ -362,6 +434,11 @@ $(document).ready(function () {
     //Get the current node alias and pubkey
     async function getNodeInfo() {
         nodeInfo = await $.get(`/api/v1/node_info`);
+    }
+
+    //Get configured settings
+    async function getSettings() {
+        settings = await $.get(`/api/v1/settings`);
     }
 
     //Refresh the timestatmps of all the boosts on the list
@@ -736,6 +813,7 @@ $(document).ready(function () {
         renderReplyModal();
         //Get starting balance and index number
         await getNodeInfo();
+        await getSettings();
         await getAppList();
         await getNumerologyList();
         renderBoostInfo();

@@ -11,21 +11,27 @@ use axum_extra::{
     extract::cookie::{CookieJar, Cookie},
 };
 
+// use axum_macros::debug_handler;
+use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
+
 use chrono::{DateTime, TimeDelta, Utc};
 use crate::{AppState, lightning, podcastindex};
-use dbif::{BoostRecord, WebhookRecord};
+use dbif::{BoostRecord, NumerologyRecord, WebhookRecord};
 use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fs, str};
+use std::string::String;
 use url::Url;
+use tempfile::NamedTempFile;
 
 //Constants --------------------------------------------------------------------------------------------------
 const WEBROOT_PATH_HTML: &str = "webroot/html";
 const WEBROOT_PATH_IMAGE: &str = "webroot/image";
 const WEBROOT_PATH_STYLE: &str = "webroot/style";
 const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
+const WEBROOT_PATH_SOUND: &str = "/data/sounds";
 
 
 //Structs and Enums ------------------------------------------------------------------------------------------
@@ -174,14 +180,16 @@ where
 
         let doc = match fs::read_to_string(self.0) {
             Ok(doc) => doc,
-            Err(_) => {
+            Err(e) => {
+                eprintln!("** Unable to open template file {}: {}.\n", self.0, e);
                 return (StatusCode::BAD_REQUEST, "Unable to open template file").into_response();
             }
         };
 
         let doc_rendered = match reg.render_template(&doc, &self.1) {
             Ok(rendered) => rendered,
-            Err(_) => {
+            Err(e) => {
+                eprintln!("** Unable to render template {}: {}.\n", self.0, e);
                 return (StatusCode::BAD_REQUEST, "Unable to render template").into_response();
             }
         };
@@ -229,9 +237,9 @@ pub async fn apps_json() -> Response {
 }
 
 //Numerology definitions file
-pub async fn numerology_json() -> Response {
-    let file = fs::read("webroot/extra/numerology.json").expect("Unable to read file");
-    ([(header::CONTENT_TYPE, "application/json")], file).into_response()
+pub async fn numerology_json(State(state): State<AppState>) -> Response {
+    let results = dbif::get_numerology_from_db(&state.helipad_config.database_file_path).unwrap();
+    Json(results).into_response()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -273,13 +281,21 @@ pub async fn asset(
             content_type = "text/javascript";
             file_extension = "js";
         }
+        "/sound" => {
+            file_path = WEBROOT_PATH_SOUND;
+            content_type = "audio/mpeg";
+            file_extension = "";
+        }
         _ => {
             return (StatusCode::BAD_REQUEST, "** Invalid asset type requested (ex. /images?name=filename.").into_response();
         }
     };
 
     //Attempt to serve the file
-    let file_to_serve = format!("{}/{}.{}", file_path, params.name, file_extension);
+    let file_to_serve = match file_extension {
+        "" => format!("{}/{}", file_path, params.name),
+        _  => format!("{}/{}.{}", file_path, params.name, file_extension),
+    };
     println!("** Serving file: [{}]", file_to_serve);
     let file = fs::read(file_to_serve.as_str()).expect("Something went wrong reading the file.");
     (
@@ -306,6 +322,18 @@ pub async fn api_v1_node_info(State(state): State<AppState>) -> Response {
         Err(e) => {
             eprintln!("** Error getting node info: {}.\n", e);
             (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting node info.").into_response()
+        }
+    }
+}
+
+pub async fn api_v1_settings(State(state): State<AppState>) -> Response {
+    match dbif::load_settings_from_db(&state.helipad_config.database_file_path) {
+        Ok(settings) => {
+            Json(settings).into_response()
+        }
+        Err(e) => {
+            eprintln!("** Error getting settings: {}.\n", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting settings.").into_response()
         }
     }
 }
@@ -697,59 +725,30 @@ pub async fn webhook_settings_list(State(state): State<AppState>) -> Response {
     webhook_list_response(&state.helipad_config.database_file_path).await
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WebhookEditParams {
-    idx: String,
-}
-
-impl Default for WebhookEditParams {
-    fn default() -> Self {
-        Self { idx: String::from("") }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WebhookEditResponse {
-    webhook: Option<WebhookRecord>,
-}
-
 pub async fn webhook_settings_load(
     Path(idx): Path<String>,
     State(state): State<AppState>
 ) -> Response {
-    // let Query(params) = params.unwrap_or_default();
 
     let index = match idx.as_str() {
         "add" => 0,
         idx => idx.parse().unwrap(),
     };
 
-    let mut result = WebhookEditResponse{
-        webhook: None,
-    };
-
-    if index > 0 {
-        let webhook = match dbif::load_webhook_from_db(&state.helipad_config.database_file_path, index) {
-            Ok(wh) => wh,
+    let webhook = match index {
+        0 => None,
+        _ => match dbif::load_webhook_from_db(&state.helipad_config.database_file_path, index) {
+            Ok(wh) => Some(wh),
             Err(e) => {
                 eprintln!("** Error loading webhook: {}.\n", e);
                 return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error loading webhook.")).into_response();
             }
-        };
-
-        result = WebhookEditResponse{
-            webhook: Some(webhook),
-        };
-    }
+        }
+    };
 
     println!("** load_webhook_from_db({})", index);
 
-    HtmlTemplate("webroot/template/webhook-edit.hbs", &result).into_response()
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WebhookSaveParams {
-    idx: String,
+    HtmlTemplate("webroot/template/webhook-edit.hbs", json!({"webhook": webhook})).into_response()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -818,6 +817,223 @@ pub async fn webhook_settings_delete(
     println!("** delete_webhook_from_db({})", index);
 
     (StatusCode::OK, "")
+}
+
+pub async fn general_settings_load(State(state): State<AppState>) -> impl IntoResponse {
+    let settings = dbif::load_settings_from_db(&state.helipad_config.database_file_path).unwrap();
+    HtmlTemplate("webroot/template/general-settings.hbs", json!({"settings": settings}))
+}
+
+#[derive(Debug, TryFromMultipart)]
+pub struct GeneralSettingsMultipart {
+    show_received_sats: Option<bool>,
+    show_split_percentage: Option<bool>,
+    hide_boosts: Option<bool>,
+    hide_boosts_below: Option<String>,
+    play_pew: Option<bool>,
+
+    // The `unlimited arguments` means that this field will be limited to the
+    // total size of the request body. If you want to limit the size of this
+    // field to a specific value you can also specify a limit in bytes, like
+    // '5MiB' or '1GiB'.
+    #[form_data(limit = "5MiB")]
+    custom_pew_file: Option<FieldData<NamedTempFile>>,
+    custom_pew_existing: Option<bool>,
+}
+
+pub async fn general_settings_save(
+    State(state): State<AppState>,
+    TypedMultipart(parts): TypedMultipart<GeneralSettingsMultipart>,
+) -> impl IntoResponse {
+
+    let hide_boosts_below = match parts.hide_boosts_below {
+        Some(s) => match s.is_empty() {
+            false => Some(s.parse::<u64>().unwrap_or(0)),
+            true => None,
+        },
+        None => None,
+    };
+
+    let mut settings = dbif::load_settings_from_db(&state.helipad_config.database_file_path).unwrap();
+
+    settings.show_received_sats = parts.show_received_sats.unwrap_or(false);
+    settings.show_split_percentage = parts.show_split_percentage.unwrap_or(false);
+    settings.hide_boosts = parts.hide_boosts.unwrap_or(false);
+    settings.hide_boosts_below = hide_boosts_below;
+    settings.play_pew = parts.play_pew.unwrap_or(false);
+
+    if !settings.hide_boosts {
+        settings.hide_boosts_below = None;
+    }
+
+    if let Some(field) = parts.custom_pew_file {
+        let from_path = field.contents.path();
+        let to_path = "/data/sounds/custom_pew.mp3".to_string();
+        let bytes = std::fs::copy(from_path, &to_path).unwrap_or(0);
+
+        if bytes > 0 {
+            println!("** Wrote custom pew to: {}", to_path);
+            settings.custom_pew_file = Some("custom_pew.mp3".to_string())
+        } else {
+            settings.custom_pew_file = None;
+        }
+    } else if parts.custom_pew_existing.is_none() {
+        settings.custom_pew_file = None;
+    }
+
+    dbif::save_settings_to_db(&state.helipad_config.database_file_path, &settings).unwrap();
+
+    HtmlTemplate("webroot/template/general-settings.hbs", json!({"settings": settings, "saved": true}))
+}
+
+pub fn numerology_list(db_filepath: &String) -> impl IntoResponse {
+    let results = dbif::get_numerology_from_db(&db_filepath).unwrap();
+    HtmlTemplate("webroot/template/numerology-list.hbs", json!({"numerology": results}))
+}
+
+pub async fn numerology_settings_list(State(state): State<AppState>) -> impl IntoResponse {
+    numerology_list(&state.helipad_config.database_file_path)
+}
+
+pub async fn numerology_settings_load(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+) -> impl IntoResponse {
+
+    let index = match idx.as_str() {
+        "add" => 0,
+        idx => idx.parse().unwrap(),
+    };
+
+    let result = if index > 0 {
+        dbif::load_numerology_from_db(&state.helipad_config.database_file_path, index).ok()
+    } else {
+        None
+    };
+
+    let equality = match &result {
+        Some(eq) => eq.equality.clone(),
+        None => "".to_string(),
+    };
+
+    let params = json!({
+        "numerology": result,
+        "equality": json!({
+            "eq": equality == "=",
+            "in": equality == "=~",
+            "lt": equality == "<",
+            "gte": equality == ">=",
+        }),
+    });
+
+    HtmlTemplate("webroot/template/numerology-edit.hbs", params)
+}
+
+#[derive(Debug, TryFromMultipart)]
+pub struct NumerologyMultipart {
+    amount: u64,
+    equality: String,
+    emoji: Option<String>,
+
+    #[form_data(limit = "5MiB")]
+    sound_file: Option<FieldData<NamedTempFile>>,
+    sound_file_existing: Option<bool>,
+
+    description: Option<String>,
+}
+
+pub async fn numerology_settings_save(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+    TypedMultipart(parts): TypedMultipart<NumerologyMultipart>,
+) -> Response {
+    let db_filepath = state.helipad_config.database_file_path;
+
+    let index = match idx.as_str() {
+        "add" => 0,
+        idx => idx.parse().unwrap(),
+    };
+
+    let mut numero = NumerologyRecord {
+        index: index,
+        amount: parts.amount,
+        equality: parts.equality,
+        emoji: parts.emoji,
+        sound_file: None,
+        description: parts.description,
+    };
+
+    if index > 0 {
+        let existing = match dbif::load_numerology_from_db(&db_filepath, index) {
+            Ok(exist) => exist,
+            Err(e) => {
+                eprintln!("** Error loading numerology: {}.\n", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error loading numerology.")).into_response();
+            }
+        };
+
+        numero.sound_file = existing.sound_file;
+    }
+
+    if let Some(field) = parts.sound_file {
+        let filename = format!("{}.mp3", parts.amount);
+        let from_path = field.contents.path();
+        let to_path = format!("/data/sounds/{}", filename);
+        let bytes = std::fs::copy(from_path, &to_path).unwrap_or(0);
+
+        if bytes > 0 {
+            println!("** Wrote sound file to: {}", to_path);
+            numero.sound_file = Some(filename)
+        } else {
+            numero.sound_file = None;
+        }
+    } else if parts.sound_file_existing.is_none() {
+        numero.sound_file = None;
+    }
+
+    let idx = match dbif::save_numerology_to_db(&db_filepath, &numero) {
+        Ok(idx) => idx,
+        Err(e) => {
+            eprintln!("** Error saving numerology: {}.\n", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error saving numerology.").into_response();
+        }
+    };
+
+    println!("** numerology_settings_save({})", idx);
+
+    numerology_list(&db_filepath).into_response()
+}
+
+pub async fn numerology_settings_delete(
+    State(state): State<AppState>,
+    Path(idx): Path<String>
+) -> impl IntoResponse {
+
+    let index = idx.parse().unwrap();
+
+    if let Err(e) = dbif::delete_numerology_from_db(&state.helipad_config.database_file_path, index) {
+        eprintln!("** Error deleting numerology: {}.\n", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, "** Error deleting numerology.");
+    }
+
+    println!("** numerology_settings_delete({})", index);
+
+    (StatusCode::OK, "")
+}
+
+pub async fn numerology_settings_reset() -> impl IntoResponse {
+    HtmlTemplate("webroot/template/numerology-reset.hbs", "")
+}
+
+pub async fn numerology_settings_do_reset(State(state): State<AppState>) -> Response {
+    let db_filepath = state.helipad_config.database_file_path;
+
+    if let Err(e) = dbif::reset_numerology_in_db(&db_filepath) {
+        eprintln!("** Error resetting numerology: {}.\n", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, "** Error resetting numerology.").into_response()
+    }
+
+    numerology_list(&db_filepath).into_response()
 }
 
 #[derive(Debug, Serialize, Deserialize)]

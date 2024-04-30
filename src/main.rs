@@ -230,6 +230,16 @@ async fn main() {
         .route("/apps.json", get(handler::apps_json))
         .route("/numerology.json", get(handler::numerology_json))
 
+        .route("/settings/general", get(handler::general_settings_load))
+        .route("/settings/general", post(handler::general_settings_save))
+
+        .route("/settings/numerology", get(handler::numerology_settings_list))
+        .route("/settings/numerology/reset", get(handler::numerology_settings_reset))
+        .route("/settings/numerology/reset", post(handler::numerology_settings_do_reset))
+        .route("/settings/numerology/:idx", get(handler::numerology_settings_load))
+        .route("/settings/numerology/:idx", post(handler::numerology_settings_save))
+        .route("/settings/numerology/:idx", delete(handler::numerology_settings_delete))
+
         .route("/settings/webhooks", get(handler::webhook_settings_list))
         .route("/settings/webhooks/:idx", get(handler::webhook_settings_load))
         .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
@@ -238,6 +248,8 @@ async fn main() {
         //Api
         .route("/api/v1/node_info", options(handler::api_v1_node_info_options))
         .route("/api/v1/node_info", get(handler::api_v1_node_info))
+
+        .route("/api/v1/settings", get(handler::api_v1_settings))
 
         .route("/api/v1/boosts", options(handler::api_v1_boosts_options))
         .route("/api/v1/boosts", get(handler::api_v1_boosts))
@@ -266,7 +278,6 @@ async fn main() {
         .route_layer(middleware::from_fn_with_state(state.clone(), handler::auth_middleware))
 
         // Auth-free routes
-
         .route("/login", get(handler::login).post(handler::handle_login))
 
         //Assets
@@ -275,6 +286,7 @@ async fn main() {
         .route("/style", get(handler::asset))
         .route("/script", get(handler::asset))
         .route("/extra", get(handler::asset))
+        .route("/sound", get(handler::asset))
 
         .with_state(state);
 
