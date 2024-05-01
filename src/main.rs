@@ -453,7 +453,8 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
 async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
     let webhooks = match dbif::get_webhooks_from_db(&db_filepath, Some(true)) {
         Ok(wh) => wh,
-        Err(_) => {
+        Err(e) => {
+            eprintln!("Error loading webhooks from db: {:#?}", e);
             return;
         }
     };
@@ -473,39 +474,72 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
 
         let mut headers = HeaderMap::new();
 
-        headers.insert(CONTENT_TYPE, HeaderValue::from_str("application/json").unwrap());
+        headers.insert(CONTENT_TYPE, match HeaderValue::from_str("application/json") {
+            Ok(hdr) => hdr,
+            Err(e) => {
+                eprintln!("Unable to create content type header: {}", e);
+                continue;
+            }
+        });
 
         let user_agent = format!("Helipad/{}", env!("CARGO_PKG_VERSION"));
-        headers.insert(USER_AGENT, HeaderValue::from_str(user_agent.as_str()).unwrap());
+        headers.insert(USER_AGENT, match HeaderValue::from_str(user_agent.as_str()) {
+            Ok(hdr) => hdr,
+            Err(e) => {
+                eprintln!("Unable to create user agent header: {}", e);
+                continue;
+            }
+        });
 
         if webhook.token != "" {
             let token = format!("Bearer {}", webhook.token);
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&token).unwrap());
+            headers.insert(AUTHORIZATION, match HeaderValue::from_str(&token) {
+                Ok(hdr) => hdr,
+                Err(e) => {
+                    eprintln!("Unable to create authorization header: {}", e);
+                    continue;
+                }
+            });
         }
 
-        let client = reqwest::Client::builder()
-            .redirect(Policy::limited(5))
-            .build()
-            .unwrap();
-
-        let json = serde_json::to_string_pretty(&boost).unwrap();
-        let response = client
-            .post(&webhook.url)
-            .body(json)
-            .headers(headers)
-            .send()
-            .await
-            .unwrap()
-            .text()
-            .await;
-
-        let timestamp = Utc::now().timestamp();
-        let successful = response.is_ok();
-
-        match response {
-            Ok(resp) => println!("Webhook sent to {}: {}", webhook.url, resp),
-            Err(e) => eprintln!("Webhook Error: {}", e),
+        let client = match reqwest::Client::builder().redirect(Policy::limited(5)).build() {
+            Ok(cli) => cli,
+            Err(e) => {
+                eprintln!("Unable to build reqwest client: {}", e);
+                continue;
+            }
         };
+
+        let json = match serde_json::to_string_pretty(&boost) {
+            Ok(js) => js,
+            Err(e) => {
+                eprintln!("Unable to encode boost as JSON: {}", e);
+                continue;
+            }
+        };
+
+        let result = client.post(&webhook.url).body(json).headers(headers).send().await;
+        let timestamp = Utc::now().timestamp();
+        let mut successful = false;
+
+        if let Ok(res) = result {
+            let status = res.status();
+            let response = res.text().await;
+
+            if status == 200 && response.is_ok() {
+                println!("Webhook sent to {}: {}", webhook.url, response.unwrap());
+                successful = true;
+            }
+            else if status != 200 {
+                eprintln!("Webhook returned {}: {}", status, response.unwrap_or_default());
+            }
+            else if let Err(e) = response {
+                eprintln!("Webhook Error: {}", e);
+            }
+        }
+        else if let Err(e) = result {
+            eprintln!("Unable to send webhook: {}", e);
+        }
 
         if let Err(e) = dbif::set_webhook_last_request(&db_filepath, webhook.index, successful, timestamp) {
             eprintln!("Error setting webhook last request status: {}", e);
