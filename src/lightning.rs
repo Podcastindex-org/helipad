@@ -26,47 +26,13 @@ pub struct RawBoost {
     #[serde(default = "d_blank")]
     app_name: Option<String>,
     #[serde(default = "d_blank")]
-    app_version: Option<String>,
-    #[serde(default = "d_blank")]
-    boost_link: Option<String>,
-    #[serde(default = "d_blank")]
     message: Option<String>,
-    #[serde(default = "d_blank")]
-    name: Option<String>,
-    #[serde(default = "d_blank")]
-    pubkey: Option<String>,
-    #[serde(default = "d_blank")]
-    sender_key: Option<String>,
     #[serde(default = "d_blank")]
     sender_name: Option<String>,
     #[serde(default = "d_blank")]
-    sender_id: Option<String>,
-    #[serde(default = "d_blank")]
-    sig_fields: Option<String>,
-    #[serde(default = "d_blank")]
-    signature: Option<String>,
-    #[serde(default = "d_blank")]
-    speed: Option<String>,
-    #[serde(default = "d_blank")]
-    uuid: Option<String>,
-    #[serde(default = "d_blank")]
     podcast: Option<String>,
-    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    feedID: Option<u64>,
-    #[serde(default = "d_blank")]
-    guid: Option<String>,
-    #[serde(default = "d_blank")]
-    url: Option<String>,
     #[serde(default = "d_blank")]
     episode: Option<String>,
-    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    itemID: Option<u64>,
-    #[serde(default = "d_blank")]
-    episode_guid: Option<String>,
-    #[serde(default = "d_blank")]
-    time: Option<String>,
-    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    ts: Option<u64>,
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     value_msat: Option<u64>,
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
@@ -332,7 +298,7 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &Vec<u8>, rem
                     "stream" => 1, //This indicates a per-minute podcast payment
                     "boost"  => 2, //This is a manual boost or boost-a-gram
                     "auto"   => 4, //This is an automated boost
-                    _        => 3, //Invalid or no action (set to 3 for legacy reasons)
+                    _        => 3, //Invalid action or empty string (set to 3 for legacy reasons)
                 }
             }
 
