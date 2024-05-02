@@ -14,6 +14,7 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, Header
 use reqwest::redirect::Policy;
 
 use std::env;
+use std::fs;
 use std::path::Path;
 
 #[macro_use]
@@ -28,6 +29,7 @@ mod podcastindex;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
+const HELIPAD_SOUND_DIR: &str = "./sounds";
 const HELIPAD_STANDARD_PORT: &str = "2112";
 
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
@@ -47,6 +49,7 @@ pub struct AppState {
 #[derive(Clone, Debug)]
 pub struct HelipadConfig {
     pub database_file_path: String,
+    pub sound_path: String,
     pub listen_port: String,
     pub macaroon_path: String,
     pub cert_path: String,
@@ -70,6 +73,7 @@ async fn main() {
     //Configuration
     let mut helipad_config = HelipadConfig {
         database_file_path: "".to_string(),
+        sound_path: "".to_string(),
         listen_port: "".to_string(),
         macaroon_path: "".to_string(),
         cert_path: "".to_string(),
@@ -83,6 +87,7 @@ async fn main() {
 
     //Debugging
     println!("Config file(database_dir): {:#?}", server_config.database_dir);
+    println!("Config file(sound_dir): {:#?}", server_config.sound_dir);
     println!("Config file(listen_port): {:#?}", server_config.listen_port);
     println!("Config file(macaroon): {:#?}", server_config.macaroon);
     println!("Config file(cert): {:#?}", server_config.cert);
@@ -136,6 +141,28 @@ async fn main() {
         Err(e) => {
             eprintln!("Database error: {:#?}", e);
             std::process::exit(3);
+        }
+    }
+
+    //SOUND DIR
+    //Get the directory to store boost sounds in
+    println!("\nDiscovering sound directory...");
+    if let Ok(sound_dir) = std::env::var("HELIPAD_SOUND_DIR") {
+        helipad_config.sound_path = sound_dir.clone();
+        println!(" - Using environment var(HELIPAD_SOUND_DIR): [{}]", helipad_config.sound_path);
+    }
+    else if let Some(sound_dir) = server_config.sound_dir {
+        helipad_config.sound_path = sound_dir.clone();
+        println!(" - Using config var(sound_dir): [{}]", helipad_config.sound_path);
+    }
+    else {
+        helipad_config.sound_path = HELIPAD_SOUND_DIR.to_string();
+        println!(" - Using default: [{}]", helipad_config.sound_path);
+    }
+
+    if !Path::new(&helipad_config.sound_path).is_dir() {
+        if let Err(e) = fs::create_dir_all(&helipad_config.sound_path) {
+            eprintln!("Unable to create sound directory: {}", e);
         }
     }
 

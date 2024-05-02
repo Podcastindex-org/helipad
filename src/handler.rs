@@ -31,7 +31,6 @@ const WEBROOT_PATH_HTML: &str = "webroot/html";
 const WEBROOT_PATH_IMAGE: &str = "webroot/image";
 const WEBROOT_PATH_STYLE: &str = "webroot/style";
 const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
-const WEBROOT_PATH_SOUND: &str = "/data/sounds";
 
 
 //Structs and Enums ------------------------------------------------------------------------------------------
@@ -249,6 +248,7 @@ pub struct AssetParams {
 
 //Serve a web asset by name from webroot subfolder according to it's requested type
 pub async fn asset(
+    State(state): State<AppState>,
     Query(params): Query<AssetParams>,
     uri: Uri,
 ) -> Response {
@@ -282,7 +282,7 @@ pub async fn asset(
             file_extension = "js";
         }
         "/sound" => {
-            file_path = WEBROOT_PATH_SOUND;
+            file_path = &state.helipad_config.sound_path;
             content_type = "audio/mpeg";
             file_extension = "";
         }
@@ -868,7 +868,7 @@ pub async fn general_settings_save(
 
     if let Some(field) = parts.custom_pew_file {
         let from_path = field.contents.path();
-        let to_path = "/data/sounds/custom_pew.mp3".to_string();
+        let to_path =  format!("{}/custom_pew.mp3", state.helipad_config.sound_path);
         let bytes = std::fs::copy(from_path, &to_path).unwrap_or(0);
 
         if bytes > 0 {
@@ -978,7 +978,7 @@ pub async fn numerology_settings_save(
     if let Some(field) = parts.sound_file {
         let filename = format!("{}.mp3", parts.amount);
         let from_path = field.contents.path();
-        let to_path = format!("/data/sounds/{}", filename);
+        let to_path = format!("{}/{}", state.helipad_config.sound_path, filename);
         let bytes = std::fs::copy(from_path, &to_path).unwrap_or(0);
 
         if bytes > 0 {
