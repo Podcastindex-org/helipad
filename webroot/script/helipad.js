@@ -522,6 +522,9 @@ $(document).ready(function () {
                 </table>
               </div>
               <div class="modal-footer">
+                <div class="flex-fill">
+                    <a id="download-tlv" href="#" target="_blank">Download TLV</a>
+                </div>
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
               </div>
             </div>
@@ -543,11 +546,20 @@ $(document).ready(function () {
                 const boost = result[0];
                 let tlv = null;
 
+                $('#download-tlv')
+                    .prop('href', 'data:application/json;charset=utf-8,' + encodeURIComponent(boost.tlv))
+                    .prop('download', `tlv-${msgid}.json`)
+
                 try {
                     tlv = JSON.parse(boost.tlv);
                 }
                 catch (e) {
-                    return $table.html('Unable to parse TLV');
+                    $table.empty()
+                    $table.append('<tr><td colspan="2">Unable to parse TLV</td></tr>')
+                    $table.append(
+                        $('<tr>').append($('<th>').text('tlv')).append($('<td>').text(boost.tlv))
+                    )
+                    return
                 }
 
                 $table.empty().append(
