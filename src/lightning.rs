@@ -298,7 +298,7 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &Vec<u8>, rem
                     "stream" => 1, //This indicates a per-minute podcast payment
                     "boost"  => 2, //This is a manual boost or boost-a-gram
                     "auto"   => 4, //This is an automated boost
-                    _        => 3, //Invalid or no action (set to 3 for legacy reasons)
+                    _        => 3, //Invalid action or empty string (set to 3 for legacy reasons)
                 }
             }
 

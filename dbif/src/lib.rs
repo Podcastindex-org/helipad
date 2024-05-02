@@ -647,7 +647,7 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
 }
 
 
-//Get all of the boosts from the database
+//Get all of the non-boosts from the database
 pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
@@ -658,7 +658,7 @@ pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: b
         ltgt = "<=";
     }
 
-    //Build the query
+    //Build the query to include anything that's not a boost or auto boost
     let sqltxt = format!("SELECT idx, \
                                        time, \
                                        value_msat, \
@@ -674,7 +674,7 @@ pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: b
                                        remote_episode, \
                                        reply_sent \
                                  FROM boosts \
-                                 WHERE action = 1 \
+                                 WHERE action NOT IN (2, 4) \
                                    AND idx {} :index \
                                  ORDER BY idx DESC \
                                  LIMIT :max", ltgt);
