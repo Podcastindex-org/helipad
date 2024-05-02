@@ -26,47 +26,13 @@ pub struct RawBoost {
     #[serde(default = "d_blank")]
     app_name: Option<String>,
     #[serde(default = "d_blank")]
-    app_version: Option<String>,
-    #[serde(default = "d_blank")]
-    boost_link: Option<String>,
-    #[serde(default = "d_blank")]
     message: Option<String>,
-    #[serde(default = "d_blank")]
-    name: Option<String>,
-    #[serde(default = "d_blank")]
-    pubkey: Option<String>,
-    #[serde(default = "d_blank")]
-    sender_key: Option<String>,
     #[serde(default = "d_blank")]
     sender_name: Option<String>,
     #[serde(default = "d_blank")]
-    sender_id: Option<String>,
-    #[serde(default = "d_blank")]
-    sig_fields: Option<String>,
-    #[serde(default = "d_blank")]
-    signature: Option<String>,
-    #[serde(default = "d_blank")]
-    speed: Option<String>,
-    #[serde(default = "d_blank")]
-    uuid: Option<String>,
-    #[serde(default = "d_blank")]
     podcast: Option<String>,
-    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    feedID: Option<u64>,
-    #[serde(default = "d_blank")]
-    guid: Option<String>,
-    #[serde(default = "d_blank")]
-    url: Option<String>,
     #[serde(default = "d_blank")]
     episode: Option<String>,
-    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    itemID: Option<u64>,
-    #[serde(default = "d_blank")]
-    episode_guid: Option<String>,
-    #[serde(default = "d_blank")]
-    time: Option<String>,
-    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    ts: Option<u64>,
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
     value_msat: Option<u64>,
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
