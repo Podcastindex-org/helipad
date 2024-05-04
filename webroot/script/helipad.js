@@ -1,7 +1,7 @@
 $(document).ready(function () {
     let messages = $('div.mesgs');
     let inbox = messages.find('div.msg_history');
-    let appIconUrlBase = '/image?name=';
+    let appIconUrlBase = 'image/';
     let pewAudio = new Audio();
     let appList = {};
     let numerologyList = [];
@@ -124,7 +124,7 @@ $(document).ready(function () {
 
                     //Icon
                     let appIcon = appList[boostApp.toLowerCase()] || {};
-                    let appIconUrl = appIconUrlBase + (appIcon.icon || 'unknown');
+                    let appIconUrl = appIconUrlBase + (appIcon.icon || 'unknown') + '.png';
                     let appIconHref = appIcon.url || '#';
 
                     //Person
@@ -411,13 +411,13 @@ $(document).ready(function () {
         const pews = parseNumerology(value).filter(num => num.sound_file)
 
         if (pews.length) {
-            pewAudio.src = `/sound?name=${pews[0].sound_file}`
+            pewAudio.src = `sound/${pews[0].sound_file}`
         }
         else if (settings.custom_pew_file) {
-            pewAudio.src = `/sound?name=${settings.custom_pew_file}`;
+            pewAudio.src = `sound/${settings.custom_pew_file}`;
         }
         else {
-            pewAudio.src = '/pew.mp3'; // default
+            pewAudio.src = 'pew.mp3'; // default
         }
 
         pewAudio.play();

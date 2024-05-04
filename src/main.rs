@@ -6,6 +6,8 @@ use axum::{
     Router,
 };
 
+use tower_http::services::{ServeDir, ServeFile};
+
 use chrono::Utc;
 use drop_root::set_user_group;
 use rand::{distributions::Alphanumeric, Rng}; // 0.8
@@ -37,6 +39,10 @@ const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/ad
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
 
 const REMOTE_GUID_CACHE_SIZE: usize = 20;
+
+const WEBROOT_PATH_IMAGE: &str = "webroot/image";
+const WEBROOT_PATH_STYLE: &str = "webroot/style";
+const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
 
 //Structs ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
@@ -252,9 +258,6 @@ async fn main() {
         .route("/streams", get(handler::streams))
         .route("/sent", get(handler::sent))
         .route("/settings", get(handler::settings))
-        .route("/pew.mp3", get(handler::pewmp3))
-        .route("/favicon.ico", get(handler::favicon))
-        .route("/apps.json", get(handler::apps_json))
         .route("/numerology.json", get(handler::numerology_json))
 
         .route("/settings/general", get(handler::general_settings_load))
@@ -308,12 +311,14 @@ async fn main() {
         .route("/login", get(handler::login).post(handler::handle_login))
 
         //Assets
-        .route("/image", get(handler::asset))
-        .route("/html", get(handler::asset))
-        .route("/style", get(handler::asset))
-        .route("/script", get(handler::asset))
-        .route("/extra", get(handler::asset))
-        .route("/sound", get(handler::asset))
+        .nest_service("/image", ServeDir::new(WEBROOT_PATH_IMAGE))
+        .nest_service("/script", ServeDir::new(WEBROOT_PATH_SCRIPT))
+        .nest_service("/style", ServeDir::new(WEBROOT_PATH_STYLE))
+        .nest_service("/sound", ServeDir::new(helipad_config.sound_path))
+
+        .nest_service("/pew.mp3", ServeFile::new("webroot/extra/pew.mp3"))
+        .nest_service("/favicon.ico", ServeFile::new("webroot/extra/favicon.ico"))
+        .nest_service("/apps.json", ServeFile::new("webroot/extra/apps.json"))
 
         .with_state(state);
 

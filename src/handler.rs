@@ -1,8 +1,7 @@
 // use crate::{Context, Request, Body, Response};
 use axum::{
-    body::Body,
     extract::{Form, Path, Query, Request, State},
-    http::{header, StatusCode, Uri},
+    http::{header, StatusCode, HeaderMap},
     middleware::Next,
     response::{Html, Json, Redirect, IntoResponse, Response},
 };
@@ -25,13 +24,6 @@ use std::{fs, str};
 use std::string::String;
 use url::Url;
 use tempfile::NamedTempFile;
-
-//Constants --------------------------------------------------------------------------------------------------
-const WEBROOT_PATH_HTML: &str = "webroot/html";
-const WEBROOT_PATH_IMAGE: &str = "webroot/image";
-const WEBROOT_PATH_STYLE: &str = "webroot/style";
-const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
-
 
 //Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
@@ -217,92 +209,11 @@ pub async fn settings(State(state): State<AppState>) -> Response {
     HtmlTemplate("webroot/html/settings.html", &json!({"version": state.version})).into_response()
 }
 
-//Pew-pew audio
-pub async fn pewmp3() -> Response {
-    let file = fs::read("webroot/extra/pew.mp3").expect("Unable to read file");
-    ([(header::CONTENT_TYPE, "audio/mpeg")], file).into_response()
-}
-
-//Favicon icon
-pub async fn favicon() -> Response {
-    let file = fs::read("webroot/extra/favicon.ico").expect("Unable to read file");
-    ([(header::CONTENT_TYPE, "image/png")], file).into_response()
-}
-
-//Apps definitions file
-pub async fn apps_json() -> Response {
-    let file = fs::read("webroot/extra/apps.json").expect("Unable to read file");
-    ([(header::CONTENT_TYPE, "application/json")], file).into_response()
-}
 
 //Numerology definitions file
 pub async fn numerology_json(State(state): State<AppState>) -> Response {
     let results = dbif::get_numerology_from_db(&state.helipad_config.database_file_path).unwrap();
     Json(results).into_response()
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct AssetParams {
-    name: String,
-}
-
-//Serve a web asset by name from webroot subfolder according to it's requested type
-pub async fn asset(
-    State(state): State<AppState>,
-    Query(params): Query<AssetParams>,
-    uri: Uri,
-) -> Response {
-    println!("** Uri: {:#?}", uri);
-    println!("** Params: {:#?}", params);
-
-    //Set up the response framework
-    let file_path;
-    let content_type;
-    let file_extension;
-
-    match uri.path() {
-        "/html" => {
-            file_path = WEBROOT_PATH_HTML;
-            content_type = "text/html";
-            file_extension = "html";
-        }
-        "/image" => {
-            file_path = WEBROOT_PATH_IMAGE;
-            content_type = "image/png";
-            file_extension = "png";
-        }
-        "/style" => {
-            file_path = WEBROOT_PATH_STYLE;
-            content_type = "text/css";
-            file_extension = "css";
-        }
-        "/script" => {
-            file_path = WEBROOT_PATH_SCRIPT;
-            content_type = "text/javascript";
-            file_extension = "js";
-        }
-        "/sound" => {
-            file_path = &state.helipad_config.sound_path;
-            content_type = "audio/mpeg";
-            file_extension = "";
-        }
-        _ => {
-            return (StatusCode::BAD_REQUEST, "** Invalid asset type requested (ex. /images?name=filename.").into_response();
-        }
-    };
-
-    //Attempt to serve the file
-    let file_to_serve = match file_extension {
-        "" => format!("{}/{}", file_path, params.name),
-        _  => format!("{}/{}.{}", file_path, params.name, file_extension),
-    };
-    println!("** Serving file: [{}]", file_to_serve);
-    let file = fs::read(file_to_serve.as_str()).expect("Something went wrong reading the file.");
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, content_type)],
-        Body::from(file)
-    ).into_response()
 }
 
 //API - give back node info
