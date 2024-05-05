@@ -145,16 +145,15 @@ $(document).ready(function () {
 
                     //Show sat amount and more info
                     let boostDisplayAmount = numberFormat(boostSats) + " sats";
-                    let boostMoreInfo = numberFormat(boostActualSats) + " sats received after splits/fees.";
                     let boostSentReceived = (config.pluralName == 'sent boosts' ? 'sent' : 'received');
 
                     if (settings.show_received_sats) {
                         boostDisplayAmount = `${numberFormat(boostActualSats)} sats ${boostSentReceived}`;
-                        boostMoreInfo = numberFormat(boostSats) + " total sats sent.";
                     }
 
                     //If there is a difference between actual and stated sats, display it
                     if ((boostSats != boostActualSats) && boostSats > 0 && boostActualSats > 0) {
+                        let boostMoreInfo = `${numberFormat(boostActualSats)} of ${numberFormat(boostSats)} sats ${boostSentReceived} after splits/fees.`;
                         boostDisplayAmount = '<span class="more_info" title="' + boostMoreInfo + '">' + boostDisplayAmount + '</span>';
                     }
 
