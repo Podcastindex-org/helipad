@@ -119,8 +119,8 @@ pub async fn auth_middleware(
     };
 
     // login required
-    if ctype.starts_with("application/json") {
-        return (StatusCode::FORBIDDEN, "Access forbidden").into_response(); // json response
+    if path.starts_with("/api/v1") || ctype.starts_with("application/json") {
+        return (StatusCode::FORBIDDEN, "Not logged in").into_response(); // json response
     }
 
     Redirect::to("/login").into_response() // redirect to login
