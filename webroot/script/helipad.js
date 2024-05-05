@@ -159,7 +159,8 @@ $(document).ready(function () {
 
                     let boostSplitPercentage = '';
                     if (settings.show_split_percentage) {
-                        split = Math.round(100 * boostSats / boostActualSats) / 100;
+                        const split = Math.round(100 * boostActualSats / boostSats);
+
                         if (settings.show_received_sats) {
                             boostSplitPercentage = ' <small>(' + split + '% of ' + numberFormat(boostSats) + ' sats)</small>';
                         }
