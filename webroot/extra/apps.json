@@ -102,5 +102,9 @@
     "ln beats": {
         "icon": "lnbeats",
         "url": "https://lnbeats.com"
+    },
+    "the split kit": {
+        "icon": "split-kit",
+        "url": "https://www.thesplitkit.com/"
     }
 }
