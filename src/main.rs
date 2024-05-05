@@ -2,7 +2,7 @@
 //------------------------------------------------------------------------------------------------------------
 use axum::{
     middleware,
-    routing::{get, post, options, delete},
+    routing::{get, post, options, delete, patch},
     Router,
 };
 
@@ -266,6 +266,7 @@ async fn main() {
         .route("/settings/numerology", get(handler::numerology_settings_list))
         .route("/settings/numerology/reset", get(handler::numerology_settings_reset))
         .route("/settings/numerology/reset", post(handler::numerology_settings_do_reset))
+        .route("/settings/numerology/:idx", patch(handler::numerology_settings_patch))
         .route("/settings/numerology/:idx", get(handler::numerology_settings_load))
         .route("/settings/numerology/:idx", post(handler::numerology_settings_save))
         .route("/settings/numerology/:idx", delete(handler::numerology_settings_delete))

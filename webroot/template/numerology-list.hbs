@@ -1,5 +1,6 @@
 <thead>
   <tr>
+    <th></th>
     <th>Amount</th>
     <th>Description</th>
     <th>Emoji</th>
@@ -9,16 +10,25 @@
   </tr>
 </thead>
 
-<tbody>
+<tbody id="numerology-items">
   {{#each numerology}}
-  <tr class="numerology" data-index="{{ index }}">
-    <td>
+  <tr class="numerology" data-index="{{ index }}" hx-patch="/settings/numerology/{{ index }}" hx-trigger="move" hx-target="#numerology">
+    <td class="align-middle">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="sort-handle" style="color: dimgray; width: 1rem; cursor: move; user-select: none;">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5" />
+      </svg>
+    </td>
+    <td class="align-middle">
       {{ equality }}
       {{ amount }}
     </td>
-    <td>{{ description }}</td>
-    <td>{{ emoji }}</td>
-    <td>
+    <td class="align-middle">
+      {{ description }}
+    </td>
+    <td class="align-middle">
+      {{ emoji }}
+    </td>
+    <td class="align-middle">
       {{#if sound_file}}
         <a href="#" onclick="(new Audio('sound/{{ sound_file }}')).play(); return false">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-volume-up" viewBox="0 0 16 16">
@@ -29,7 +39,7 @@
         </a>
       {{/if}}
     </td>
-    <td class="text-right">
+    <td class="align-middle text-right">
       <button
           class="btn btn-sm btn-primary"
           hx-get="/settings/numerology/{{ index }}"
@@ -56,3 +66,21 @@
   <tr id="added-numerology" style="display: none">
   </tr>
 </tbody>
+
+<script type="text/javascript">
+(() => {
+  const items = document.getElementById("numerology-items")
+
+  new Sortable(items, {
+    handle: '.sort-handle',
+    animation: 150,
+    onSort: function (ev) {
+      ev.item.setAttribute("hx-vals", JSON.stringify({
+        position: ev.newIndex + 1
+      }))
+
+      ev.item.dispatchEvent(new CustomEvent("move", ev))
+    },
+  });
+})();
+</script>

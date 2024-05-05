@@ -52,11 +52,6 @@
         </div>
       </div>
       <div class="form-group">
-        <label for="num-description">Description</label>
-        <input name="description" type="text" class="form-control" id="num-description" aria-describedby="num-description-help" value="{{ numerology.description }}">
-        <small id="num-description-help" class="form-text text-muted">Description to show in Helipad for this numerology.</small>
-      </div>
-      <div class="form-group">
         <label for="num-sound-file">Sound</label>
         {{#if numerology.sound_file}}
         <div id="num-sound-file-existing" class="border bg-light px-2 py-1 my-2" style="border-color: #ced4da">
@@ -76,6 +71,23 @@
           <input class="form-control" type="file" name="sound_file" accept=".mp3">
         </div>
         <small id="num-sound-help" class="form-text text-muted">Sound to play when boosts are received with this amount.</small>
+      </div>
+      <div class="form-group">
+        <label for="num-position">Position</label>
+        <input
+          name="position"
+          type="number"
+          class="form-control w-auto"
+          id="num-position"
+          aria-describedby="num-position-help"
+          {{#if numerology.position}}value="{{ numerology.position }}"{{/if}}
+          {{#unless numerology.position}}value="1"{{/unless}}
+        <small id="num-position-help" class="form-text text-muted">Numerologies with lower positions are applied first</small>
+      </div>
+      <div class="form-group">
+        <label for="num-description">Description</label>
+        <input name="description" type="text" class="form-control" id="num-description" aria-describedby="num-description-help" value="{{ numerology.description }}">
+        <small id="num-description-help" class="form-text text-muted">Description to show in Helipad for this numerology.</small>
       </div>
     </div>
     <div class="modal-footer">

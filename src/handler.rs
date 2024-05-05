@@ -842,6 +842,7 @@ pub async fn numerology_settings_load(
 
 #[derive(Debug, TryFromMultipart)]
 pub struct NumerologyMultipart {
+    position: u64,
     amount: u64,
     equality: String,
     emoji: Option<String>,
@@ -867,6 +868,7 @@ pub async fn numerology_settings_save(
 
     let mut numero = NumerologyRecord {
         index: index,
+        position: parts.position,
         amount: parts.amount,
         equality: parts.equality,
         emoji: parts.emoji,
@@ -945,6 +947,43 @@ pub async fn numerology_settings_do_reset(State(state): State<AppState>) -> Resp
     }
 
     numerology_list(&db_filepath).into_response()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NumerologyPatchForm {
+    position: u64,
+}
+
+pub async fn numerology_settings_patch(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+    Form(params): Form<NumerologyPatchForm>,
+) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
+    let db_filepath = state.helipad_config.database_file_path;
+
+    let index = idx.parse().unwrap();
+
+    let mut numero = match dbif::load_numerology_from_db(&db_filepath, index) {
+        Ok(num) => num,
+        Err(e) => {
+            eprintln!("** Error loading numerology item: {}.\n", e);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "** Error loading numerology item."));
+        }
+    };
+
+    numero.position = params.position;
+
+    match dbif::save_numerology_to_db(&db_filepath, &numero) {
+        Ok(num) => num,
+        Err(e) => {
+            eprintln!("** Error saving numerology item: {}.\n", e);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "** Error saving numerology item."));
+        }
+    };
+
+    println!("** numerology_settings_patch({})", index);
+
+    Ok(numerology_list(&db_filepath))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
