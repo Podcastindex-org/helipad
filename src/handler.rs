@@ -1,7 +1,7 @@
 // use crate::{Context, Request, Body, Response};
 use axum::{
     extract::{Form, Path, Query, Request, State},
-    http::{header, StatusCode, HeaderMap},
+    http::{header, StatusCode},
     middleware::Next,
     response::{Html, Json, Redirect, IntoResponse, Response},
 };
@@ -217,14 +217,6 @@ pub async fn numerology_json(State(state): State<AppState>) -> Response {
 }
 
 //API - give back node info
-pub async fn api_v1_node_info_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
-}
-
 pub async fn api_v1_node_info(State(state): State<AppState>) -> Response {
     match dbif::get_node_info_from_db(&state.helipad_config.database_file_path) {
         Ok(info) => {
@@ -250,14 +242,6 @@ pub async fn api_v1_settings(State(state): State<AppState>) -> Response {
 }
 
 //API - give back the node balance
-pub async fn api_v1_balance_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
-}
-
 pub async fn api_v1_balance(State(state): State<AppState>) -> Response {
 
     //Get the boosts from db for returning
@@ -273,14 +257,6 @@ pub async fn api_v1_balance(State(state): State<AppState>) -> Response {
 }
 
 //API - serve boosts as JSON either in ascending or descending order
-pub async fn api_v1_boosts_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BoostParams {
     index: u64,
@@ -325,14 +301,6 @@ pub async fn api_v1_boosts(
 }
 
 //API - serve streams as JSON either in ascending or descending order
-pub async fn api_v1_streams_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
-}
-
 pub async fn api_v1_streams(
     params: Option<Query<BoostParams>>,
     State(state): State<AppState>
@@ -365,14 +333,6 @@ pub async fn api_v1_streams(
 }
 
 //API - get the current invoice index number
-pub async fn api_v1_index_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
-}
-
 pub async fn api_v1_index(State(state): State<AppState>) -> Response {
 
     //Get the last known invoice index from the database
@@ -389,14 +349,6 @@ pub async fn api_v1_index(State(state): State<AppState>) -> Response {
 }
 
 //API - get the current payment index number
-pub async fn api_v1_sent_index_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
-}
-
 pub async fn api_v1_sent_index(State(state): State<AppState>) -> Response {
     //Get the last known payment index from the database
     match dbif::get_last_payment_index_from_db(&state.helipad_config.database_file_path) {
@@ -412,14 +364,6 @@ pub async fn api_v1_sent_index(State(state): State<AppState>) -> Response {
 }
 
 //API - serve sent as JSON either in ascending or descending order
-pub async fn api_v1_sent_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
-}
-
 pub async fn api_v1_sent(
     params: Option<Query<BoostParams>>,
     State(state): State<AppState>
@@ -449,14 +393,6 @@ pub async fn api_v1_sent(
             (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting sent boosts.").into_response()
         }
     }
-}
-
-pub async fn api_v1_reply_options() -> impl IntoResponse {
-    (
-        StatusCode::NO_CONTENT,
-        [(header::ACCESS_CONTROL_ALLOW_METHODS, "GET, OPTIONS")],
-        ""
-    )
 }
 
 #[derive(Debug, Serialize, Deserialize)]

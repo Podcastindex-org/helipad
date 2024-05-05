@@ -1,11 +1,13 @@
 //Modules ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
 use axum::{
+    http::Method,
     middleware,
-    routing::{get, post, options, delete, patch},
+    routing::{get, post, delete, patch},
     Router,
 };
 
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 
 use chrono::Utc;
@@ -252,66 +254,63 @@ async fn main() {
         version: version.to_string(),
     };
 
+    // Api routes
+
     //Router
     let app = Router::new()
-        .route("/", get(handler::home))
-        .route("/streams", get(handler::streams))
-        .route("/sent", get(handler::sent))
-        .route("/settings", get(handler::settings))
-        .route("/numerology.json", get(handler::numerology_json))
+        // authed routes (if password set)
+        .nest("/", Router::new()
+            .route("/", get(handler::home))
+            .route("/streams", get(handler::streams))
+            .route("/sent", get(handler::sent))
+            .route("/settings", get(handler::settings))
+            .route("/numerology.json", get(handler::numerology_json))
 
-        .route("/settings/general", get(handler::general_settings_load))
-        .route("/settings/general", post(handler::general_settings_save))
+            .route("/settings/general", get(handler::general_settings_load))
+            .route("/settings/general", post(handler::general_settings_save))
 
-        .route("/settings/numerology", get(handler::numerology_settings_list))
-        .route("/settings/numerology/reset", get(handler::numerology_settings_reset))
-        .route("/settings/numerology/reset", post(handler::numerology_settings_do_reset))
-        .route("/settings/numerology/:idx", patch(handler::numerology_settings_patch))
-        .route("/settings/numerology/:idx", get(handler::numerology_settings_load))
-        .route("/settings/numerology/:idx", post(handler::numerology_settings_save))
-        .route("/settings/numerology/:idx", delete(handler::numerology_settings_delete))
+            .route("/settings/numerology", get(handler::numerology_settings_list))
+            .route("/settings/numerology/reset", get(handler::numerology_settings_reset))
+            .route("/settings/numerology/reset", post(handler::numerology_settings_do_reset))
+            .route("/settings/numerology/:idx", patch(handler::numerology_settings_patch))
+            .route("/settings/numerology/:idx", get(handler::numerology_settings_load))
+            .route("/settings/numerology/:idx", post(handler::numerology_settings_save))
+            .route("/settings/numerology/:idx", delete(handler::numerology_settings_delete))
 
-        .route("/settings/webhooks", get(handler::webhook_settings_list))
-        .route("/settings/webhooks/:idx", get(handler::webhook_settings_load))
-        .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
-        .route("/settings/webhooks/:idx", delete(handler::webhook_settings_delete))
+            .route("/settings/webhooks", get(handler::webhook_settings_list))
+            .route("/settings/webhooks/:idx", get(handler::webhook_settings_load))
+            .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
+            .route("/settings/webhooks/:idx", delete(handler::webhook_settings_delete))
 
-        //Api
-        .route("/api/v1/node_info", options(handler::api_v1_node_info_options))
-        .route("/api/v1/node_info", get(handler::api_v1_node_info))
+            .route("/csv", get(handler::csv_export_boosts))
 
-        .route("/api/v1/settings", get(handler::api_v1_settings))
+            // public api (cors all origins)
+            .nest("/api/v1", Router::new()
+                .route("/node_info", get(handler::api_v1_node_info))
+                .route("/settings", get(handler::api_v1_settings))
+                .route("/boosts", get(handler::api_v1_boosts))
+                .route("/balance", get(handler::api_v1_balance))
+                .route("/streams", get(handler::api_v1_streams))
+                .route("/sent", get(handler::api_v1_sent))
+                .route("/index", get(handler::api_v1_index))
+                .route("/sent_index", get(handler::api_v1_sent_index))
 
-        .route("/api/v1/boosts", options(handler::api_v1_boosts_options))
-        .route("/api/v1/boosts", get(handler::api_v1_boosts))
+                // allow all origins to GET from public api
+                .route_layer(CorsLayer::new().allow_methods([Method::GET]).allow_origin(Any))
+            )
 
-        .route("/api/v1/balance", options(handler::api_v1_balance_options))
-        .route("/api/v1/balance", get(handler::api_v1_balance))
+            // protected api
+            .route("/api/v1/reply", post(handler::api_v1_reply))
+            .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
 
-        .route("/api/v1/streams", options(handler::api_v1_streams_options))
-        .route("/api/v1/streams", get(handler::api_v1_streams))
+            // require auth for above routes
+            .route_layer(middleware::from_fn_with_state(state.clone(), handler::auth_middleware))
+        )
 
-        .route("/api/v1/sent", options(handler::api_v1_sent_options))
-        .route("/api/v1/sent", get(handler::api_v1_sent))
-
-        .route("/api/v1/index", options(handler::api_v1_index_options))
-        .route("/api/v1/index", get(handler::api_v1_index))
-
-        .route("/api/v1/sent_index", options(handler::api_v1_sent_index_options))
-        .route("/api/v1/sent_index", get(handler::api_v1_sent_index))
-
-        .route("/api/v1/reply", options(handler::api_v1_reply_options))
-        .route("/api/v1/reply", post(handler::api_v1_reply))
-        .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
-
-        .route("/csv", get(handler::csv_export_boosts))
-
-        .route_layer(middleware::from_fn_with_state(state.clone(), handler::auth_middleware))
-
-        // Auth-free routes
+        // login page
         .route("/login", get(handler::login).post(handler::handle_login))
 
-        //Assets
+        // static assets
         .nest_service("/image", ServeDir::new(WEBROOT_PATH_IMAGE))
         .nest_service("/script", ServeDir::new(WEBROOT_PATH_SCRIPT))
         .nest_service("/style", ServeDir::new(WEBROOT_PATH_STYLE))
@@ -322,6 +321,7 @@ async fn main() {
         .nest_service("/apps.json", ServeFile::new("webroot/extra/apps.json"))
 
         .with_state(state);
+
 
     let binding = format!("0.0.0.0:{}", &listen_port);
     let listener = tokio::net::TcpListener::bind(&binding).await.unwrap();
