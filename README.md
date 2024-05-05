@@ -43,11 +43,17 @@ convenience as it's a very common thing to change during testing.
 ## API
 The very simplistic API consists of the following endpoints:
 
-#### /api/v1/index
-This call returns the current most recent invoice index number that Helipad has reconciled with LND.
-
 #### /api/v1/balance
 This call returns the current channel balance that LND is reporting.
+
+#### /api/v1/node_info
+This call returns the node name, pubkey, and version that LND is reporting.
+
+#### /api/v1/settings
+This call returns the current settings that the user has set.
+
+#### /api/v1/index
+This call returns the most recent invoice index number that Helipad has reconciled with LND.
 
 #### /api/v1/boosts
 This call returns `count` boosts starting at `index`.  If the `old` parameter is present, the boosts returned start from `index` and
@@ -56,6 +62,70 @@ descend by `count`, showing older boosts.  Otherwise, they start at `index` and 
 #### /api/v1/streams
 This call returns `count` streams starting at `index`.  If the `old` parameter is present, the streams returned start from `index` and
 descend by `count`, showing older streams.  Otherwise, they start at `index` and ascend by `count`, showing newer streams.
+
+#### /api/v1/sent_index
+This call returns the most recent payment index number that Helipad has reconciled with LND.
+
+#### /api/v1/sent
+This call returns `count` sent boosts starting at `index`.  If the `old` parameter is present, the sent boosts returned start from `index` and
+descend by `count`, showing older sent boosts.  Otherwise, they start at `index` and ascend by `count`, showing newer sent boosts.
+
+<br><br>
+## Webhooks
+Webhooks send an HTTP POST to a user defined URL whenever a new boost, stream, or sent boost is processed by Helipad. The body of the POST will contain the following JSON format:
+```json
+{
+  "index": 1234,
+  "time": 1714548166,
+  "value_msat": 100000,
+  "value_msat_total": 1000000,
+  "action": 2,
+  "sender": "Mark Pugner",
+  "app": "CurioCaster",
+  "message": "My boost message",
+  "podcast": "Podcast name",
+  "episode": "Episode name",
+  "tlv": "{\n  \"podcast\": \"Podcast name\",\n  \"feedId\": 1234567,\n  \"episode\": \"Episode name\",\n  \"action\": \"boost\",\n  \"app_name\": \"CurioCaster\",\n  \"url\": \"https://podcast/example.xml\",\n  \"value_msat_total\": 1000000,\n  \"message\": \"My boost message\",\n  \"sender_name\": \"Mark Pugner\",\n  \"reply_address\": \"03ae9f91a0cb8ff43840e3c322c4c61f019d8c1c3cea15a25cfc425ac605e61a4a\",\n  \"remote_feed_guid\": \"b8b6971e-403e-568f-a4e6-7aa2b45e50d4\",\n  \"remote_item_guid\": \"72a3b402-8491-4cd9-823e-a621fd81b86f\",\n  \"value_msat\": 100000,\n  \"name\": \"Podcastindex.org\"\n}\n",
+  "remote_podcast": "Some artist",
+  "remote_episode": "Some song",
+  "reply_sent": false,
+  "payment_info": null
+}
+```
+
+The fields are as follows:
+
+* `index`: LND index of the invoice or payment
+* `time`: Unix Timestamp of the item
+* `value_msat`: Actual amount received/sent by our node
+* `value_msat_total`: Total amount of the item
+* `action`: Item type (1 = stream, 2 = boost, 3 = unknown, 4 = automated boost, 0 = error)
+* `sender`: Sender's name
+* `app`: Application used to send the item
+* `message`: Message sent by the sender
+* `podcast`: Name of the podcast
+* `episode`: Name of the episode
+* `tlv`: Raw copy of the TLV
+* `remote_podcast`: Name of the remote podcast (during a Value Time Split)
+* `remote_episode`: Name of the remote episode (during a Value Time Split)
+* `reply_sent`: Flag that indicates if this item has been sent a reply boost
+* `payment_info`: Additional payment info for sent boosts:
+  ```json
+    "payment_info": {
+      "payment_hash": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "pubkey": "03ae9f91a0cb8ff43840e3c322c4c61f019d8c1c3cea15a25cfc425ac605e61a4a",
+      "custom_key": 696969,
+      "custom_value": "XXXXXXXXXXXXXXXXXXXX",
+      "fee_msat": 333,
+      "reply_to_idx": null
+    }
+  ```
+  * `payment_hash`: Payment hash from LND
+  * `pubkey`: Recipient's node pubkey
+  * `custom_key`: Recipient's wallet key
+  * `custom_value`: Recipient's wallet ID
+  * `fee_msat`: Fee paid to send boost
+  * `reply_to_idx`: Index of item that was replied to
 
 
 <br><br>
