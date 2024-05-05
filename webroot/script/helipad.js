@@ -130,7 +130,7 @@ $(document).ready(function () {
                     //Person
                     let boostPerson = "";
                     if (config.pluralName == 'sent boosts' && boostTlv.name) {
-                        boostPerson = `sent to ${boostTlv.name}`;
+                        boostPerson = `to ${boostTlv.name}`;
                     }
                     else if (element.sender.trim() != "") {
                         boostPerson = `from ${element.sender}`;
@@ -146,9 +146,10 @@ $(document).ready(function () {
                     //Show sat amount and more info
                     let boostDisplayAmount = numberFormat(boostSats) + " sats";
                     let boostMoreInfo = numberFormat(boostActualSats) + " sats received after splits/fees.";
+                    let boostSentReceived = (config.pluralName == 'sent boosts' ? 'sent' : 'received');
 
                     if (settings.show_received_sats) {
-                        boostDisplayAmount = numberFormat(boostActualSats) + " sats received";
+                        boostDisplayAmount = `${numberFormat(boostActualSats)} sats ${boostSentReceived}`;
                         boostMoreInfo = numberFormat(boostSats) + " total sats sent.";
                     }
 
