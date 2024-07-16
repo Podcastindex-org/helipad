@@ -25,6 +25,8 @@ use std::string::String;
 use url::Url;
 use tempfile::NamedTempFile;
 
+use crate::lnclient;
+
 //Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
@@ -406,7 +408,7 @@ pub struct ReplyForm {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ReplyResponse {
     success: bool,
-    data: BoostRecord,
+    payment: lnclient::Payment,
 }
 
 pub async fn api_v1_reply(
@@ -461,10 +463,12 @@ pub async fn api_v1_reply(
     });
 
     let helipad_config = state.helipad_config.clone();
-    let lightning = match lightning::connect_to_lnd(helipad_config.node_address, helipad_config.cert_path, helipad_config.macaroon_path).await {
-        Some(lndconn) => lndconn,
-        None => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error connecting to LND.").into_response();
+
+    let lightning = match lnclient::connect(&helipad_config).await {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("** Error connecting to node: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error connecting to node.").into_response();
         }
     };
 
@@ -478,33 +482,27 @@ pub async fn api_v1_reply(
 
     let mut cache = podcastindex::GuidCache::new(1);
 
-    let mut boost = match lightning::parse_boost_from_payment(payment, &mut cache).await {
-        Some(boost) => boost,
-        None => {
-            eprintln!("** Error parsing sent boost");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error parsing sent boost").into_response();
+    if let Some(mut boost) = lightning::parse_boost_from_payment(&payment, &mut cache).await {
+        if let Some(pay_info) = boost.payment_info {
+            boost.payment_info = Some(dbif::PaymentRecord {
+                reply_to_idx: Some(index),
+                ..pay_info
+            });
         }
-    };
 
-    if let Some(pay_info) = boost.payment_info {
-        boost.payment_info = Some(dbif::PaymentRecord {
-            reply_to_idx: Some(index),
-            ..pay_info
-        });
-    }
+        //Give some output
+        println!("Sent Boost: {:#?}", boost);
 
-    //Give some output
-    println!("Sent Boost: {:#?}", boost);
-
-    //Store in the database
-    match dbif::add_payment_to_db(&state.helipad_config.database_file_path, &boost) {
-        Ok(_) => println!("New sent boost added."),
-        Err(e) => eprintln!("Error adding sent boost: {:#?}", e)
+        //Store in the database
+        match dbif::add_payment_to_db(&state.helipad_config.database_file_path, &boost) {
+            Ok(_) => println!("New sent boost added."),
+            Err(e) => eprintln!("Error adding sent boost: {:#?}", e)
+        }
     }
 
     Json(ReplyResponse {
         success: true,
-        data: boost,
+        payment: payment,
     }).into_response()
 }
 
