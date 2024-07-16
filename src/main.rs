@@ -33,6 +33,7 @@ extern crate configure_me;
 mod handler;
 mod lightning;
 mod podcastindex;
+mod lnclient;
 mod lnaddress;
 mod metadata;
 mod boost;
@@ -48,6 +49,10 @@ const HELIPAD_STANDARD_PORT: &str = "2112";
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
 const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
+const CLN_GRPC_URL: &str = "192.168.50.138:50386";
+const CLN_CERT_PATH: &str = "/cln/regtest/client.pem";
+const CLN_KEY_PATH: &str = "/cln/regtest/client-key.pem";
+const CLN_CACERT_PATH: &str = "/cln/regtest/ca.pem";
 
 const REMOTE_GUID_CACHE_SIZE: usize = 20;
 
@@ -75,6 +80,11 @@ pub struct HelipadConfig {
     pub node_address: String,
     pub password: String,
     pub secret: String,
+    pub node_type: String,
+    pub cln_url: String,
+    pub cln_cert_path: String,
+    pub cln_key_path: String,
+    pub cln_cacert_path: String,
 }
 
 
@@ -100,6 +110,11 @@ async fn main() {
         node_address: "".to_string(),
         password: "".to_string(),
         secret: "".to_string(),
+        node_type: "".to_string(),
+        cln_url: "".to_string(),
+        cln_cert_path: "".to_string(),
+        cln_key_path: "".to_string(),
+        cln_cacert_path: "".to_string(),
     };
 
     //Bring in the configuration info
@@ -290,8 +305,15 @@ async fn main() {
 
     //Start the LND polling thread.  This thread will poll LND every few seconds to
     //get the latest invoices and store them in the database.
-    tokio::spawn(poller::lnd_poller(helipad_config.clone(), state.ws_tx.clone()));
-    tokio::spawn(poller::lnd_subscribe_invoices(helipad_config.clone(), state.ws_tx.clone(), shared_settings.clone()));
+
+    //CLN vs. LND-Modus entscheiden (NODE_TYPE=cln -> generischer Poller)
+    if helipad_config.node_type.to_uppercase() == "CLN" {
+        println!(" - Using CLN node type - spawning generic invoice poller...");
+        tokio::spawn(generic_poller(helipad_config.clone()));
+    } else {
+        tokio::spawn(poller::lnd_poller(helipad_config.clone(), state.ws_tx.clone()));
+        tokio::spawn(poller::lnd_subscribe_invoices(helipad_config.clone(), state.ws_tx.clone(), shared_settings.clone()));
+    }
 
     // Api routes
 
@@ -433,3 +455,228 @@ pub struct WebSocketEvent(
     pub String,
     pub serde_json::Value,
 );
+
+async fn generic_poller(helipad_config: HelipadConfig) {
+    let db_filepath = helipad_config.database_file_path.clone();
+
+    //Make the connection to LND
+    println!("\nConnecting to node address...");
+
+    let mut lightning = match lnclient::connect(&helipad_config).await {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("Unable to connect to node: {}", e);
+            return;
+        }
+    };
+
+    println!(" - Success.");
+
+    //Get lnd node info
+    match lightning.get_info().await {
+        Ok(node_info) => {
+            println!("Node info: {:#?}", node_info);
+
+            let record = dbif::NodeInfoRecord {
+                lnd_alias: node_info.alias,
+                node_pubkey: node_info.pubkey,
+                node_version: node_info.version,
+            };
+
+            if dbif::add_node_info_to_db(&db_filepath, record).is_err() {
+                println!("Error updating node info in database.");
+            }
+        }
+        Err(e) => {
+            eprintln!("Error getting node info: {:#?}", e);
+        }
+    }
+
+    //Instantiate a cache to use when resolving remote podcasts/episode guids
+    let mut remote_cache = podcastindex::GuidCache::new(REMOTE_GUID_CACHE_SIZE);
+
+    //The main loop
+    let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
+    let mut current_payment = dbif::get_last_payment_index_from_db(&db_filepath).unwrap();
+
+    loop {
+        let mut updated = false;
+
+        //Get lnd node channel balance
+        match lightning.channel_balance().await {
+            Ok(current_balance) => {
+                if dbif::add_wallet_balance_to_db(&db_filepath, current_balance).is_err() {
+                    println!("Error adding wallet balance to the database.");
+                }
+            },
+            Err(e) => {
+                eprintln!("Error getting wallet balance: {:#?}", e);
+            }
+        };
+
+        //Get a list of invoices
+        let invoices = match lightning.list_invoices(current_index.clone(), 500).await {
+            Ok(invoices) => invoices,
+            Err(e) => {
+                eprintln!("lightning::list_invoices failed: {}", e);
+                vec![]
+            }
+        };
+
+        for invoice in invoices {
+            if let Some(db_boost) = lightning::parse_boost_from_invoice(&invoice, &mut remote_cache).await {
+                //Give some output
+                println!("Boost: {:#?}", &db_boost);
+
+                //Store in the database
+                match dbif::add_invoice_to_db(&db_filepath, &db_boost) {
+                    Ok(_) => println!("New invoice added."),
+                    Err(e) => eprintln!("Error adding invoice: {:#?}", e)
+                }
+
+                //Send out webhooks (if any)
+                send_webhooks(&db_filepath, &db_boost).await;
+            }
+
+            current_index = invoice.index;
+            updated = true;
+        }
+
+        //Make sure we are tracking our position properly
+        println!("Current index: {}", current_index);
+
+        let payments = match lightning.list_payments(current_payment, 500).await {
+            Ok(payments) => payments,
+            Err(e) => {
+                eprintln!("lightning::list_payments failed: {}", e);
+                vec![]
+            }
+        };
+
+        for payment in payments {
+            let parsed = lightning::parse_boost_from_payment(&payment, &mut remote_cache).await;
+
+            if let Some(boost) = parsed {
+                //Give some output
+                println!("Sent Boost: {:#?}", boost);
+
+                //Store in the database
+                match dbif::add_payment_to_db(&db_filepath, &boost) {
+                    Ok(_) => println!("New payment added."),
+                    Err(e) => eprintln!("Error adding payment: {:#?}", e)
+                }
+
+                //Send out webhooks (if any)
+                send_webhooks(&db_filepath, &boost).await;
+            }
+
+            current_payment = payment.index;
+            updated = true;
+        }
+
+        //Make sure we are tracking our position properly
+        println!("Current payment: {}", current_payment);
+
+        //Sleep only if nothing was updated
+        if !updated {
+            tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
+        }
+    }
+}
+
+async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
+    let webhooks = match dbif::get_webhooks_from_db(&db_filepath, Some(true)) {
+        Ok(wh) => wh,
+        Err(e) => {
+            eprintln!("Error loading webhooks from db: {:#?}", e);
+            return;
+        }
+    };
+
+    for webhook in webhooks {
+        if boost.payment_info.is_some() && !webhook.on_sent {
+            continue; // sent
+        }
+
+        if boost.action == 1 && !webhook.on_stream {
+            continue; // stream
+        }
+
+        if (boost.action == 2 || boost.action == 4) && !webhook.on_boost {
+            continue; // boost or auto
+        }
+
+        let mut headers = HeaderMap::new();
+
+        headers.insert(CONTENT_TYPE, match HeaderValue::from_str("application/json") {
+            Ok(hdr) => hdr,
+            Err(e) => {
+                eprintln!("Unable to create content type header: {}", e);
+                continue;
+            }
+        });
+
+        let user_agent = format!("Helipad/{}", env!("CARGO_PKG_VERSION"));
+        headers.insert(USER_AGENT, match HeaderValue::from_str(user_agent.as_str()) {
+            Ok(hdr) => hdr,
+            Err(e) => {
+                eprintln!("Unable to create user agent header: {}", e);
+                continue;
+            }
+        });
+
+        if webhook.token != "" {
+            let token = format!("Bearer {}", webhook.token);
+            headers.insert(AUTHORIZATION, match HeaderValue::from_str(&token) {
+                Ok(hdr) => hdr,
+                Err(e) => {
+                    eprintln!("Unable to create authorization header: {}", e);
+                    continue;
+                }
+            });
+        }
+
+        let client = match reqwest::Client::builder().redirect(Policy::limited(5)).build() {
+            Ok(cli) => cli,
+            Err(e) => {
+                eprintln!("Unable to build reqwest client: {}", e);
+                continue;
+            }
+        };
+
+        let json = match serde_json::to_string_pretty(&boost) {
+            Ok(js) => js,
+            Err(e) => {
+                eprintln!("Unable to encode boost as JSON: {}", e);
+                continue;
+            }
+        };
+
+        let result = client.post(&webhook.url).body(json).headers(headers).send().await;
+        let timestamp = Utc::now().timestamp();
+        let mut successful = false;
+
+        if let Ok(res) = result {
+            let status = res.status();
+            let response = res.text().await;
+
+            if status == 200 && response.is_ok() {
+                println!("Webhook sent to {}: {}", webhook.url, response.unwrap());
+                successful = true;
+            }
+            else if status != 200 {
+                eprintln!("Webhook returned {}: {}", status, response.unwrap_or_default());
+            }
+            else if let Err(e) = response {
+                eprintln!("Webhook Error: {}", e);
+            }
+        }
+        else if let Err(e) = result {
+            eprintln!("Unable to send webhook: {}", e);
+        }
+
+        if let Err(e) = dbif::set_webhook_last_request(&db_filepath, webhook.index, successful, timestamp) {
+            eprintln!("Error setting webhook last request status: {}", e);
+        }
+    }
+}
