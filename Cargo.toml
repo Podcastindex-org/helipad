@@ -16,6 +16,7 @@ url = "2.2.1"
 drop-root = "1.2.2"
 dbif = { path = 'dbif'}
 lnd-rs = { path = "lnd-rs" }
+cln-rs = { path = "cln-rs" }
 configure_me = "0.4.0"
 handlebars = "6.4.0"
 chrono = "0.4.35"
