@@ -433,14 +433,25 @@ pub async fn api_v1_reply(
     let tlv = boost.parse_tlv().unwrap();
 
     let pub_key = tlv["reply_address"].as_str().unwrap_or_default().to_string();
-    let custom_key = tlv["reply_custom_key"].as_u64();
+
+    let custom_key = match tlv["reply_custom_key"].as_u64() {
+        None => None,
+        Some(0) => None,
+        Some(rck) => Some(rck),
+    };
+
     let custom_value = match tlv["reply_custom_value"].as_str() {
+        None => None,
+        Some("") => None,
         Some(rcv) => Some(rcv.to_string()),
-        None => None
     };
 
     if pub_key == "" {
         return (StatusCode::BAD_REQUEST, "** No reply_address found in boost").into_response();
+    }
+
+    if custom_key.is_none() && custom_value.is_some() {
+        return (StatusCode::BAD_REQUEST, "** No reply_custom_key found in boost").into_response();
     }
 
     if custom_key.is_some() && custom_value.is_none() {
