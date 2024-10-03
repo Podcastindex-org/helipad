@@ -13,7 +13,7 @@ pub struct NodeInfoRecord {
     pub node_version: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BoostRecord {
     pub index: u64,
     pub time: i64,
@@ -49,7 +49,7 @@ impl BoostRecord {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PaymentRecord {
     pub payment_hash: String,
     pub pubkey: String,
@@ -561,8 +561,8 @@ pub fn mark_boost_as_replied(filepath: &String, index: u64) -> Result<bool, Box<
     Ok(true)
 }
 
-//Get all of the boosts from the database
-pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+//Get all of the invoices from the database
+pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
@@ -571,26 +571,22 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
         ltgt = "<=";
     }
 
+    let action = match invtype {
+        "boost" => " AND action IN (2, 4)",
+        "stream" => " AND action NOT IN (2, 4)",
+        _ => "",
+    };
+
     //Query for boosts and automated boosts
-    let sqltxt = format!("SELECT idx, \
-                                       time, \
-                                       value_msat, \
-                                       value_msat_total, \
-                                       action, \
-                                       sender, \
-                                       app, \
-                                       message, \
-                                       podcast, \
-                                       episode, \
-                                       tlv, \
-                                       remote_podcast, \
-                                       remote_episode, \
-                                       reply_sent \
-                                 FROM boosts \
-                                 WHERE action IN (2, 4) \
-                                   AND idx {} :index \
-                                 ORDER BY idx DESC \
-                                 LIMIT :max", ltgt);
+    let sqltxt = format!("
+        SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent
+        FROM boosts
+        WHERE
+            idx {} :index
+            {}
+        ORDER BY idx DESC
+        LIMIT :max
+    ", ltgt, action);
 
     //Prepare and execute the query
     let mut stmt = conn.prepare(sqltxt.as_str())?;
@@ -648,93 +644,24 @@ pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bo
     Ok(boosts)
 }
 
+pub fn get_single_invoice_from_db(filepath: &String, invtype: &str, index: u64, escape_html: bool) -> Result<Option<BoostRecord>, Box<dyn Error>> {
+    let invoices = get_invoices_from_db(filepath, invtype, index, 1, true, escape_html)?;
+
+    if invoices.len() > 0 && invoices[0].index == index {
+        Ok(Some(invoices[0].clone()))
+    }
+    else {
+        Ok(None)
+    }
+}
+
+pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+    get_invoices_from_db(filepath, "boost", index, max, direction, escape_html)
+}
 
 //Get all of the non-boosts from the database
 pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
-    let conn = connect_to_database(false, filepath)?;
-    let mut boosts: Vec<BoostRecord> = Vec::new();
-
-
-    let mut ltgt = ">=";
-    if direction {
-        ltgt = "<=";
-    }
-
-    //Build the query to include anything that's not a boost or auto boost
-    let sqltxt = format!("SELECT idx, \
-                                       time, \
-                                       value_msat, \
-                                       value_msat_total, \
-                                       action, \
-                                       sender, \
-                                       app, \
-                                       message, \
-                                       podcast, \
-                                       episode, \
-                                       tlv, \
-                                       remote_podcast, \
-                                       remote_episode, \
-                                       reply_sent \
-                                 FROM boosts \
-                                 WHERE action NOT IN (2, 4) \
-                                   AND idx {} :index \
-                                 ORDER BY idx DESC \
-                                 LIMIT :max", ltgt);
-
-    //Prepare and execute the query
-    let mut stmt = conn.prepare(sqltxt.as_str())?;
-    let rows = stmt.query_map(&[(":index", index.to_string().as_str()), (":max", max.to_string().as_str())], |row| {
-        Ok(BoostRecord {
-            index: row.get(0)?,
-            time: row.get(1)?,
-            value_msat: row.get(2)?,
-            value_msat_total: row.get(3)?,
-            action: row.get(4)?,
-            sender: row.get(5)?,
-            app: row.get(6)?,
-            message: row.get(7)?,
-            podcast: row.get(8)?,
-            episode: row.get(9)?,
-            tlv: row.get(10)?,
-            remote_podcast: row.get(11).ok(),
-            remote_episode: row.get(12).ok(),
-            reply_sent: row.get(13).unwrap_or(false),
-            payment_info: None,
-        })
-    }).unwrap();
-
-    //Parse the results
-    for row in rows {
-        let boost: BoostRecord = row.unwrap();
-
-        //Some things like text output don't need to be html entity escaped
-        //so only do it if asked for
-        if escape_html {
-            let boost_clean = BoostRecord {
-                sender: BoostRecord::escape_for_html(boost.sender),
-                app: BoostRecord::escape_for_html(boost.app),
-                message: BoostRecord::escape_for_html(boost.message),
-                podcast: BoostRecord::escape_for_html(boost.podcast),
-                episode: BoostRecord::escape_for_html(boost.episode),
-                tlv: BoostRecord::escape_for_html(boost.tlv),
-                remote_podcast: match boost.remote_podcast {
-                    Some(item) => Some(BoostRecord::escape_for_html(item)),
-                    None => None
-                },
-                remote_episode: match boost.remote_episode {
-                    Some(item) => Some(BoostRecord::escape_for_html(item)),
-                    None => None
-                },
-                ..boost
-            };
-            boosts.push(boost_clean);
-        } else {
-            boosts.push(boost);
-        }
-
-    }
-
-    Ok(boosts)
+    get_invoices_from_db(filepath, "stream", index, max, direction, escape_html)
 }
 
 //Get the last boost index number from the database

@@ -418,18 +418,16 @@ pub async fn api_v1_reply(
     let sender = params.sender.unwrap_or("Anonymous".into());
     let message = params.message.unwrap_or("".into());
 
-    let boosts = match dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, 1, true, true) {
-        Ok(items) => items,
+    let boost = match dbif::get_single_invoice_from_db(&state.helipad_config.database_file_path, "", index, true) {
+        Ok(Some(boost)) => boost,
+        Ok(None) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Unknown boost index.").into_response();
+        },
         Err(_) => {
             return (StatusCode::INTERNAL_SERVER_ERROR, "** Error finding boost index.").into_response();
         }
     };
 
-    if boosts.is_empty() {
-        return (StatusCode::INTERNAL_SERVER_ERROR, "** Unknown boost index.").into_response();
-    }
-
-    let boost = &boosts[0];
     let tlv = boost.parse_tlv().unwrap();
 
     let pub_key = tlv["reply_address"].as_str().unwrap_or_default().to_string();
