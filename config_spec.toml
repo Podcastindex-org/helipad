@@ -9,16 +9,6 @@ type = "String"
 doc = "The location to store boost sounds."
 
 [[param]]
-name = "macaroon"
-type = "String"
-doc = "The location of the macaroon file."
-
-[[param]]
-name = "cert"
-type = "String"
-doc = "The location of the tls certificate file."
-
-[[param]]
 name = "listen_port"
 type = "u16"
 doc = "The port to listen on."
@@ -29,6 +19,41 @@ type = "String"
 doc = "The password to use to access Helipad."
 
 [[param]]
+name = "node_type"
+type = "String"
+doc = "The type of node to access (LND or CLN)."
+
+[[param]]
 name = "lnd_url"
 type = "String"
 doc = "The url and port of the LND grpc api."
+
+[[param]]
+name = "macaroon"
+type = "String"
+doc = "The location of the LND macaroon file."
+
+[[param]]
+name = "cert"
+type = "String"
+doc = "The location of the LND tls certificate file."
+
+[[param]]
+name = "cln_url"
+type = "String"
+doc = "The url and port of the CLN GRPC API (e.g. localhost:3001)."
+
+[[param]]
+name = "cln_cert_path"
+type = "String"
+doc = "The location of the CLN client certificate."
+
+[[param]]
+name = "cln_key_path"
+type = "String"
+doc = "The location of the CLN client key."
+
+[[param]]
+name = "cln_cacert_path"
+type = "String"
+doc = "The location of the CLN CA certificate."

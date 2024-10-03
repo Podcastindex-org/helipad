@@ -30,6 +30,7 @@ extern crate configure_me;
 mod handler;
 mod lightning;
 mod podcastindex;
+mod lnclient;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
@@ -39,6 +40,11 @@ const HELIPAD_STANDARD_PORT: &str = "2112";
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
 const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
+
+const CLN_URL: &str = "https://127.0.0.1:2105";
+const CLN_CERT_PATH: &str = "/cln/regtest/client.pem";
+const CLN_KEY_PATH: &str = "/cln/regtest/client-key.pem";
+const CLN_CACERT_PATH: &str = "/cln/regtest/ca.pem";
 
 const REMOTE_GUID_CACHE_SIZE: usize = 20;
 
@@ -59,11 +65,16 @@ pub struct HelipadConfig {
     pub database_file_path: String,
     pub sound_path: String,
     pub listen_port: String,
-    pub macaroon_path: String,
-    pub cert_path: String,
-    pub node_address: String,
     pub password: String,
     pub secret: String,
+    pub node_type: String,
+    pub lnd_url: String,
+    pub lnd_macaroon_path: String,
+    pub lnd_cert_path: String,
+    pub cln_url: String,
+    pub cln_cert_path: String,
+    pub cln_key_path: String,
+    pub cln_cacert_path: String,
 }
 
 //Configure_me
@@ -83,11 +94,16 @@ async fn main() {
         database_file_path: "".to_string(),
         sound_path: "".to_string(),
         listen_port: "".to_string(),
-        macaroon_path: "".to_string(),
-        cert_path: "".to_string(),
-        node_address: "".to_string(),
         password: "".to_string(),
         secret: "".to_string(),
+        node_type: "".to_string(),
+        lnd_url: "".to_string(),
+        lnd_macaroon_path: "".to_string(),
+        lnd_cert_path: "".to_string(),
+        cln_url: "".to_string(),
+        cln_cert_path: "".to_string(),
+        cln_key_path: "".to_string(),
+        cln_cacert_path: "".to_string(),
     };
 
     //Bring in the configuration info
@@ -194,54 +210,130 @@ async fn main() {
             .collect();
     }
 
-    //Get the macaroon and cert files.  Look in the local directory first as an override.
-    //If the files are not found in the currect working directory, look for them at their
-    //normal LND directory locations
-    println!("\nDiscovering macaroon file path...");
-    let env_macaroon_path = std::env::var("LND_ADMINMACAROON");
-    //First try from the environment
-    if env_macaroon_path.is_ok() {
-        helipad_config.macaroon_path = env_macaroon_path.unwrap();
-        println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", helipad_config.macaroon_path);
-    } else if server_config.macaroon.is_some() {
-        helipad_config.macaroon_path = server_config.macaroon.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.macaroon_path);
-    } else if Path::new("admin.macaroon").is_file() {
-        helipad_config.macaroon_path = "admin.macaroon".to_string();
-        println!(" - Trying current directory: [{}]", helipad_config.macaroon_path);
-    } else {
-        helipad_config.macaroon_path = String::from(LND_STANDARD_MACAROON_LOCATION);
-        println!(" - Trying LND default: [{}]", helipad_config.macaroon_path);
+    //Get the url connection string of the CLN node if provided
+    println!("\nDiscovering node type...");
+
+    let env_node_type = std::env::var("NODE_TYPE");
+
+    if env_node_type.is_ok() {
+        helipad_config.node_type = env_node_type.unwrap();
+        println!(" - Trying environment var(NODE_TYPE): [{}]", helipad_config.node_type);
+    } else if server_config.node_type.is_some() {
+        helipad_config.node_type = server_config.node_type.unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.node_type);
     }
 
-    println!("\nDiscovering certificate file path...");
-    let env_cert_path = std::env::var("LND_TLSCERT");
-    if env_cert_path.is_ok() {
-        helipad_config.cert_path = env_cert_path.unwrap();
-        println!(" - Trying environment var(LND_TLSCERT): [{}]", helipad_config.cert_path);
-    } else if server_config.cert.is_some() {
-        helipad_config.cert_path = server_config.cert.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cert_path);
-    } else if Path::new("tls.cert").is_file() {
-        helipad_config.cert_path = "tls.cert".to_string();
-        println!(" - Trying current directory: [{}]", helipad_config.cert_path);
-    } else {
-        helipad_config.cert_path = String::from(LND_STANDARD_TLSCERT_LOCATION);
-        println!(" - Trying LND default: [{}]", helipad_config.cert_path);
-    }
+    if helipad_config.node_type.to_uppercase() == "CLN" {
+        println!("\nDiscovering CLN GRPC address...");
+        let env_cln_url = std::env::var("CLN_URL");
 
-    //Get the url connection string of the lnd node
-    println!("\nDiscovering LND node address...");
-    let env_lnd_url = std::env::var("LND_URL");
-    if env_lnd_url.is_ok() {
-        helipad_config.node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
-        println!(" - Trying environment var(LND_URL): [{}]", helipad_config.node_address);
-    } else if server_config.lnd_url.is_some() {
-        helipad_config.node_address = server_config.lnd_url.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.node_address);
-    } else {
-        helipad_config.node_address = String::from(LND_STANDARD_GRPC_URL);
-        println!(" - Trying localhost default: [{}].", helipad_config.node_address);
+        if env_cln_url.is_ok() {
+            helipad_config.cln_url = "https://".to_owned() + env_cln_url.unwrap().as_str();
+            println!(" - Trying environment var(CLN_URL): [{}]", helipad_config.cln_url);
+        } else if server_config.cln_url.is_some() {
+            helipad_config.cln_url = server_config.cln_url.unwrap();
+            println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_url);
+        } else {
+            helipad_config.cln_cert_path = String::from(CLN_URL);
+            println!(" - Trying default: [{}]", helipad_config.cln_url);
+        }
+
+        //Get the rune string of the CLN node
+        println!("\nDiscovering CLN GRPC certificate path...");
+        let env_cln_cert_path = std::env::var("CLN_CERT_PATH");
+
+        if env_cln_cert_path.is_ok() {
+            helipad_config.cln_cert_path = env_cln_cert_path.unwrap();
+            println!(" - Trying environment var(CLN_CERT_PATH): [{}]", helipad_config.cln_cert_path);
+        } else if server_config.cln_cert_path.is_some() {
+            helipad_config.cln_cert_path = server_config.cln_cert_path.unwrap();
+            println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_cert_path);
+        } else {
+            helipad_config.cln_cert_path = String::from(CLN_CERT_PATH);
+            println!(" - Trying default: [{}]", helipad_config.cln_cert_path);
+        }
+
+        println!("\nDiscovering CLN GRPC CA key path...");
+        let env_cln_key_path = std::env::var("CLN_KEY_PATH");
+
+        if env_cln_key_path.is_ok() {
+            helipad_config.cln_key_path = env_cln_key_path.unwrap();
+            println!(" - Trying environment var(CLN_KEY_PATH): [{}]", helipad_config.cln_key_path);
+        } else if server_config.cln_key_path.is_some() {
+            helipad_config.cln_key_path = server_config.cln_key_path.unwrap();
+            println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_key_path);
+        } else {
+            helipad_config.cln_key_path = String::from(CLN_KEY_PATH);
+            println!(" - Trying default: [{}]", helipad_config.cln_key_path);
+        }
+
+        println!("\nDiscovering CLN GRPC root certificate path...");
+        let env_cln_cacert_path = std::env::var("CLN_CACERT_PATH");
+
+        if env_cln_cacert_path.is_ok() {
+            helipad_config.cln_cacert_path = env_cln_cacert_path.unwrap();
+            println!(" - Trying environment var(CLN_CACERT_PATH): [{}]", helipad_config.cln_cacert_path);
+        } else if server_config.cln_cacert_path.is_some() {
+            helipad_config.cln_cacert_path = server_config.cln_cacert_path.unwrap();
+            println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_cacert_path);
+        } else {
+            helipad_config.cln_cacert_path = String::from(CLN_CACERT_PATH);
+            println!(" - Trying default: [{}]", helipad_config.cln_cacert_path);
+        }
+    }
+    else {
+        //Get the url connection string of the lnd node
+        println!("\nDiscovering LND node address...");
+        let env_lnd_url = std::env::var("LND_URL");
+
+        if env_lnd_url.is_ok() {
+            helipad_config.lnd_url = "https://".to_owned() + env_lnd_url.unwrap().as_str();
+            println!(" - Trying environment var(LND_URL): [{}]", helipad_config.lnd_url);
+        } else if server_config.lnd_url.is_some() {
+            helipad_config.lnd_url = server_config.lnd_url.unwrap();
+            println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.lnd_url);
+        } else {
+            helipad_config.lnd_url = String::from(LND_STANDARD_GRPC_URL);
+            println!(" - Trying localhost default: [{}].", helipad_config.lnd_url);
+        }
+
+        //Get the macaroon and cert files.  Look in the local directory first as an override.
+        //If the files are not found in the currect working directory, look for them at their
+        //normal LND directory locations
+        println!("\nDiscovering macaroon file path...");
+        let env_macaroon_path = std::env::var("LND_ADMINMACAROON");
+
+        //First try from the environment
+        if env_macaroon_path.is_ok() {
+            helipad_config.lnd_macaroon_path = env_macaroon_path.unwrap();
+            println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", helipad_config.lnd_macaroon_path);
+        } else if server_config.macaroon.is_some() {
+            helipad_config.lnd_macaroon_path = server_config.macaroon.unwrap();
+            println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.lnd_macaroon_path);
+        } else if Path::new("admin.macaroon").is_file() {
+            helipad_config.lnd_macaroon_path = "admin.macaroon".to_string();
+            println!(" - Trying current directory: [{}]", helipad_config.lnd_macaroon_path);
+        } else {
+            helipad_config.lnd_macaroon_path = String::from(LND_STANDARD_MACAROON_LOCATION);
+            println!(" - Trying LND default: [{}]", helipad_config.lnd_macaroon_path);
+        }
+
+        println!("\nDiscovering certificate file path...");
+        let env_cert_path = std::env::var("LND_TLSCERT");
+
+        if env_cert_path.is_ok() {
+            helipad_config.lnd_cert_path = env_cert_path.unwrap();
+            println!(" - Trying environment var(LND_TLSCERT): [{}]", helipad_config.lnd_cert_path);
+        } else if server_config.cert.is_some() {
+            helipad_config.lnd_cert_path = server_config.cert.unwrap();
+            println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.lnd_cert_path);
+        } else if Path::new("tls.cert").is_file() {
+            helipad_config.lnd_cert_path = "tls.cert".to_string();
+            println!(" - Trying current directory: [{}]", helipad_config.lnd_cert_path);
+        } else {
+            helipad_config.lnd_cert_path = String::from(LND_STANDARD_TLSCERT_LOCATION);
+            println!(" - Trying LND default: [{}]", helipad_config.lnd_cert_path);
+        }
     }
 
     //Start the LND polling thread.  This thread will poll LND every few seconds to
@@ -353,26 +445,26 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
     let db_filepath = helipad_config.database_file_path.clone();
 
     //Make the connection to LND
-    println!("\nConnecting to LND node address...");
-    let mut lightning;
-    match lightning::connect_to_lnd(helipad_config.node_address, helipad_config.cert_path, helipad_config.macaroon_path).await {
-        Some(lndconn) => {
-            println!(" - Success.");
-            lightning = lndconn;
+    println!("\nConnecting to node address...");
+
+    let mut lightning = match lnclient::connect(&helipad_config).await {
+        Ok(conn) => conn,
+        Err(e) => {
+            eprintln!("Unable to connect to node: {}", e);
+            return;
         }
-        None => {
-            std::process::exit(1);
-        }
-    }
+    };
+
+    println!(" - Success.");
 
     //Get lnd node info
-    match lnd::Lnd::get_info(&mut lightning).await {
+    match lightning.get_info().await {
         Ok(node_info) => {
-            println!("LND node info: {:#?}", node_info);
+            println!("Node info: {:#?}", node_info);
 
             let record = dbif::NodeInfoRecord {
                 lnd_alias: node_info.alias,
-                node_pubkey: node_info.identity_pubkey,
+                node_pubkey: node_info.pubkey,
                 node_version: node_info.version,
             };
 
@@ -381,7 +473,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
             }
         }
         Err(e) => {
-            eprintln!("Error getting LND node info: {:#?}", e);
+            eprintln!("Error getting node info: {:#?}", e);
         }
     }
 
@@ -396,82 +488,76 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         let mut updated = false;
 
         //Get lnd node channel balance
-        match lnd::Lnd::channel_balance(&mut lightning).await {
-            Ok(balance) => {
-                let mut current_balance: i64 = 0;
-                if let Some(bal) = balance.local_balance {
-                    println!("LND node local balance: {:#?}", bal.sat);
-                    current_balance = bal.sat as i64;
-                }
-
+        match lightning.channel_balance().await {
+            Ok(current_balance) => {
                 if dbif::add_wallet_balance_to_db(&db_filepath, current_balance).is_err() {
                     println!("Error adding wallet balance to the database.");
                 }
-            }
+            },
             Err(e) => {
-                eprintln!("Error getting LND wallet balance: {:#?}", e);
+                eprintln!("Error getting wallet balance: {:#?}", e);
             }
-        }
+        };
 
         //Get a list of invoices
-        match lnd::Lnd::list_invoices(&mut lightning, false, current_index.clone(), 500, false).await {
-            Ok(response) => {
-                for invoice in response.invoices {
-                    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
-
-                    if let Some(boost) = parsed {
-                        //Give some output
-                        println!("Boost: {:#?}", &boost);
-
-                        //Store in the database
-                        match dbif::add_invoice_to_db(&db_filepath, &boost) {
-                            Ok(_) => println!("New invoice added."),
-                            Err(e) => eprintln!("Error adding invoice: {:#?}", e)
-                        }
-
-                        //Send out webhooks (if any)
-                        send_webhooks(&db_filepath, &boost).await;
-                    }
-
-                    current_index = invoice.add_index;
-                    updated = true;
-                }
-            }
+        let invoices = match lightning.list_invoices(current_index.clone(), 500).await {
+            Ok(invoices) => invoices,
             Err(e) => {
-                eprintln!("lnd::Lnd::list_invoices failed: {}", e);
+                eprintln!("lightning::list_invoices failed: {}", e);
+                vec![]
             }
+        };
+
+        for invoice in invoices {
+            if let Some(db_boost) = lightning::parse_boost_from_invoice(&invoice, &mut remote_cache).await {
+                //Give some output
+                println!("Boost: {:#?}", &db_boost);
+
+                //Store in the database
+                match dbif::add_invoice_to_db(&db_filepath, &db_boost) {
+                    Ok(_) => println!("New invoice added."),
+                    Err(e) => eprintln!("Error adding invoice: {:#?}", e)
+                }
+
+                //Send out webhooks (if any)
+                send_webhooks(&db_filepath, &db_boost).await;
+            }
+
+            current_index = invoice.index;
+            updated = true;
         }
 
         //Make sure we are tracking our position properly
         println!("Current index: {}", current_index);
 
-        match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false).await {
-            Ok(response) => {
-                for payment in response.payments {
-                    let parsed = lightning::parse_boost_from_payment(payment.clone(), &mut remote_cache).await;
-
-                    if let Some(boost) = parsed {
-                        //Give some output
-                        println!("Sent Boost: {:#?}", boost);
-
-                        //Store in the database
-                        match dbif::add_payment_to_db(&db_filepath, &boost) {
-                            Ok(_) => println!("New payment added."),
-                            Err(e) => eprintln!("Error adding payment: {:#?}", e)
-                        }
-
-                        //Send out webhooks (if any)
-                        send_webhooks(&db_filepath, &boost).await;
-                    }
-
-                    current_payment = payment.payment_index;
-                    updated = true;
-                }
-            }
+        let payments = match lightning.list_payments(current_payment, 500).await {
+            Ok(payments) => payments,
             Err(e) => {
-                eprintln!("lnd::Lnd::list_payments failed: {}", e);
+                eprintln!("lightning::list_payments failed: {}", e);
+                vec![]
             }
         };
+
+        for payment in payments {
+            let parsed = lightning::parse_boost_from_payment(&payment, &mut remote_cache).await;
+
+            if let Some(boost) = parsed {
+                //Give some output
+                println!("Sent Boost: {:#?}", boost);
+
+                //Store in the database
+                match dbif::add_payment_to_db(&db_filepath, &boost) {
+                    Ok(_) => println!("New payment added."),
+                    Err(e) => eprintln!("Error adding payment: {:#?}", e)
+                }
+
+                //Send out webhooks (if any)
+                send_webhooks(&db_filepath, &boost).await;
+            }
+
+            current_payment = payment.index;
+            updated = true;
+        }
 
         //Make sure we are tracking our position properly
         println!("Current payment: {}", current_payment);

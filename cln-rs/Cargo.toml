@@ -1,0 +1,14 @@
+[package]
+name = "cln-rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cln_rs"
+
+[dependencies]
+prost = "0.13.1"
+tonic = { version = "0.12.1", features = ["tls"] }
+
+[build-dependencies]
+tonic-build = "0.12.1"
