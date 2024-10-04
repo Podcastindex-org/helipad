@@ -126,29 +126,21 @@ impl std::fmt::Display for BoostError {
 impl std::error::Error for BoostError {}
 
 pub async fn connect_to_lnd(node_address: String, cert_path: String, macaroon_path: String) -> Option<lnd::Lnd> {
-    let cert: Vec<u8>;
-    match fs::read(cert_path.clone()) {
-        Ok(cert_content) => {
-            // println!(" - Success.");
-            cert = cert_content;
-        }
+    let cert: Vec<u8> = match fs::read(cert_path.clone()) {
+        Ok(cert_content) => cert_content,
         Err(_) => {
             eprintln!("Cannot find a valid tls.cert file");
             return None;
         }
-    }
+    };
 
-    let macaroon: Vec<u8>;
-    match fs::read(macaroon_path.clone()) {
-        Ok(macaroon_content) => {
-            // println!(" - Success.");
-            macaroon = macaroon_content;
-        }
+    let macaroon: Vec<u8> = match fs::read(macaroon_path.clone()) {
+        Ok(macaroon_content) => macaroon_content,
         Err(_) => {
             eprintln!("Cannot find a valid admin.macaroon file");
             return None;
         }
-    }
+    };
 
     //Make the connection to LND
     let lightning = lnd::Lnd::connect_with_macaroon(node_address.clone(), &cert, &macaroon).await;
@@ -159,7 +151,7 @@ pub async fn connect_to_lnd(node_address: String, cert_path: String, macaroon_pa
         return None;
     }
 
-    return lightning.ok();
+    lightning.ok()
 }
 
 pub async fn resolve_keysend_address(address: &str) -> Result<KeysendAddressResponse, Box<dyn Error>> {
@@ -187,9 +179,7 @@ pub async fn resolve_keysend_address(address: &str) -> Result<KeysendAddressResp
         print!(" custom_key={}, custom_value={}", item.custom_key, item.custom_value);
     }
 
-    println!("");
-
-    return Ok(data);
+    Ok(data)
 }
 
 pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key: Option<u64>, custom_value: Option<String>, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error>> {
@@ -201,7 +191,7 @@ pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key
     let mut recipient_custom_data: HashMap<u64, String> = HashMap::new();
 
     // convert keysend address into pub_key/custom keyvalue format
-    if destination.contains("@") {
+    if destination.contains('@') {
         let ln_info = resolve_keysend_address(&destination).await?;
 
         recipient_pubkey = ln_info.pubkey;
@@ -218,8 +208,10 @@ pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key
     else {
         recipient_pubkey = destination;
 
-        if custom_key.is_some() && custom_value.is_some() {
-            recipient_custom_data.insert(custom_key.unwrap(), custom_value.unwrap());
+        if let Some(ckey) = custom_key {
+            if let Some(cvalue) = custom_value {
+                recipient_custom_data.insert(ckey, cvalue);
+            }
         }
     }
 
@@ -252,7 +244,7 @@ pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key
         dest: raw_pubkey.clone(),
         amt: sats as i64,
         payment_hash: payment_hash.to_vec(),
-        dest_custom_records: dest_custom_records,
+        dest_custom_records,
         ..Default::default()
     };
 
@@ -260,8 +252,8 @@ pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key
     let response = lnd::Lnd::send_payment_sync(&mut lightning, req).await?;
     let sent_payment_hash = HEXLOWER.encode(&response.payment_hash);
 
-    if response.payment_error != "" {
-        return Err(Box::new(BoostError(response.payment_error.into())));
+    if !response.payment_error.is_empty() {
+        return Err(Box::new(BoostError(response.payment_error)));
     }
 
     // get detailed payment info from list_payments
@@ -278,8 +270,8 @@ pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key
 
 
 
-pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &Vec<u8>, remote_cache: &mut podcastindex::GuidCache) {
-    let tlv = std::str::from_utf8(&val).unwrap();
+pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote_cache: &mut podcastindex::GuidCache) {
+    let tlv = std::str::from_utf8(val).unwrap();
     println!("TLV: {:#?}", tlv);
 
     boost.tlv = tlv.to_string();
@@ -383,7 +375,7 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
         return Some(boost);
     }
 
-    return None;
+    None
 }
 
 pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
@@ -439,7 +431,7 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
                     payment_hash: payment.payment_hash.clone(),
                     pubkey: hop.pub_key.clone(),
                     custom_key: idx,
-                    custom_value: custom_value,
+                    custom_value,
                     fee_msat: payment.fee_msat,
                     reply_to_idx: None,
                 });
@@ -449,5 +441,5 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
         return Some(boost);
     }
 
-    return None;
+    None
 }

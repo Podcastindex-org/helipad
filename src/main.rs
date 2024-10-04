@@ -115,13 +115,13 @@ async fn main() {
         println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, listen_port);
     } else if let Some(arg_port) = args.get(1) {
         //If that fails, try from the command line
-        listen_port = arg_port.to_owned();
+        arg_port.clone_into(&mut listen_port);
         println!(" - Using arg from command line: [{}]", listen_port);
     } else {
         //If everything fails, then just use the default port
         println!(" - Nothing else found. Using default: [{}]...", listen_port);
     }
-    helipad_config.listen_port = listen_port.clone();
+    helipad_config.listen_port.clone_from(&listen_port);
 
     //DATABASE FILE -----
     //First try to get the database file location from the environment
@@ -156,11 +156,11 @@ async fn main() {
     //Get the directory to store boost sounds in
     println!("\nDiscovering sound directory...");
     if let Ok(sound_dir) = std::env::var("HELIPAD_SOUND_DIR") {
-        helipad_config.sound_path = sound_dir.clone();
+        helipad_config.sound_path.clone_from(&sound_dir);
         println!(" - Using environment var(HELIPAD_SOUND_DIR): [{}]", helipad_config.sound_path);
     }
     else if let Some(sound_dir) = server_config.sound_dir {
-        helipad_config.sound_path = sound_dir.clone();
+        helipad_config.sound_path.clone_from(&sound_dir);
         println!(" - Using config var(sound_dir): [{}]", helipad_config.sound_path);
     }
     else {
@@ -414,7 +414,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         }
 
         //Get a list of invoices
-        match lnd::Lnd::list_invoices(&mut lightning, false, current_index.clone(), 500, false).await {
+        match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false).await {
             Ok(response) => {
                 for invoice in response.invoices {
                     let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
@@ -484,7 +484,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
 }
 
 async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
-    let webhooks = match dbif::get_webhooks_from_db(&db_filepath, Some(true)) {
+    let webhooks = match dbif::get_webhooks_from_db(db_filepath, Some(true)) {
         Ok(wh) => wh,
         Err(e) => {
             eprintln!("Error loading webhooks from db: {:#?}", e);
@@ -524,7 +524,7 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
             }
         });
 
-        if webhook.token != "" {
+        if !webhook.token.is_empty() {
             let token = format!("Bearer {}", webhook.token);
             headers.insert(AUTHORIZATION, match HeaderValue::from_str(&token) {
                 Ok(hdr) => hdr,
@@ -574,7 +574,7 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
             eprintln!("Unable to send webhook: {}", e);
         }
 
-        if let Err(e) = dbif::set_webhook_last_request(&db_filepath, webhook.index, successful, timestamp) {
+        if let Err(e) = dbif::set_webhook_last_request(db_filepath, webhook.index, successful, timestamp) {
             eprintln!("Error setting webhook last request status: {}", e);
         }
     }

@@ -35,4 +35,4 @@ tempfile = "3.10.1"
 tower-http = { version = "0.5.2", features = ["fs", "cors"] }
 
 [build-dependencies]
-configure_me_codegen = "0.4.1"
+configure_me_codegen = "0.4.8"

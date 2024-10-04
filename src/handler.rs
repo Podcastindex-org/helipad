@@ -46,7 +46,7 @@ pub fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> bool {
         }
     };
 
-    let token = match decode::<JwtClaims>(&jwt, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256)) {
+    let token = match decode::<JwtClaims>(jwt, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256)) {
         Ok(token) => token,
         Err(_) => {
             eprintln!("Unable to decode HELIPAD_JWT cookie");
@@ -279,11 +279,7 @@ pub async fn api_v1_boosts(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let mut old = false;
-    match params.old {
-        Some(_) => old = true,
-        None => {}
-    };
+    let old = params.old.is_some();
 
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied boost count from call: [{}]", boostcount);
@@ -311,11 +307,7 @@ pub async fn api_v1_streams(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let mut old = false;
-    match params.old {
-        Some(_) => old = true,
-        None => {}
-    };
+    let old = params.old.is_some();
 
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied stream count from call: [{}]", boostcount);
@@ -374,11 +366,7 @@ pub async fn api_v1_sent(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let mut old = false;
-    match params.old {
-        Some(_) => old = true,
-        None => {}
-    };
+    let old = params.old.is_some();
 
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied sent boost count from call: [{}]", boostcount);
@@ -444,7 +432,7 @@ pub async fn api_v1_reply(
         Some(rcv) => Some(rcv.to_string()),
     };
 
-    if pub_key == "" {
+    if pub_key.is_empty() {
         return (StatusCode::BAD_REQUEST, "** No reply_address found in boost").into_response();
     }
 
@@ -548,11 +536,11 @@ pub async fn api_v1_mark_replied(
 }
 
 async fn webhook_list_response(db_filepath: &String) -> Response {
-    let webhooks = match dbif::get_webhooks_from_db(&db_filepath, None) {
+    let webhooks = match dbif::get_webhooks_from_db(db_filepath, None) {
         Ok(wh) => wh,
         Err(e) => {
             eprintln!("** Error getting webhooks: {}.\n", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error getting webhooks.")).into_response();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting webhooks.".to_string()).into_response();
         }
     };
 
@@ -597,7 +585,7 @@ pub async fn webhook_settings_load(
             Ok(wh) => Some(wh),
             Err(e) => {
                 eprintln!("** Error loading webhook: {}.\n", e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error loading webhook.")).into_response();
+                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error loading webhook.".to_string()).into_response();
             }
         }
     };
@@ -634,7 +622,7 @@ pub async fn webhook_settings_save(
     }
 
     let webhook = WebhookRecord {
-        index: index,
+        index,
         url: form.url,
         token: form.token,
         on_boost: form.on_boost.unwrap_or(false),
@@ -743,7 +731,7 @@ pub async fn general_settings_save(
 }
 
 pub fn numerology_list(db_filepath: &String) -> impl IntoResponse {
-    let results = dbif::get_numerology_from_db(&db_filepath).unwrap();
+    let results = dbif::get_numerology_from_db(db_filepath).unwrap();
     HtmlTemplate("webroot/template/numerology-list.hbs", json!({"numerology": results}))
 }
 
@@ -812,7 +800,7 @@ pub async fn numerology_settings_save(
     };
 
     let mut numero = NumerologyRecord {
-        index: index,
+        index,
         position: parts.position,
         amount: parts.amount,
         equality: parts.equality,
@@ -826,7 +814,7 @@ pub async fn numerology_settings_save(
             Ok(exist) => exist,
             Err(e) => {
                 eprintln!("** Error loading numerology: {}.\n", e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, format!("** Error loading numerology.")).into_response();
+                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error loading numerology.".to_string()).into_response();
             }
         };
 
@@ -964,16 +952,10 @@ pub async fn csv_export_boosts(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let old = match params.old {
-        Some(_) => true,
-        None => false,
-    };
+    let old = params.old.is_some();
 
     //Was a stop index given?
-    let endex = match params.end {
-        Some(endexnum) => endexnum,
-        None => 0,
-    };
+    let endex = params.end.unwrap_or(0);
 
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied boostcount from call: [{}]", boostcount);
@@ -1000,13 +982,13 @@ pub async fn csv_export_boosts(
             let mut csv = String::new();
 
             //CSV column name header
-            csv.push_str(format!("count,index,time,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode\n").as_str());
+            csv.push_str("count,index,time,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode\n");
 
             //Iterate the boost set
             let mut count: u64 = 1;
             for boost in boosts {
                 //Parse out a friendly date
-                let dt = DateTime::from_timestamp(boost.time, 0).expect(&format!("Unable to parse boost time: {}", boost.time));
+                let dt = DateTime::from_timestamp(boost.time, 0).unwrap_or_else(|| panic!("Unable to parse boost time: {}", boost.time));
                 let boost_time = dt.format("%e %b %Y %H:%M:%S UTC").to_string();
 
                 //Translate to sats
@@ -1050,18 +1032,18 @@ pub async fn csv_export_boosts(
                 }
             }
 
-            return (
+            (
                 StatusCode::OK,
                 [
                     (header::CONTENT_TYPE, "text/plain; charset=utf-8".to_string()),
                     (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}.csv\"", list))
                 ],
                 csv
-            ).into_response();
+            ).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting boosts: {}.\n", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts.").into_response();
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts.").into_response()
         }
     }
 }
