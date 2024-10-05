@@ -199,6 +199,8 @@ $(document).ready(function () {
 
                     if (!messageIds.includes(boostIndex)) {
                         let dateTime = new Date(element.time * 1000).toISOString();
+                        let localDateTime = new Date(element.time * 1000).toLocaleString();
+
                         $('div.nodata').remove();
 
                         //Build the message element
@@ -210,7 +212,7 @@ $(document).ready(function () {
                                 <a href="${appIconHref}"><img src="${appIconUrl}" title="${boostApp}" alt="${boostApp}"></a>
                               </span>
                               <div class="pull-right text-right">
-                                <time class="time_date" datetime="${dateTime}" title="${dateFormat(dateTime)}">
+                                <time class="time_date" datetime="${dateTime}" title="${localDateTime}">
                                   <a href="#" style="color: blue" data-toggle="modal" data-target="#boostInfo">
                                     ${prettyDate(dateTime)}
                                   </a>
