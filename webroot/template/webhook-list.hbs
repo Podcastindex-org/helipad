@@ -1,6 +1,7 @@
 <thead>
   <tr>
     <th>URL</th>
+    <th>Amount</th>
     <th class="d-none d-md-table-cell">Last Request</th>
     <th class="d-none d-sm-table-cell">Enabled</th>
     <th class="text-right">Action</th>
@@ -11,6 +12,10 @@
   {{#each webhooks}}
   <tr class="webhook" data-index="{{ index }}">
     <td>{{ url }}</td>
+    <td>
+      {{#if equality}}{{ equality }} {{ amount }}{{/if}}
+      {{#unless equality}}Any{{/unless}}
+    </td>
     <td class="d-none d-md-table-cell">
       {{#unless request_timestamp }}--{{/unless}}
       {{#if request_timestamp }}

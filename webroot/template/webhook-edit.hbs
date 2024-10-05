@@ -33,7 +33,22 @@
         <small id="edit-wh-auth-help" class="form-text text-muted">This will be passed in the <em>Authorization: Bearer</em> header to your URL.</small>
       </div>
       <div class="form-group">
-        <label for="edit-wh-auth">Trigger on</label>
+        <label>Trigger on amount</label>
+
+        <div class="form-inline">
+          <select id="edit-wh-equality" name="equality" class="form-control w-auto">
+            <option value=""{{#if equality.any}} selected{{/if}}>Any amount</option>
+            <option value="="{{#if equality.eq}} selected{{/if}}>Equal to</option>
+            <option value="=~"{{#if equality.in}} selected{{/if}}>Contains</option>
+            <option value="<"{{#if equality.lt}} selected{{/if}}>Less than</option>
+            <option value=">="{{#if equality.gte}} selected{{/if}}>Greater than or equal to</option>
+          </select>
+          <input id="edit-wh-amount" name="amount" type="number" class="form-control w-auto" value="{{#unless equality.any}}{{ webhook.amount }}{{/unless}}">
+        </div>
+
+      </div>
+      <div class="form-group">
+        <label>Trigger on:</label>
 
         <div class="form-check">
           <input id="edit-wh-on-boost" name="on_boost" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_boost}} checked{{/if}}{{#unless webhook}} checked{{/unless}}>
@@ -70,3 +85,13 @@
   </div>
 </div>
 </form>
+
+<script>
+(() => {
+    document.querySelector('#edit-wh-amount').style.display = (document.querySelector('#edit-wh-equality').value == "" ? "none" : "")
+})()
+
+document.querySelector('#edit-wh-equality').addEventListener('change', (ev) => {
+    document.querySelector('#edit-wh-amount').style.display = (ev.target.value == "" ? "none" : "")
+})
+</script>

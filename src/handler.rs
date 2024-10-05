@@ -590,9 +590,25 @@ pub async fn webhook_settings_load(
         }
     };
 
+    let equality = match webhook.clone() {
+        Some(wh) => wh.equality,
+        None => "".to_string(),
+    };
+
+    let params = json!({
+        "webhook": webhook,
+        "equality": json!({
+            "any": equality.is_empty(),
+            "eq": equality == "=",
+            "in": equality == "=~",
+            "lt": equality == "<",
+            "gte": equality == ">=",
+        }),
+    });
+
     println!("** load_webhook_from_db({})", index);
 
-    HtmlTemplate("webroot/template/webhook-edit.hbs", json!({"webhook": webhook})).into_response()
+    HtmlTemplate("webroot/template/webhook-edit.hbs", params).into_response()
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -602,6 +618,8 @@ pub struct WebhookSaveForm {
     on_boost: Option<bool>,
     on_stream: Option<bool>,
     on_sent: Option<bool>,
+    equality: Option<String>,
+    amount: Option<String>,
     enabled: Option<bool>,
 }
 
@@ -621,6 +639,14 @@ pub async fn webhook_settings_save(
         return (StatusCode::BAD_REQUEST, format!("** bad value for url: {}", e)).into_response();
     }
 
+    let mut equality = form.equality.unwrap_or_default();
+    let mut amount: u64 = form.amount.unwrap_or_default().parse().unwrap_or_default();
+
+    if equality.is_empty() || amount == 0 {
+        equality = String::new();
+        amount = 0;
+    }
+
     let webhook = WebhookRecord {
         index,
         url: form.url,
@@ -628,6 +654,8 @@ pub async fn webhook_settings_save(
         on_boost: form.on_boost.unwrap_or(false),
         on_stream: form.on_stream.unwrap_or(false),
         on_sent: form.on_sent.unwrap_or(false),
+        equality,
+        amount,
         enabled: form.enabled.unwrap_or(false),
         request_successful: None,
         request_timestamp: None,

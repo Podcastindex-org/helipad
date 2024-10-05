@@ -20,6 +20,7 @@ use reqwest::redirect::Policy;
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::convert::TryInto;
 
 #[macro_use]
 extern crate configure_me;
@@ -503,6 +504,30 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
 
         if (boost.action == 2 || boost.action == 4) && !webhook.on_boost {
             continue; // boost or auto
+        }
+
+        let sats: u64 = if boost.value_msat_total > 0 {
+            (boost.value_msat_total / 1000).try_into().unwrap() // i64 -> u64
+        } else {
+            0
+        };
+
+        if &webhook.equality == "<" && sats >= webhook.amount {
+            continue; // not less than
+        }
+        else if &webhook.equality == ">=" && sats < webhook.amount {
+            continue; // not greater/equal to
+        }
+        else if &webhook.equality == "=" && sats != webhook.amount {
+            continue; // not equal
+        }
+        else if &webhook.equality == "=~" {
+            let sat_val = sats.to_string();
+            let wh_val = webhook.amount.to_string();
+
+            if !sat_val.contains(&wh_val) {
+                continue; // does not contain
+            }
         }
 
         let mut headers = HeaderMap::new();

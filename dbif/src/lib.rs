@@ -78,6 +78,8 @@ pub struct WebhookRecord {
     pub on_boost: bool,
     pub on_stream: bool,
     pub on_sent: bool,
+    pub equality: String,
+    pub amount: u64,
     pub enabled: bool,
     pub request_successful: Option<bool>,
     pub request_timestamp: Option<i64>,
@@ -363,6 +365,13 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
             eprintln!("{}", e);
             return Err(Box::new(HydraError(format!("Failed to create database webhooks table: [{}].", filepath))))
         }
+    }
+
+    if conn.execute_batch(
+        "ALTER TABLE webhooks ADD COLUMN equality text DEFAULT '';
+        ALTER TABLE webhooks ADD COLUMN amount integer DEFAULT 0;"
+    ).is_ok() {
+        println!("Webhook amounts added");
     }
 
     Ok(true)
@@ -927,6 +936,8 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             on_boost,
             on_stream,
             on_sent,
+            equality,
+            amount,
             enabled,
             request_successful,
             request_timestamp
@@ -945,9 +956,11 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             on_boost: row.get(3)?,
             on_stream: row.get(4)?,
             on_sent: row.get(5)?,
-            enabled: row.get(6)?,
-            request_successful: row.get(7).ok(),
-            request_timestamp: row.get(8).ok(),
+            equality: row.get(6)?,
+            amount: row.get(7)?,
+            enabled: row.get(8)?,
+            request_successful: row.get(9).ok(),
+            request_timestamp: row.get(10).ok(),
         })
     }).unwrap();
 
@@ -969,6 +982,8 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             on_boost,
             on_stream,
             on_sent,
+            equality,
+            amount,
             enabled,
             request_successful,
             request_timestamp
@@ -987,9 +1002,11 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             on_boost: row.get(3)?,
             on_stream: row.get(4)?,
             on_sent: row.get(5)?,
-            enabled: row.get(6)?,
-            request_successful: row.get(7).ok(),
-            request_timestamp: row.get(8).ok(),
+            equality: row.get(6)?,
+            amount: row.get(7)?,
+            enabled: row.get(8)?,
+            request_successful: row.get(9).ok(),
+            request_timestamp: row.get(10).ok(),
         })
     })?;
 
@@ -1013,18 +1030,22 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
             on_boost,
             on_stream,
             on_sent,
+            equality,
+            amount,
             enabled,
             request_successful,
             request_timestamp
         )
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
         ON CONFLICT(idx) DO UPDATE SET
             url = excluded.url,
             token = excluded.token,
             on_boost = excluded.on_boost,
             on_stream = excluded.on_stream,
             on_sent = excluded.on_sent,
+            equality = excluded.equality,
+            amount = excluded.amount,
             enabled = excluded.enabled
         RETURNING idx
         "#,
@@ -1037,6 +1058,8 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
         webhook.on_boost,
         webhook.on_stream,
         webhook.on_sent,
+        webhook.equality,
+        webhook.amount,
         webhook.enabled,
         webhook.request_successful,
         webhook.request_timestamp,
