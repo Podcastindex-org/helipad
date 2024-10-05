@@ -35,17 +35,17 @@ pub struct BoostRecord {
 impl BoostRecord {
     //Removes unsafe html interpretable characters from displayable strings
     pub fn escape_for_html( field: String) -> String {
-        return field.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        field.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
     }
 
     //Removes unsafe html interpretable characters from displayable strings
     pub fn escape_for_csv( field: String) -> String {
-        return field.replace("\"", "\"\"").replace("\n", " ");
+        field.replace('"', "\"\"").replace('\n', " ")
     }
 
     //Parses the TLV record into a Value
     pub fn parse_tlv(&self) -> Result<Value, Box<dyn Error>> {
-        return Ok(serde_json::from_str(self.tlv.as_str())?);
+        Ok(serde_json::from_str(self.tlv.as_str())?)
     }
 }
 
@@ -86,10 +86,7 @@ pub struct WebhookRecord {
 impl WebhookRecord {
     pub fn get_request_timestamp_string(&self) -> Option<String> {
         match self.request_timestamp {
-            Some(timestamp) => match DateTime::from_timestamp(timestamp, 0) {
-                Some(ts) => Some(ts.to_rfc3339()),
-                None => None,
-            },
+            Some(timestamp) => DateTime::from_timestamp(timestamp, 0).map(|ts| ts.to_rfc3339()),
             None => None,
         }
     }
@@ -129,7 +126,7 @@ fn connect_to_database(init: bool, filepath: &String) -> Result<Connection, Box<
         }
         Ok(conn)
     } else {
-        return Err(Box::new(HydraError(format!("Could not open a database file at: [{}].", filepath).into())))
+        Err(Box::new(HydraError(format!("Could not open a database file at: [{}].", filepath))))
     }
 }
 
@@ -146,12 +143,12 @@ fn set_database_file_permissions(filepath: &str) -> Result<bool, Box<dyn Error>>
                     Ok(true)
                 },
                 Err(e) => {
-                    return Err(Box::new(HydraError(format!("Error getting metadata from database file handle: [{}].  Error: {:#?}.", filepath, e).into())))
+                    Err(Box::new(HydraError(format!("Error getting metadata from database file handle: [{}].  Error: {:#?}.", filepath, e))))
                 }
             }
         },
         Err(e) => {
-            return Err(Box::new(HydraError(format!("Error opening database file handle: [{}] for permissions setting.  Error: {:#?}.", filepath, e).into())))
+            Err(Box::new(HydraError(format!("Error opening database file handle: [{}] for permissions setting.  Error: {:#?}.", filepath, e))))
         }
     }
 }
@@ -159,13 +156,9 @@ fn set_database_file_permissions(filepath: &str) -> Result<bool, Box<dyn Error>>
 fn table_exists(conn: &Connection, table_name: &str) -> Result<bool, Box<dyn Error>> {
     //Prepare and execute the query
     let mut stmt = conn.prepare(r#"SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1"#)?;
-    let rows = stmt.query_map(params![table_name], |_| Ok(true))?;
+    let mut rows = stmt.query_map(params![table_name], |_| Ok(true))?;
 
-    for _ in rows {
-        return Ok(true);
-    }
-
-    Ok(false)
+    Ok(rows.next().is_some())
 }
 
 //Create or update a new database file if needed
@@ -196,30 +189,21 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to create database boosts table: [{}].", filepath).into())))
+            return Err(Box::new(HydraError(format!("Failed to create database boosts table: [{}].", filepath))))
         }
     }
 
     //Add additional columns to existing installs
-    match conn.execute("ALTER TABLE boosts ADD COLUMN remote_podcast text", []) {
-        Ok(_) => {
-            println!("Boosts remote podcast column added.");
-        }
-        Err(_) => {}
+    if conn.execute("ALTER TABLE boosts ADD COLUMN remote_podcast text", []).is_ok() {
+        println!("Boosts remote podcast column added.");
     }
 
-    match conn.execute("ALTER TABLE boosts ADD COLUMN remote_episode text", []) {
-        Ok(_) => {
-            println!("Boosts remote episode column added.");
-        }
-        Err(_) => {}
+    if conn.execute("ALTER TABLE boosts ADD COLUMN remote_episode text", []).is_ok() {
+        println!("Boosts remote episode column added.");
     }
 
-    match conn.execute("ALTER TABLE boosts ADD COLUMN reply_sent integer", []) {
-        Ok(_) => {
-            println!("Boosts reply sent column added.");
-        }
-        Err(_) => {}
+    if conn.execute("ALTER TABLE boosts ADD COLUMN reply_sent integer", []).is_ok() {
+        println!("Boosts reply sent column added.");
     }
 
     //Create the node info table
@@ -269,7 +253,7 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to create database node_info table: [{}].", filepath).into())))
+            return Err(Box::new(HydraError(format!("Failed to create database node_info table: [{}].", filepath))))
         }
     }
 
@@ -303,7 +287,7 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to create database sent_boosts table: [{}].", filepath).into())))
+            return Err(Box::new(HydraError(format!("Failed to create database sent_boosts table: [{}].", filepath))))
         }
     }
 
@@ -327,14 +311,12 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to create database numerology table: [{}].", filepath).into())))
+            return Err(Box::new(HydraError(format!("Failed to create database numerology table: [{}].", filepath))))
         }
     }
 
-    if !numerology_exists {
-        if insert_default_numerology(&conn)? {
-            println!("Default numerology added.");
-        }
+    if !numerology_exists && insert_default_numerology(&conn)? {
+        println!("Default numerology added.");
     }
 
     //Create the settings table
@@ -355,7 +337,7 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to create database settings table: [{}].", filepath).into())))
+            return Err(Box::new(HydraError(format!("Failed to create database settings table: [{}].", filepath))))
         }
     }
 
@@ -379,7 +361,7 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to create database webhooks table: [{}].", filepath).into())))
+            return Err(Box::new(HydraError(format!("Failed to create database webhooks table: [{}].", filepath))))
         }
     }
 
@@ -472,7 +454,7 @@ pub fn get_node_info_from_db(filepath: &String) -> Result<NodeInfoRecord, Box<dy
             idx = 1
     ")?;
 
-    let rows = stmt.query_map([], |row| {
+    let mut rows = stmt.query_map([], |row| {
         Ok(NodeInfoRecord {
             lnd_alias: row.get(0)?,
             node_pubkey: row.get(1)?,
@@ -481,7 +463,7 @@ pub fn get_node_info_from_db(filepath: &String) -> Result<NodeInfoRecord, Box<dy
     })?;
 
     // Return first record if found
-    for row in rows {
+    if let Some(row) = rows.next() {
         return Ok(row?);
     }
 
@@ -518,7 +500,7 @@ pub fn add_node_info_to_db(filepath: &String, info: NodeInfoRecord) -> Result<bo
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError("Failed to add node info".into())))
+            Err(Box::new(HydraError("Failed to add node info".into())))
         }
     }
 }
@@ -549,7 +531,7 @@ pub fn add_invoice_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool,
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to add boost: [{}].", boost.index).into())))
+            Err(Box::new(HydraError(format!("Failed to add boost: [{}].", boost.index))))
         }
     }
 }
@@ -624,14 +606,8 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
                 podcast: BoostRecord::escape_for_html(boost.podcast),
                 episode: BoostRecord::escape_for_html(boost.episode),
                 tlv: BoostRecord::escape_for_html(boost.tlv),
-                remote_podcast: match boost.remote_podcast {
-                    Some(item) => Some(BoostRecord::escape_for_html(item)),
-                    None => None
-                },
-                remote_episode: match boost.remote_episode {
-                    Some(item) => Some(BoostRecord::escape_for_html(item)),
-                    None => None
-                },
+                remote_podcast: boost.remote_podcast.map(BoostRecord::escape_for_html),
+                remote_episode: boost.remote_episode.map(BoostRecord::escape_for_html),
                 ..boost
             };
             boosts.push(boost_clean);
@@ -647,7 +623,7 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
 pub fn get_single_invoice_from_db(filepath: &String, invtype: &str, index: u64, escape_html: bool) -> Result<Option<BoostRecord>, Box<dyn Error>> {
     let invoices = get_invoices_from_db(filepath, invtype, index, 1, true, escape_html)?;
 
-    if invoices.len() > 0 && invoices[0].index == index {
+    if !invoices.is_empty() && invoices[0].index == index {
         Ok(Some(invoices[0].clone()))
     }
     else {
@@ -700,7 +676,7 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
         boosts.push(boost);
     }
 
-    if boosts.len() > 0 {
+    if !boosts.is_empty() {
         return Ok(boosts[0].index)
     }
 
@@ -721,7 +697,7 @@ pub fn add_wallet_balance_to_db(filepath: &String, balance: i64) -> Result<bool,
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError(format!("Failed to update wallet balance in database: [{}].", balance).into())))
+            Err(Box::new(HydraError(format!("Failed to update wallet balance in database: [{}].", balance))))
         }
     }
 }
@@ -830,14 +806,8 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
                 podcast: BoostRecord::escape_for_html(boost.podcast),
                 episode: BoostRecord::escape_for_html(boost.episode),
                 tlv: BoostRecord::escape_for_html(boost.tlv),
-                remote_podcast: match boost.remote_podcast {
-                    Some(item) => Some(BoostRecord::escape_for_html(item)),
-                    None => None
-                },
-                remote_episode: match boost.remote_episode {
-                    Some(item) => Some(BoostRecord::escape_for_html(item)),
-                    None => None
-                },
+                remote_podcast: boost.remote_podcast.map(BoostRecord::escape_for_html),
+                remote_episode: boost.remote_episode.map(BoostRecord::escape_for_html),
                 payment_info: match boost.payment_info {
                     Some(info) => Some(PaymentRecord {
                         pubkey: BoostRecord::escape_for_html(info.pubkey),
@@ -878,7 +848,7 @@ pub fn add_payment_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool,
     let payment_info = match &boost.payment_info {
         Some(info) => info,
         None => {
-            return Err(Box::new(HydraError(format!("Missing payment info for sent boost: [{}].", boost.index).into())))
+            return Err(Box::new(HydraError(format!("Missing payment info for sent boost: [{}].", boost.index))))
         }
     };
 
@@ -1180,7 +1150,7 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
         }
         Err(e) => {
             eprintln!("{}", e);
-            return Err(Box::new(HydraError("Failed to save settings".into())))
+            Err(Box::new(HydraError("Failed to save settings".into())))
         }
     }
 }
@@ -1266,7 +1236,7 @@ pub fn save_numerology_to_db(filepath: &String, numero: &NumerologyRecord) -> Re
         None
     };
 
-    set_numerology_position_in_db(&filepath, numero.index, numero.position)?;
+    set_numerology_position_in_db(filepath, numero.index, numero.position)?;
 
     let mut stmt = conn.prepare(
         r#"INSERT INTO numerology (
@@ -1306,7 +1276,7 @@ pub fn save_numerology_to_db(filepath: &String, numero: &NumerologyRecord) -> Re
         Ok(idx)
     })?;
 
-    renumber_numerology_positions_in_db(&filepath)?;
+    renumber_numerology_positions_in_db(filepath)?;
 
     Ok(idx)
 }
@@ -1314,6 +1284,7 @@ pub fn save_numerology_to_db(filepath: &String, numero: &NumerologyRecord) -> Re
 pub fn set_numerology_position_in_db(filepath: &String, index: u64, position: u64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
+    #[allow(clippy::comparison_chain)]
     if index > 0 {
         let current = load_numerology_from_db(filepath, index)?;
 
