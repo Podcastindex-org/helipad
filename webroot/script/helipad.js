@@ -2,7 +2,7 @@ $(document).ready(function () {
     let messages = $('div.mesgs');
     let inbox = messages.find('div.msg_history');
     let appIconUrlBase = 'image/';
-    let pewAudio = new Audio();
+    let pewSound = new PewSound();
     let appList = {};
     let numerologyList = [];
     var connection = null;
@@ -406,22 +406,54 @@ $(document).ready(function () {
         return numerology;
     }
 
+    // Plays and queues the pews
+    function PewSound() {
+        this.audio = new Audio();
+        this.playing = false;
+        this.queue = [];
+
+        // plays the requested pew sound
+        const playSound = (src) => {
+            this.playing = true;
+
+            this.audio.src = src;
+            this.audio.play();
+
+            this.audio.addEventListener('ended', () => this.playing = false);
+        }
+
+        // work through the queue of pews
+        setInterval(() => {
+            if (!this.playing && this.queue.length > 0) {
+                playSound(this.queue.shift());
+            }
+        }, 1000);
+
+        // play or queue the sound
+        this.play = (src) => {
+            if (!this.playing && this.queue.length === 0) { // nothing playing or queued
+                playSound(src); // play the sound
+            }
+            else {
+                this.queue.push(src); // queue the sound
+            }
+        }
+    }
+
     //Play the pew sound that corresponds with the donation amount
     function playPew(value) {
         // find the first pew with a sound file
         const pews = parseNumerology(value).filter(num => num.sound_file)
+        let src = 'pew.mp3'; // default
 
         if (pews.length) {
-            pewAudio.src = `sound/${pews[0].sound_file}`
+            src = `sound/${pews[0].sound_file}`;
         }
         else if (settings.custom_pew_file) {
-            pewAudio.src = `sound/${settings.custom_pew_file}`;
-        }
-        else {
-            pewAudio.src = 'pew.mp3'; // default
+            src = `sound/${settings.custom_pew_file}`;
         }
 
-        pewAudio.play();
+        pewSound.play(src);
     }
 
     //Animate some confetti on the page with a given duration interval in milliseconds
