@@ -368,10 +368,25 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
             remote_podcast: None,
             remote_episode: None,
             reply_sent: false,
+            custom_key: None,
+            custom_value: None,
             payment_info: None,
         };
 
-        parse_podcast_tlv(&mut boost, &htlc.custom_records[&TLV_PODCASTING20], remote_cache).await;
+        // Parse boost and custodial wallet TLVs
+        for (key, val) in htlc.custom_records {
+            if key == TLV_PODCASTING20 {
+                // Parse boost TLV
+                parse_podcast_tlv(&mut boost, &val, remote_cache).await;
+            }
+            else if key == TLV_WALLET_KEY || key == TLV_WALLET_ID || key == TLV_HIVE_ACCOUNT || key == TLV_FOUNTAIN_KEY {
+                // Parse custodial wallet info
+                let custom_value = std::str::from_utf8(&val).unwrap().to_string();
+                boost.custom_key = Some(key);
+                boost.custom_value = Some(custom_value);
+                break;
+            }
+        }
 
         return Some(boost);
     }
@@ -410,6 +425,8 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
             tlv: "".to_string(),
             remote_podcast: None,
             remote_episode: None,
+            custom_key: None,
+            custom_value: None,
             reply_sent: false,
             payment_info: Some(dbif::PaymentRecord {
                 payment_hash: payment.payment_hash.clone(),
@@ -421,17 +438,20 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
             }),
         };
 
-        for (idx, val) in hop.custom_records {
-            if idx == TLV_PODCASTING20 {
+        // Parse boost and custodial wallet TLVs
+        for (key, val) in hop.custom_records {
+            if key == TLV_PODCASTING20 {
+                // Parse boost TLV
                 parse_podcast_tlv(&mut boost, &val, remote_cache).await;
             }
-            else if idx == TLV_WALLET_KEY || idx == TLV_WALLET_ID || idx == TLV_HIVE_ACCOUNT || idx == TLV_FOUNTAIN_KEY {
+            else if key == TLV_WALLET_KEY || key == TLV_WALLET_ID || key == TLV_HIVE_ACCOUNT || key == TLV_FOUNTAIN_KEY {
+                // Parse custodial wallet info
                 let custom_value = std::str::from_utf8(&val).unwrap().to_string();
 
                 boost.payment_info = Some(dbif::PaymentRecord {
                     payment_hash: payment.payment_hash.clone(),
                     pubkey: hop.pub_key.clone(),
-                    custom_key: idx,
+                    custom_key: key,
                     custom_value,
                     fee_msat: payment.fee_msat,
                     reply_to_idx: None,

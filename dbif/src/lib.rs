@@ -29,6 +29,8 @@ pub struct BoostRecord {
     pub remote_podcast: Option<String>,
     pub remote_episode: Option<String>,
     pub reply_sent: bool,
+    pub custom_key: Option<u64>,
+    pub custom_value: Option<String>,
     pub payment_info: Option<PaymentRecord>,
 }
 
@@ -182,7 +184,9 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
              episode text,
              tlv text,
              remote_podcast text,
-             remote_episode text
+             remote_episode text,
+             custom_key integer,
+             custom_value text
          )",
         [],
     ) {
@@ -206,6 +210,10 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
 
     if conn.execute("ALTER TABLE boosts ADD COLUMN reply_sent integer", []).is_ok() {
         println!("Boosts reply sent column added.");
+    }
+
+    if conn.execute_batch("ALTER TABLE boosts ADD COLUMN custom_key integer; ALTER TABLE boosts ADD COLUMN custom_value text;").is_ok() {
+        println!("Boosts custom key/value added.");
     }
 
     //Create the node info table
@@ -518,22 +526,30 @@ pub fn add_node_info_to_db(filepath: &String, info: NodeInfoRecord) -> Result<bo
 pub fn add_invoice_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
-    match conn.execute("INSERT INTO boosts (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent) \
-                                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-                       params![boost.index,
-                                       boost.time,
-                                       boost.value_msat,
-                                       boost.value_msat_total,
-                                       boost.action,
-                                       boost.sender,
-                                       boost.app,
-                                       boost.message,
-                                       boost.podcast,
-                                       boost.episode,
-                                       boost.tlv,
-                                       boost.remote_podcast,
-                                       boost.remote_episode,
-                                       boost.reply_sent]
+    match conn.execute(
+        "INSERT INTO boosts
+            (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value)
+        VALUES
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+        ",
+        params![
+            boost.index,
+            boost.time,
+            boost.value_msat,
+            boost.value_msat_total,
+            boost.action,
+            boost.sender,
+            boost.app,
+            boost.message,
+            boost.podcast,
+            boost.episode,
+            boost.tlv,
+            boost.remote_podcast,
+            boost.remote_episode,
+            boost.reply_sent,
+            boost.custom_key,
+            boost.custom_value
+        ]
     ) {
         Ok(_) => {
             Ok(true)
@@ -570,7 +586,7 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
 
     //Query for boosts and automated boosts
     let sqltxt = format!("
-        SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent
+        SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value
         FROM boosts
         WHERE
             idx {} :index
@@ -597,6 +613,8 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
             remote_podcast: row.get(11).ok(),
             remote_episode: row.get(12).ok(),
             reply_sent: row.get(13).unwrap_or(false),
+            custom_key: row.get(14).ok(),
+            custom_value: row.get(15).ok(),
             payment_info: None,
         })
     }).unwrap();
@@ -656,9 +674,18 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
     let max = 1;
 
     //Prepare and execute the query
-    let mut stmt = conn.prepare("SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent \
-                                 FROM boosts \
-                                 ORDER BY idx DESC LIMIT :max")?;
+    let mut stmt = conn.prepare(
+        "SELECT
+            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value
+        FROM
+            boosts
+        ORDER BY
+            idx DESC
+        LIMIT
+            :max
+        "
+    )?;
+
     let rows = stmt.query_map(&[(":max", max.to_string().as_str())], |row| {
         Ok(BoostRecord {
             index: row.get(0)?,
@@ -675,6 +702,8 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
             remote_podcast: row.get(11).ok(),
             remote_episode: row.get(12).ok(),
             reply_sent: row.get(13).unwrap_or(false),
+            custom_key: row.get(14).ok(),
+            custom_value: row.get(15).ok(),
             payment_info: None,
         })
     }).unwrap();
@@ -790,6 +819,8 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
             remote_podcast: row.get(11).ok(),
             remote_episode: row.get(12).ok(),
             reply_sent: false,
+            custom_key: None,
+            custom_value: None,
             payment_info: Some(PaymentRecord {
                 payment_hash: row.get(13)?,
                 pubkey: row.get(14)?,
