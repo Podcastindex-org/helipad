@@ -14,6 +14,7 @@ pub const TLV_PODCASTING20: u64 = 7629169;
 pub const TLV_WALLET_KEY: u64 = 696969;
 pub const TLV_WALLET_ID: u64 = 112111100;
 pub const TLV_HIVE_ACCOUNT: u64 = 818818;
+pub const TLV_FOUNTAIN_KEY: u64 = 906608;
 pub const TLV_KEYSEND: u64 = 5482373484;
 
 
@@ -424,7 +425,7 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
             if idx == TLV_PODCASTING20 {
                 parse_podcast_tlv(&mut boost, &val, remote_cache).await;
             }
-            else if idx == TLV_WALLET_KEY || idx == TLV_WALLET_ID || idx == TLV_HIVE_ACCOUNT {
+            else if idx == TLV_WALLET_KEY || idx == TLV_WALLET_ID || idx == TLV_HIVE_ACCOUNT || idx == TLV_FOUNTAIN_KEY {
                 let custom_value = std::str::from_utf8(&val).unwrap().to_string();
 
                 boost.payment_info = Some(dbif::PaymentRecord {
