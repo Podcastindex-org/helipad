@@ -106,5 +106,9 @@
     "the split kit": {
         "icon": "split-kit",
         "url": "https://www.thesplitkit.com/"
+    },
+    "wherever": {
+        "icon": "wherever",
+        "url": "https://wherever.audio/"
     }
 }
