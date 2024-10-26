@@ -187,11 +187,11 @@ $(document).ready(function () {
                     //Generate remote item and link to podcastindex website if one exists
                     let boostRemoteInfo = '';
                     if (boostRemoteEpisode) {
-                        boostRemoteInfo = '(' + boostRemotePodcast + ' - ' + boostRemoteEpisode + ')';
+                        boostRemoteInfo = boostRemotePodcast + ' - ' + boostRemoteEpisode;
 
                         if (boostTlv && boostTlv.remote_feed_guid) {
                             boostRemoteInfo = `
-                            <a href="https://podcastindex.org/podcast/${boostTlv.remote_feed_guid}" target="_blank" style="color: blue;">
+                            - <a href="https://podcastindex.org/podcast/${boostTlv.remote_feed_guid}" target="_blank" style="color: blue;">
                                 ${boostRemoteInfo}
                             </a>`;
                         }
