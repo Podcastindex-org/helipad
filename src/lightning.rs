@@ -384,7 +384,6 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
                 let custom_value = std::str::from_utf8(&val).unwrap().to_string();
                 boost.custom_key = Some(key);
                 boost.custom_value = Some(custom_value);
-                break;
             }
         }
 
