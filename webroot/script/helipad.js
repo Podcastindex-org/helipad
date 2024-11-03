@@ -197,6 +197,12 @@ $(document).ready(function () {
                         }
                     }
 
+                    //Generate podcast and episode label
+                    let boostPodcastEpisode = boostPodcast;
+                    if (boostEpisode) {
+                        boostPodcastEpisode += `- ${boostEpisode}`;
+                    }
+
                     if (!messageIds.includes(boostIndex)) {
                         let dateTime = new Date(element.time * 1000).toISOString();
                         let localDateTime = new Date(element.time * 1000).toLocaleString();
@@ -224,7 +230,7 @@ $(document).ready(function () {
                                 ${boostDisplayAmount} ${boostPerson} ${boostNumerology} ${boostSplitPercentage}
                               </h5>
                               <small class="podcast_episode">
-                                ${boostPodcast} - ${boostEpisode}
+                                ${boostPodcastEpisode}
                                 <span class="remote_item">${boostRemoteInfo}</span>
                               </small>
                               <div style="clear: both">
