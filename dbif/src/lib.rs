@@ -1,10 +1,11 @@
-use rusqlite::{params, Connection, Error::QueryReturnedNoRows};
+use rusqlite::{params, Connection, Statement, Error::QueryReturnedNoRows};
 use std::error::Error;
 use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::os::unix::fs::PermissionsExt;
 use chrono::DateTime;
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeInfoRecord {
@@ -106,6 +107,17 @@ pub struct SettingsRecord {
     pub custom_pew_file: Option<String>,
 }
 
+#[derive(Debug, Default)]
+pub struct BoostFilters {
+    pub podcast: Option<String>,
+}
+
+impl BoostFilters {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
 #[derive(Debug)]
 struct HydraError(String);
 impl fmt::Display for HydraError {
@@ -163,6 +175,20 @@ fn table_exists(conn: &Connection, table_name: &str) -> Result<bool, Box<dyn Err
     let mut rows = stmt.query_map(params![table_name], |_| Ok(true))?;
 
     Ok(rows.next().is_some())
+}
+
+//Bind a query parameter by param name and desired value
+fn bind_query_param(stmt: &mut Statement, name: &str, value: &str) -> Result<(), Box<dyn Error>> {
+    let idx = match stmt.parameter_index(name)? {
+        Some(num) => num,
+        None => {
+            return Err(format!("{} param not found", name).into());
+        }
+    };
+
+    stmt.raw_bind_parameter(idx, value)?;
+
+    Ok(())
 }
 
 //Create or update a new database file if needed
@@ -569,36 +595,64 @@ pub fn mark_boost_as_replied(filepath: &String, index: u64) -> Result<bool, Box<
 }
 
 //Get all of the invoices from the database
-pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
-    let mut ltgt = ">=";
-    if direction {
-        ltgt = "<=";
+    let mut conditions = String::new();
+    let mut bindings: HashMap<&str, &str> = HashMap::new();
+
+    let ltgt = if direction {
+        "<="
+    } else {
+        ">="
+    };
+
+    conditions.push_str(&format!("idx {} :idx", ltgt));
+
+    let strindex = index.to_string();
+    bindings.insert(":idx", &strindex);
+
+    if invtype == "boost" {
+        conditions.push_str(" AND action IN (2, 4)");
+    }
+    else if invtype == "stream" {
+        conditions.push_str(" AND action NOT IN (2, 4)");
     }
 
-    let action = match invtype {
-        "boost" => " AND action IN (2, 4)",
-        "stream" => " AND action NOT IN (2, 4)",
-        _ => "",
-    };
+    if let Some(podcast) = &filters.podcast {
+        conditions.push_str(" AND podcast = :podcast");
+        bindings.insert(":podcast", podcast);
+    }
+
+    let strmax = max.to_string();
+    bindings.insert(":max", &strmax);
 
     //Query for boosts and automated boosts
     let sqltxt = format!("
-        SELECT idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value
-        FROM boosts
+        SELECT
+            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value
+        FROM
+            boosts
         WHERE
-            idx {} :index
             {}
-        ORDER BY idx DESC
-        LIMIT :max
-    ", ltgt, action);
+        ORDER BY
+            idx DESC
+        LIMIT
+            :max
+    ", conditions);
 
     //Prepare and execute the query
     let mut stmt = conn.prepare(sqltxt.as_str())?;
-    let rows = stmt.query_map(&[(":index", index.to_string().as_str()), (":max", max.to_string().as_str())], |row| {
-        Ok(BoostRecord {
+
+    for (name, value) in &bindings {
+        bind_query_param(&mut stmt, name, value)?;
+    }
+
+    let mut rows = stmt.raw_query();
+
+    while let Some(row) = rows.next()? {
+        let boost = BoostRecord {
             index: row.get(0)?,
             time: row.get(1)?,
             value_msat: row.get(2)?,
@@ -616,12 +670,7 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
             custom_key: row.get(14).ok(),
             custom_value: row.get(15).ok(),
             payment_info: None,
-        })
-    }).unwrap();
-
-    //Parse the results
-    for row in rows {
-        let boost: BoostRecord = row.unwrap();
+        };
 
         //Some things like text output don't need to be html entity escaped
         //so only do it if asked for
@@ -648,7 +697,8 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
 }
 
 pub fn get_single_invoice_from_db(filepath: &String, invtype: &str, index: u64, escape_html: bool) -> Result<Option<BoostRecord>, Box<dyn Error>> {
-    let invoices = get_invoices_from_db(filepath, invtype, index, 1, true, escape_html)?;
+    let filters = BoostFilters::new();
+    let invoices = get_invoices_from_db(filepath, invtype, index, 1, true, escape_html, filters)?;
 
     if !invoices.is_empty() && invoices[0].index == index {
         Ok(Some(invoices[0].clone()))
@@ -658,13 +708,13 @@ pub fn get_single_invoice_from_db(filepath: &String, invtype: &str, index: u64, 
     }
 }
 
-pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
-    get_invoices_from_db(filepath, "boost", index, max, direction, escape_html)
+pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+    get_invoices_from_db(filepath, "boost", index, max, direction, escape_html, filters)
 }
 
 //Get all of the non-boosts from the database
-pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
-    get_invoices_from_db(filepath, "stream", index, max, direction, escape_html)
+pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+    get_invoices_from_db(filepath, "stream", index, max, direction, escape_html, filters)
 }
 
 //Get the last boost index number from the database
@@ -721,6 +771,25 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
     Ok(0)
 }
 
+//Get podcasts that received boosts to this node
+pub fn get_podcasts_from_db(filepath: &String) -> Result<Vec<String>, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    let query = "SELECT DISTINCT podcast FROM boosts WHERE podcast <> '' ORDER BY podcast".to_string();
+
+    let mut stmt = conn.prepare(&query)?;
+    let mut rows = stmt.raw_query();
+
+    //Parse the results
+    let mut podcasts = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        podcasts.push(row.get(0)?);
+    }
+
+    Ok(podcasts)
+}
+
 //Set/Get the wallet balance from the database in sats
 pub fn add_wallet_balance_to_db(filepath: &String, balance: i64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
@@ -758,16 +827,33 @@ pub fn get_wallet_balance_from_db(filepath: &String) -> Result<i64, Box<dyn Erro
 }
 
 //Get all of the sent boosts from the database
-pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
 
-    let mut ltgt = ">=";
-    if direction {
-        ltgt = "<=";
+    let mut conditions = String::new();
+    let mut bindings: HashMap<&str, &str> = HashMap::new();
+
+    let ltgt = if direction {
+        "<="
+    } else {
+        ">="
+    };
+
+    conditions.push_str(&format!("idx {} :idx", ltgt));
+
+    let strindex = index.to_string();
+    bindings.insert(":idx", &strindex);
+
+    if let Some(podcast) = &filters.podcast {
+        conditions.push_str(" AND podcast = :podcast");
+        bindings.insert(":podcast", podcast);
     }
 
-    //Build the query
+    let strmax = max.to_string();
+    bindings.insert(":max", &strmax);
+
+    //Query for boosts and automated boosts
     let sqltxt = format!(
         "SELECT
             idx,
@@ -792,19 +878,27 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
         FROM
             sent_boosts
         WHERE
-            idx {} :index
+            {}
         ORDER BY
             idx DESC
         LIMIT
             :max
         ",
-        ltgt
+        conditions
     );
 
     //Prepare and execute the query
     let mut stmt = conn.prepare(sqltxt.as_str())?;
-    let rows = stmt.query_map(&[(":index", index.to_string().as_str()), (":max", max.to_string().as_str())], |row| {
-        Ok(BoostRecord {
+
+    for (name, value) in &bindings {
+        bind_query_param(&mut stmt, name, value)?;
+    }
+
+    let mut rows = stmt.raw_query();
+
+    //Parse the results
+    while let Some(row) = rows.next()? {
+        let boost = BoostRecord {
             index: row.get(0)?,
             time: row.get(1)?,
             value_msat: row.get(2)?,
@@ -829,12 +923,7 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
                 fee_msat: row.get(17)?,
                 reply_to_idx: row.get(18)?,
             }),
-        })
-    }).unwrap();
-
-    //Parse the results
-    for row in rows {
-        let boost: BoostRecord = row.unwrap();
+        };
 
         //Some things like text output don't need to be html entity escaped
         //so only do it if asked for
@@ -862,7 +951,6 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
         } else {
             boosts.push(boost);
         }
-
     }
 
     Ok(boosts)
@@ -947,6 +1035,25 @@ pub fn add_payment_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool,
     }
 
     Ok(true)
+}
+
+//Get podcasts that were send boosts from this node
+pub fn get_sent_podcasts_from_db(filepath: &String) -> Result<Vec<String>, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    let query = "SELECT DISTINCT podcast FROM sent_boosts WHERE podcast <> '' ORDER BY podcast".to_string();
+
+    let mut stmt = conn.prepare(&query)?;
+    let mut rows = stmt.raw_query();
+
+    //Parse the results
+    let mut podcasts = Vec::new();
+
+    while let Some(row) = rows.next()? {
+        podcasts.push(row.get(0)?);
+    }
+
+    Ok(podcasts)
 }
 
 pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<Vec<WebhookRecord>, Box<dyn Error>> {

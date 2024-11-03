@@ -57,64 +57,62 @@
                 </div>
             </div>
         </div>
-        <div class="inbox_msg" style="overflow-y: auto">
-            <div class="row">
-                <div class="col-12">
-                    <div class="tab-content m-4 text-white">
-                        <div class="tab-pane fade show active" id="general-content" role="tabpanel" aria-labelledby="general-tab">
-                            <div id="general-settings-div" hx-get="/settings/general" hx-trigger="intersect">
-                            </div>
+        <div class="inbox_msg">
+            <div style="height: 80%; overflow: auto">
+                <div class="tab-content m-4 text-white">
+                    <div class="tab-pane fade show active" id="general-content" role="tabpanel" aria-labelledby="general-tab">
+                        <div id="general-settings-div" hx-get="/settings/general" hx-trigger="intersect">
                         </div>
-                        <div class="tab-pane fade" id="numerology-content" role="tabpanel" aria-labelledby="numerology-tab">
-                            <button
-                                class="btn btn-md btn-primary pull-right"
-                                hx-get="/settings/numerology/add"
-                                hx-target="#modals-here"
-                                hx-trigger="click"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modals-here"
-                                hx-on::after-request="$('#modals-here').modal()"
-                            >
-                                Add Numerology
-                            </button>
+                    </div>
+                    <div class="tab-pane fade" id="numerology-content" role="tabpanel" aria-labelledby="numerology-tab">
+                        <button
+                            class="btn btn-md btn-primary pull-right"
+                            hx-get="/settings/numerology/add"
+                            hx-target="#modals-here"
+                            hx-trigger="click"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modals-here"
+                            hx-on::after-request="$('#modals-here').modal()"
+                        >
+                            Add Numerology
+                        </button>
 
-                            <b>Numerology</b>
-                            <div>Show emojis/play sounds when boosts matching the following amounts are received:</div>
+                        <b>Numerology</b>
+                        <div>Show emojis/play sounds when boosts matching the following amounts are received:</div>
 
-                            <table id="numerology" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/numerology" hx-trigger="intersect">
-                            </table>
+                        <table id="numerology" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/numerology" hx-trigger="intersect">
+                        </table>
 
-                            <button
-                                class="btn btn-md btn-danger"
-                                hx-get="/settings/numerology/reset"
-                                hx-target="#modals-here"
-                                hx-trigger="click"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modals-here"
-                                hx-on::after-request="$('#modals-here').modal()"
-                            >
-                                Reset to default
-                            </button>
-                        </div>
-                        <div class="tab-pane fade" id="webhooks-content" role="tabpanel" aria-labelledby="webhooks-tab">
-                            <button
-                                class="btn btn-md btn-primary pull-right"
-                                hx-get="/settings/webhooks/add"
-                                hx-target="#modals-here"
-                                hx-trigger="click"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modals-here"
-                                hx-on::after-request="$('#modals-here').modal()"
-                            >
-                                Add Webhook
-                            </button>
+                        <button
+                            class="btn btn-md btn-danger"
+                            hx-get="/settings/numerology/reset"
+                            hx-target="#modals-here"
+                            hx-trigger="click"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modals-here"
+                            hx-on::after-request="$('#modals-here').modal()"
+                        >
+                            Reset to default
+                        </button>
+                    </div>
+                    <div class="tab-pane fade" id="webhooks-content" role="tabpanel" aria-labelledby="webhooks-tab">
+                        <button
+                            class="btn btn-md btn-primary pull-right"
+                            hx-get="/settings/webhooks/add"
+                            hx-target="#modals-here"
+                            hx-trigger="click"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modals-here"
+                            hx-on::after-request="$('#modals-here').modal()"
+                        >
+                            Add Webhook
+                        </button>
 
-                            <b>Webhooks</b>
-                            <div>Send HTTP POSTs to the following URLs when boosts are received:</div>
+                        <b>Webhooks</b>
+                        <div>Send HTTP POSTs to the following URLs when boosts are received:</div>
 
-                            <table id="webhooks" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/webhooks" hx-trigger="intersect">
-                            </table>
-                        </div>
+                        <table id="webhooks" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/webhooks" hx-trigger="intersect">
+                        </table>
                     </div>
                 </div>
             </div>

@@ -295,6 +295,8 @@ async fn main() {
                 .route("/sent", get(handler::api_v1_sent))
                 .route("/index", get(handler::api_v1_index))
                 .route("/sent_index", get(handler::api_v1_sent_index))
+                .route("/podcasts", get(handler::api_v1_podcasts))
+                .route("/sent_podcasts", get(handler::api_v1_sent_podcasts))
 
                 // allow all origins to GET from public api
                 .route_layer(CorsLayer::new().allow_methods([Method::GET]).allow_origin(Any))

@@ -12,12 +12,15 @@ $(document).ready(function () {
     var currentBalanceAmount = 0;
     let nodeInfo = null;
     let settings = null;
+    let filters = {};
 
     let config = {
         'listUrl': '/api/v1/boosts',
         'indexUrl': '/api/v1/index',
+        'podcastsUrl': '/api/v1/podcasts',
         'singularName': 'boost',
         'pluralName': 'boosts',
+        'filterName': 'filters',
         'effects': true,
     }
 
@@ -76,6 +79,10 @@ $(document).ready(function () {
 
         if (old) {
             params.old = true;
+        }
+
+        if (filters.podcast) {
+            params.podcast = filters.podcast;
         }
 
         let url = config.listUrl + '?' + $.param(params);
@@ -297,7 +304,13 @@ $(document).ready(function () {
 
                 //Show a message if still building
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
-                    if (config.pluralName == 'boosts') {
+                    if (filters.podcast) {
+                        inbox.prepend('<div class="nodata"><p>No data found that matches your current filters.</p>' +
+                            '<p>This screen will automatically refresh if new ' + config.pluralName + ' matching your filters are found.</p>' +
+                            '<div class="lds-dual-ring"></div> Looking for ' + config.pluralName + ': <span class="invindex">' + currentInvoiceIndex + '</span>' +
+                            '</div>');
+                    }
+                    else if (config.pluralName == 'boosts') {
                         inbox.prepend('<div class="nodata"><p>No data to show yet. Building the initial database may take some time if you have many ' +
                             'transactions, or maybe you have not been sent any boostagrams yet?</p>' +
                             '<p>This screen will automatically refresh as boostagrams are sent to you.</p>' +
@@ -516,6 +529,11 @@ $(document).ready(function () {
                 getBoosts(currentInvoiceIndex, 100, true, true, false);
             }
         });
+    }
+
+    //Get all boosted podcasts
+    async function getPodcasts() {
+        return await $.get(config.podcastsUrl);
     }
 
     //Get the defined list of apps
@@ -862,6 +880,55 @@ $(document).ready(function () {
         `);
     }
 
+    function renderFilters() {
+        try {
+            filters = JSON.parse(sessionStorage.getItem(config.filterName)) || {};
+        } catch {}
+
+        if (filters.podcast) {
+            $('#filter-podcasts button').text(`Filtering by `).append($('<b>').text(filters.podcast));
+            $('#inbox-filters').removeClass('d-none')
+        }
+
+        $('.filter a').click((ev) => {
+            ev.preventDefault();
+            $('#inbox-filters').toggleClass('d-none')
+        });
+
+        $('#filter-podcasts').on('show.bs.dropdown', async (ev) => {
+            const podcasts = await getPodcasts();
+
+            $dropdown = $(ev.target).find('.dropdown-menu').empty();
+
+            if (filters.podcast) {
+                $dropdown.append(
+                    $('<a class="dropdown-item" href="#"></a>').text("Clear podcast filter").data('value', null),
+                    '<div class="dropdown-divider"></div>'
+                );
+            }
+
+            $dropdown.append(podcasts.map(
+                name => $('<a class="dropdown-item" href="#"></a>').text(name).data('value', name).prepend(name == filters.podcast ? "&#10004;" : '')
+            ));
+
+            $dropdown.find('.dropdown-item').click(ev => {
+                filters.podcast = $(ev.target).data('value');
+
+                if (filters.podcast) {
+                    $('#filter-podcasts button').text(`Filtering by `).append($('<b>').text(filters.podcast));
+                }
+                else {
+                    $('#filter-podcasts button').text(`Filter by podcast`);
+                }
+
+                inbox.empty();
+                $dropdown.empty();
+                getBoosts(currentInvoiceIndex, 100, true, true, false);
+                sessionStorage.setItem(config.filterName, JSON.stringify(filters));
+            });
+        });
+    }
+
     //Build the UI with the page loads
     async function initPage() {
         setConfig();
@@ -872,6 +939,7 @@ $(document).ready(function () {
         await getAppList();
         await getNumerologyList();
         renderBoostInfo();
+        renderFilters();
         getIndex();
     }
 
@@ -891,8 +959,10 @@ $(document).ready(function () {
         else if (pathname == "/sent") {
             config.listUrl = '/api/v1/sent';
             config.indexUrl = '/api/v1/sent_index';
+            config.podcastsUrl = '/api/v1/sent_podcasts';
             config.singularName = 'sent boost';
             config.pluralName = 'sent boosts';
+            config.filterName = 'sent_filters';
             config.effects = false;
         }
     }
