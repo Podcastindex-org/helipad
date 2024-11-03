@@ -280,11 +280,6 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
     let json_result = serde_json::from_str::<RawBoost>(tlv);
     match json_result {
         Ok(rawboost) => {
-            //If there was a sat value in the tlv, override the invoice
-            if rawboost.value_msat.is_some() {
-                boost.value_msat = rawboost.value_msat.unwrap() as i64;
-            }
-
             //Determine an action type for later filtering ability
             if rawboost.action.is_some() {
                 boost.action = match rawboost.action.unwrap().as_str() {
