@@ -425,7 +425,9 @@ $(document).ready(function () {
             this.playing = true;
 
             this.audio.src = src;
-            this.audio.play();
+            try {
+                this.audio.play();
+            } catch (err) {}
 
             this.audio.addEventListener('ended', () => this.playing = false);
         }
