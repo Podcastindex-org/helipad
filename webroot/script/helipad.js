@@ -888,6 +888,7 @@ $(document).ready(function () {
         if (filters.podcast) {
             $('#filter-podcasts button').text(`Filtering by `).append($('<b>').text(filters.podcast));
             $('#inbox-filters').removeClass('d-none')
+            $('.filter a').addClass('text-danger')
         }
 
         $('.filter a').click((ev) => {
@@ -916,9 +917,11 @@ $(document).ready(function () {
 
                 if (filters.podcast) {
                     $('#filter-podcasts button').text(`Filtering by `).append($('<b>').text(filters.podcast));
+                    $('.filter a').addClass('text-danger')
                 }
                 else {
                     $('#filter-podcasts button').text(`Filter by podcast`);
+                    $('.filter a').removeClass('text-danger')
                 }
 
                 inbox.empty();
