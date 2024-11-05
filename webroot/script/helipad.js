@@ -306,7 +306,7 @@ $(document).ready(function () {
                 if ($('div.outgoing_msg').length == 0 && $('div.nodata').length == 0) {
                     if (filters.podcast) {
                         inbox.prepend('<div class="nodata"><p>No data found that matches your current filters.</p>' +
-                            '<p>This screen will automatically refresh if new ' + config.pluralName + ' matching your filters are found.</p>' +
+                            '<p>This screen will automatically refresh when new ' + config.pluralName + ' matching your filters are found.</p>' +
                             '<div class="lds-dual-ring"></div> Looking for ' + config.pluralName + ': <span class="invindex">' + currentInvoiceIndex + '</span>' +
                             '</div>');
                     }
