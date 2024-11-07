@@ -143,6 +143,9 @@ $(document).ready(function () {
                         boostPerson = `from ${element.sender}`;
                     }
 
+                    //Add njump links to nostr references
+                    boostMessage = boostMessage.replace(/(nostr:([\w\d]{63,}))/g, '<a href="https://njump.me/$2" target="_blank">$1</a>');
+
                     //Format the boost message
                     if (boostMessage.trim() != "") {
                         boostMessage = '' +
