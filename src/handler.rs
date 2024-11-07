@@ -15,7 +15,7 @@ use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 
 use chrono::{DateTime, TimeDelta, Utc};
 use crate::{AppState, lightning, podcastindex};
-use dbif::{BoostRecord, NumerologyRecord, WebhookRecord};
+use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord};
 use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
 use serde::{Deserialize, Serialize};
@@ -262,11 +262,17 @@ pub struct BoostParams {
     index: u64,
     count: u64,
     old: Option<bool>,
+    podcast: Option<String>,
 }
 
 impl Default for BoostParams {
     fn default() -> Self {
-        Self { index: 0, count: 0, old: Some(false) }
+        Self {
+            index: 0,
+            count: 0,
+            old: Some(false),
+            podcast: None,
+        }
     }
 }
 
@@ -284,8 +290,11 @@ pub async fn api_v1_boosts(
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied boost count from call: [{}]", boostcount);
 
+    let mut filters = BoostFilters::new();
+    filters.podcast = params.podcast;
+
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true) {
+    match dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
         Ok(boosts) => {
             Json(boosts).into_response()
         }
@@ -312,8 +321,11 @@ pub async fn api_v1_streams(
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied stream count from call: [{}]", boostcount);
 
+    let mut filters = BoostFilters::new();
+    filters.podcast = params.podcast;
+
     //Get the boosts from db for returning
-    match dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true) {
+    match dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
         Ok(streams) => {
             Json(streams).into_response()
         }
@@ -371,14 +383,49 @@ pub async fn api_v1_sent(
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied sent boost count from call: [{}]", boostcount);
 
+    let mut filters = BoostFilters::new();
+    filters.podcast = params.podcast;
+
     //Get sent boosts from db for returning
-    match dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true) {
+    match dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
         Ok(sent_boosts) => {
             Json(sent_boosts).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting sent boosts: {}.\n", e);
             (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting sent boosts.").into_response()
+        }
+    }
+}
+
+pub async fn api_v1_podcasts(
+    State(state): State<AppState>
+) -> Response {
+
+    //Get the podcasts from db for returning
+    match dbif::get_podcasts_from_db(&state.helipad_config.database_file_path) {
+        Ok(podcasts) => {
+            Json(podcasts).into_response()
+        }
+        Err(e) => {
+            eprintln!("** Error getting podcasts: {}.\n", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting podcasts.").into_response()
+        }
+    }
+}
+
+pub async fn api_v1_sent_podcasts(
+    State(state): State<AppState>
+) -> Response {
+
+    //Get the podcasts from db for returning
+    match dbif::get_sent_podcasts_from_db(&state.helipad_config.database_file_path) {
+        Ok(podcasts) => {
+            Json(podcasts).into_response()
+        }
+        Err(e) => {
+            eprintln!("** Error getting sent podcasts: {}.\n", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting sent podcasts.").into_response()
         }
     }
 }
@@ -994,15 +1041,16 @@ pub async fn csv_export_boosts(
 
     //Get the boosts/streams/sent from db for returning
     let results;
+    let filters = BoostFilters::new();
 
     if list == "streams" {
-        results = dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false);
+        results = dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false, filters);
     }
     else if list == "sent" {
-        results = dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false);
+        results = dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false, filters);
     }
     else { // boosts
-        results = dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false);
+        results = dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, false, filters);
     }
 
     match results {

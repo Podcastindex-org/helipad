@@ -266,6 +266,22 @@ img {
     margin-bottom: 8px;
 }
 
+.titleBar a:hover {
+    color: white;
+    text-decoration: none;
+}
+.titleBar a {
+    color: #ccc;
+}
+
+.csv a {
+    color: var(--blue);
+}
+
+.csv a:hover {
+    color: #66b0ff;
+}
+
 h5.titleHeader {
     color: floralwhite;
     display: inline;
@@ -341,12 +357,6 @@ div.piIcon {
     padding-right:2px;
     float:right;
 }
-span.csv {
-    padding-right:8px;
-}
-span.csv a {
-    text-decoration: none;
-}
 div.nodata span.invindex {
     color: orange;
 }
@@ -369,23 +379,10 @@ ul.navButtons li.active,
 ul.navButtons li a.active {
     border-bottom: 2px solid red
 }
-ul.navButtons li:hover a {
-    color: white;
-    text-decoration: none;
-}
-ul.navButtons li a {
-    color: #ccc;
-}
 ul.navButtons li.active a,
 ul.navButtons li a[aria-selected="true"] {
     color: white;
     font-weight: bold;
-}
-.settings a {
-    color: #ccc;
-}
-.settings a:hover {
-    opacity: .6;
 }
 .rightHeader {
     display: flex;
