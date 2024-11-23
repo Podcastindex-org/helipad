@@ -24,7 +24,8 @@ use std::{fs, str};
 use std::string::String;
 use url::Url;
 use tempfile::NamedTempFile;
-
+use reqwest;
+use std::collections::HashMap;
 //Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
@@ -992,6 +993,214 @@ pub async fn numerology_settings_patch(
     println!("** numerology_settings_patch({})", index);
 
     Ok(numerology_list(&db_filepath))
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReportGenerateForm {
+    list_boosts: Option<bool>,
+    list_streams: Option<bool>,
+    list_sent: Option<bool>,
+    podcast: String,
+    start_date: Option<u64>,
+    end_date: Option<u64>,
+    include_usd: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct BtcPrices {
+    bpi: HashMap<String, f64>,
+}
+
+pub async fn fetch_btc_prices(start_date: u64, end_date: u64) -> Result<Option<BtcPrices>, reqwest::Error> {
+    let start_str = DateTime::from_timestamp(start_date as i64, 0)
+        .map(|s| s.format("%Y-%m-%d").to_string());
+
+    let end_str = DateTime::from_timestamp(end_date as i64, 0)
+        .map(|e| e.format("%Y-%m-%d").to_string());
+
+    if start_str.is_none() || end_str.is_none() {
+        return Ok(None);
+    }
+
+    let query = vec![
+        ("start", start_str.unwrap()),
+        ("end", end_str.unwrap()),
+    ];
+
+    let client = reqwest::Client::new();
+    let response = client.get("https://api.coindesk.com/v1/bpi/historical/close.json")
+        .query(&query)
+        .send()
+        .await?;
+
+    let btc_prices = response.json::<BtcPrices>().await?;
+
+    Ok(Some(btc_prices))
+}
+
+pub async fn report_generate(
+    State(state): State<AppState>,
+    Form(form): Form<ReportGenerateForm>,
+) -> impl IntoResponse {
+
+    println!("** report_generate({:#?})", form.clone());
+
+    let mut lists = Vec::new();
+
+    if form.list_boosts.is_some() {
+        lists.push("boost");
+    }
+
+    if form.list_streams.is_some() {
+        lists.push("stream");
+    }
+
+    if form.list_sent.is_some() {
+        lists.push("sent");
+    }
+
+    let mut filters = BoostFilters::new();
+
+    if form.podcast != "" {
+        filters.podcast = Some(form.podcast);
+    }
+
+    if let Some(val) = form.start_date {
+        filters.start_date = Some(val);
+    }
+
+    if let Some(val) = form.end_date {
+        filters.end_date = Some(val);
+    }
+
+    let mut btc_prices = None;
+
+    if form.include_usd.is_some() && form.start_date.is_some() && form.end_date.is_some() {
+        let prices = fetch_btc_prices(form.start_date.unwrap(), form.end_date.unwrap()).await;
+
+        if let Err(e) = prices {
+            eprintln!("** Error getting btc prices: {}.\n", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting btc prices.").into_response();
+        }
+
+        btc_prices = prices.unwrap();
+    }
+
+    let index = 0;
+    let boostcount = 0;
+    let direction = false;
+
+    let mut csv = String::new();
+
+    //CSV column name header
+    let mut headers = "index,type,time,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode".to_string();
+
+    if btc_prices.is_some() {
+        headers.push_str(",btc_close,value_usd,value_usd_total");
+    }
+
+    csv.push_str(&headers);
+    csv.push_str("\n");
+
+    for list in lists {
+        let results;
+
+        if list == "boost" {
+            results = dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, direction, false, filters.clone());
+        }
+        else if list == "stream" {
+            results = dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, direction, false, filters.clone());
+        }
+        else if list == "sent" {
+            results = dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, direction, false, filters.clone());
+        }
+        else {
+            continue;
+        }
+
+        if let Err(e) = results {
+            eprintln!("** Error getting boosts: {}.\n", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts.").into_response();
+        }
+
+        let boosts = results.unwrap();
+
+        //Iterate the boost set
+        for boost in boosts {
+            //Parse out a friendly date
+            let dt = DateTime::from_timestamp(boost.time, 0).unwrap_or_else(|| panic!("Unable to parse boost time: {}", boost.time));
+            let boost_time = dt.format("%e %b %Y %H:%M:%S UTC").to_string();
+
+            //Translate to sats
+            let mut value_sat = 0;
+            if boost.value_msat > 1000 {
+                value_sat = boost.value_msat / 1000;
+            }
+
+            let mut value_sat_total = 0;
+            if boost.value_msat_total > 1000 {
+                value_sat_total = boost.value_msat_total / 1000;
+            }
+
+            //The main export data formatting
+            csv.push_str(
+                format!(
+                    "{},{},\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
+                    boost.index,
+                    list,
+                    boost_time,
+                    boost.value_msat,
+                    value_sat,
+                    boost.value_msat_total,
+                    value_sat_total,
+                    boost.action,
+                    BoostRecord::escape_for_csv(boost.sender),
+                    BoostRecord::escape_for_csv(boost.app),
+                    BoostRecord::escape_for_csv(boost.message),
+                    BoostRecord::escape_for_csv(boost.podcast),
+                    BoostRecord::escape_for_csv(boost.episode),
+                    BoostRecord::escape_for_csv(boost.remote_podcast.unwrap_or("".to_string())),
+                    BoostRecord::escape_for_csv(boost.remote_episode.unwrap_or("".to_string()))
+                ).as_str()
+            );
+
+            //Include BTC/USD conversion if set
+            if let Some(btc_prices) = &btc_prices {
+                let date = dt.format("%Y-%m-%d").to_string();
+
+                if let Some(btc_price) = btc_prices.bpi.get(&date) {
+                    let sat_price = btc_price / 100_000_000.0;
+                    let value_usd = (value_sat as f64) * sat_price;
+                    let value_usd_total = (value_sat_total as f64) * sat_price;
+
+                    csv.push_str(format!(",{},{},{}", btc_price, value_usd, value_usd_total).as_str());
+                }
+            }
+
+            csv.push_str("\n");
+        }
+    }
+
+    // return csv
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "text/plain; charset=utf-8".to_string()),
+            (header::CONTENT_DISPOSITION, "attachment; filename=\"report.csv\"".to_string())
+        ],
+        csv
+    ).into_response()
+}
+
+pub async fn report_podcasts_list(State(state): State<AppState>) -> impl IntoResponse {
+    match dbif::get_podcasts_from_db(&state.helipad_config.database_file_path) {
+        Ok(podcasts) => {
+             HtmlTemplate("webroot/template/report-podcasts-list.hbs", json!({"podcasts": podcasts}))
+        },
+        Err(err) => {
+             HtmlTemplate("webroot/template/report-podcasts-list.hbs", json!({"error": err.to_string()}))
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

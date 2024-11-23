@@ -107,9 +107,11 @@ pub struct SettingsRecord {
     pub custom_pew_file: Option<String>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct BoostFilters {
     pub podcast: Option<String>,
+    pub start_date: Option<u64>,
+    pub end_date: Option<u64>,
 }
 
 impl BoostFilters {
@@ -597,40 +599,60 @@ pub fn mark_boost_as_replied(filepath: &String, index: u64) -> Result<bool, Box<
 //Get all of the invoices from the database
 pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
-    let mut boosts: Vec<BoostRecord> = Vec::new();
 
-    let mut conditions = String::new();
+    let mut conditions: Vec<&str> = Vec::new();
     let mut bindings: HashMap<&str, &str> = HashMap::new();
 
-    let ltgt = if direction {
-        "<="
+    let cond = if direction {
+        "idx <= :idx"
     } else {
-        ">="
+        "idx >= :idx"
     };
 
-    conditions.push_str(&format!("idx {} :idx", ltgt));
+    conditions.push(&cond);
 
     let strindex = index.to_string();
     bindings.insert(":idx", &strindex);
 
     if invtype == "boost" {
-        conditions.push_str(" AND action IN (2, 4)");
+        conditions.push("action IN (2, 4)");
     }
     else if invtype == "stream" {
-        conditions.push_str(" AND action NOT IN (2, 4)");
+        conditions.push("action NOT IN (2, 4)");
     }
 
     if let Some(podcast) = &filters.podcast {
-        conditions.push_str(" AND podcast = :podcast");
+        conditions.push("podcast = :podcast");
         bindings.insert(":podcast", podcast);
     }
 
+    let start_date = filters.start_date.unwrap_or_default().to_string();
+
+    if start_date != "" && start_date != "0" {
+        conditions.push("time >= :start_date");
+        bindings.insert(":start_date", &start_date);
+    }
+
+    let end_date = filters.end_date.unwrap_or_default().to_string();
+
+    if end_date != "" && end_date != "0" {
+        conditions.push("time <= :end_date");
+        bindings.insert(":end_date", &end_date);
+    }
+
+    let conditions = conditions.join(" AND ");
+
+    let mut limit = String::new();
     let strmax = max.to_string();
-    bindings.insert(":max", &strmax);
+
+    if max > 0 {
+        limit.push_str("LIMIT :max");
+        bindings.insert(":max", &strmax);
+    }
 
     //Query for boosts and automated boosts
-    let sqltxt = format!("
-        SELECT
+    let sqltxt = format!(
+        "SELECT
             idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value
         FROM
             boosts
@@ -638,9 +660,11 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
             {}
         ORDER BY
             idx DESC
-        LIMIT
-            :max
-    ", conditions);
+        {}
+        ",
+        conditions,
+        limit
+    );
 
     //Prepare and execute the query
     let mut stmt = conn.prepare(sqltxt.as_str())?;
@@ -650,6 +674,7 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
     }
 
     let mut rows = stmt.raw_query();
+    let mut boosts: Vec<BoostRecord> = Vec::new();
 
     while let Some(row) = rows.next()? {
         let boost = BoostRecord {
@@ -829,29 +854,49 @@ pub fn get_wallet_balance_from_db(filepath: &String) -> Result<i64, Box<dyn Erro
 //Get all of the sent boosts from the database
 pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
-    let mut boosts: Vec<BoostRecord> = Vec::new();
 
-    let mut conditions = String::new();
+    let mut conditions: Vec<&str> = Vec::new();
     let mut bindings: HashMap<&str, &str> = HashMap::new();
 
-    let ltgt = if direction {
-        "<="
+    let cond = if direction {
+        "idx <= :idx"
     } else {
-        ">="
+        "idx >= :idx"
     };
 
-    conditions.push_str(&format!("idx {} :idx", ltgt));
+    conditions.push(&cond);
 
     let strindex = index.to_string();
     bindings.insert(":idx", &strindex);
 
     if let Some(podcast) = &filters.podcast {
-        conditions.push_str(" AND podcast = :podcast");
+        conditions.push("podcast = :podcast");
         bindings.insert(":podcast", podcast);
     }
 
+    let start_date = filters.start_date.unwrap_or_default().to_string();
+
+    if start_date != "" && start_date != "0" {
+        conditions.push("time >= :start_date");
+        bindings.insert(":start_date", &start_date);
+    }
+
+    let end_date = filters.end_date.unwrap_or_default().to_string();
+
+    if end_date != "" && end_date != "0" {
+        conditions.push("time <= :end_date");
+        bindings.insert(":end_date", &end_date);
+    }
+
+    let conditions = conditions.join(" AND ");
+
+    let mut limit = String::new();
     let strmax = max.to_string();
-    bindings.insert(":max", &strmax);
+
+    if max > 0 {
+        limit.push_str("LIMIT :max");
+        bindings.insert(":max", &strmax);
+    }
 
     //Query for boosts and automated boosts
     let sqltxt = format!(
@@ -881,10 +926,10 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
             {}
         ORDER BY
             idx DESC
-        LIMIT
-            :max
+        {}
         ",
-        conditions
+        conditions,
+        limit
     );
 
     //Prepare and execute the query
@@ -895,6 +940,7 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
     }
 
     let mut rows = stmt.raw_query();
+    let mut boosts: Vec<BoostRecord> = Vec::new();
 
     //Parse the results
     while let Some(row) = rows.next()? {
