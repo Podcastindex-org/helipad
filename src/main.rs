@@ -283,6 +283,9 @@ async fn main() {
             .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
             .route("/settings/webhooks/:idx", delete(handler::webhook_settings_delete))
 
+            .route("/settings/report/podcasts", get(handler::report_podcasts_list))
+            .route("/settings/report/generate", post(handler::report_generate))
+
             .route("/csv", get(handler::csv_export_boosts))
 
             // public api (cors all origins)

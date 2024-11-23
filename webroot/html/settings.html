@@ -54,6 +54,7 @@
                     <a class="nav-link active text-light" id="general-tab" data-toggle="pill" data-target="#general-content" href="#" role="tab" aria-controls="general-content" aria-selected="true">General</a>
                     <a class="nav-link text-light" id="numerology-tab" data-toggle="pill" data-target="#numerology-content" href="#" role="tab" aria-controls="numerology-content" aria-selected="false">Numerology</a>
                     <a class="nav-link text-light" id="webhooks-tab" data-toggle="pill" data-target="#webhooks-content" href="#" role="tab" aria-controls="webhooks-content" aria-selected="false">Webhooks</a>
+                    <a class="nav-link text-light" id="report-tab" data-toggle="pill" data-target="#report-content" href="#" role="tab" aria-controls="report-content" aria-selected="false">Report</a>
                 </div>
             </div>
         </div>
@@ -114,6 +115,57 @@
                         <table id="webhooks" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/webhooks" hx-trigger="intersect">
                         </table>
                     </div>
+                    <div class="tab-pane fade" id="report-content" role="tabpanel" aria-labelledby="report-tab">
+                        <form id="export-form" action="/settings/report/generate" method="POST">
+                            <div class="form-group">
+                                <b>Report</b>
+                                <div>Generate CSV report from Helipad data</div>
+                                <div class="ml-2">
+                                    <div class="mt-2">
+                                        Lists:
+                                        <div class="ml-4 form-check">
+                                            <input class="form-check-input" type="checkbox" id="export-boosts" name="list_boosts" value="true" checked>
+                                            <label class="form-check-label" for="export-boosts" style="user-select: none">Boosts</label>
+                                        </div>
+                                        <div class="ml-4 form-check">
+                                            <input class="form-check-input" type="checkbox" id="export-streams" name="list_streams" value="true">
+                                            <label class="form-check-label" for="export-streams" style="user-select: none">Streams</label>
+                                        </div>
+                                        <div class="ml-4 form-check">
+                                            <input class="form-check-input" type="checkbox" id="export-sent-boosts" name="list_sent" value="true">
+                                            <label class="form-check-label" for="export-sent-boosts" style="user-select: none">Sent boosts</label>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2">
+                                        Podcast:
+                                        <select class="form-control form-control-sm bg-dark text-light w-auto d-inline" name="podcast" hx-get="/settings/report/podcasts" hx-trigger="intersect">
+                                            <option value="">All podcasts</option>
+                                        </select>
+                                    </div>
+                                    <div class="mt-2">
+                                        Start date:
+                                        <input class="form-control form-control-sm bg-dark text-light w-auto d-inline" type="date" id="export-start-date">
+                                        <input type="hidden" id="export-start-date-ts" name="start_date">
+                                        &nbsp;
+                                        End date:
+                                        <input class="form-control form-control-sm bg-dark text-light w-auto d-inline" type="date" id="export-end-date">
+                                        <input type="hidden" id="export-end-date-ts" name="end_date">
+                                    </div>
+                                    <div class="mt-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="export-include-usd" name="include_usd" value="true">
+                                            <label class="form-check-label" for="export-include-usd" style="user-select: none">USD conversion (from Coindesk)</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group mt-4">
+                                    <button id="save-btn" type="submit" class="btn btn-md btn-success">
+                                        Generate report
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -147,6 +199,21 @@
         <div class="modal-content"></div>
     </div>
 </div>
+
+<script>
+window.addEventListener("load", () => {
+    const oneYearAgo = new Date(Date.now() - (365 * 24 * 60 * 60 * 1000));
+    const now = new Date();
+
+    document.querySelector("#export-start-date").value = oneYearAgo.toISOString().slice(0,10);
+    document.querySelector("#export-end-date").value = now.toISOString().slice(0,10);
+
+    document.querySelector("#export-form").addEventListener("submit", () => {
+        document.querySelector("#export-start-date-ts").value = Math.floor(document.querySelector("#export-start-date").valueAsNumber / 1000);
+        document.querySelector("#export-end-date-ts").value = Math.floor(document.querySelector("#export-end-date").valueAsNumber / 1000);
+    });
+});
+</script>
 
 </body>
 </html>
