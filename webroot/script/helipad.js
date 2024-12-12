@@ -114,6 +114,7 @@ $(document).ready(function () {
                     let boostRemotePodcast = element.remote_podcast;
                     let boostRemoteEpisode = element.remote_episode;
                     let boostReplySent = element.reply_sent;
+                    let boostCustomValue = element.custom_value;
                     let boostTlv = {};
                     let boostReplyAddress;
                     let boostReplyCustomKey;
@@ -178,6 +179,11 @@ $(document).ready(function () {
                         }
                     }
 
+                    let boostWalletInfo = '';
+                    if (settings.show_hosted_wallet_ids && boostCustomValue) {
+                        boostWalletInfo = `<small>[Wallet #${escapeHTML(boostCustomValue)}]</small>`;
+                    }
+
                     //Show clock icon for automated boosts
                     if (boostTlv && boostTlv.action == "auto") {
                         boostDisplayAmount = `
@@ -236,7 +242,7 @@ $(document).ready(function () {
                                 </div>
                               </div>
                               <h5 class="sats">
-                                ${boostDisplayAmount} ${boostPerson} ${boostNumerology} ${boostSplitPercentage}
+                                ${boostDisplayAmount} ${boostPerson} ${boostNumerology} ${boostSplitPercentage} ${boostWalletInfo}
                               </h5>
                               <small class="podcast_episode">
                                 ${boostPodcastEpisode}
