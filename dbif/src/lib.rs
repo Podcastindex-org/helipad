@@ -106,6 +106,7 @@ pub struct SettingsRecord {
     pub play_pew: bool,
     pub custom_pew_file: Option<String>,
     pub resolve_nostr_refs: bool,
+    pub show_hosted_wallet_ids: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -382,6 +383,10 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
 
     if conn.execute("ALTER TABLE settings ADD COLUMN resolve_nostr_refs integer DEFAULT 0", []).is_ok() {
         println!("Nostr refs setting added.");
+    }
+
+    if conn.execute("ALTER TABLE settings ADD COLUMN show_hosted_wallet_ids integer DEFAULT 0", []).is_ok() {
+        println!("Hosted wallet id setting added.");
     }
 
     //Create the webhooks table
@@ -1293,7 +1298,8 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
              hide_boosts_below,
              play_pew,
              custom_pew_file,
-             resolve_nostr_refs
+             resolve_nostr_refs,
+             show_hosted_wallet_ids
         FROM
             settings
         WHERE
@@ -1310,6 +1316,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             play_pew: row.get(4)?,
             custom_pew_file: row.get(5).ok(),
             resolve_nostr_refs: row.get(6)?,
+            show_hosted_wallet_ids: row.get(7)?,
         })
     });
 
@@ -1323,6 +1330,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             play_pew: true,
             custom_pew_file: None,
             resolve_nostr_refs: false,
+            show_hosted_wallet_ids: false,
         }),
         Err(e) => Err(Box::new(e)),
     }
@@ -1340,10 +1348,11 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             hide_boosts_below,
             play_pew,
             custom_pew_file,
-            resolve_nostr_refs
+            resolve_nostr_refs,
+            show_hosted_wallet_ids
         )
         VALUES
-            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         ON CONFLICT(idx) DO UPDATE SET
             show_received_sats = excluded.show_received_sats,
             show_split_percentage = excluded.show_split_percentage,
@@ -1351,7 +1360,8 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             hide_boosts_below = excluded.hide_boosts_below,
             play_pew = excluded.play_pew,
             custom_pew_file = excluded.custom_pew_file,
-            resolve_nostr_refs = excluded.resolve_nostr_refs
+            resolve_nostr_refs = excluded.resolve_nostr_refs,
+            show_hosted_wallet_ids = excluded.show_hosted_wallet_ids
         "#,
         params![
             settings.show_received_sats,
@@ -1361,6 +1371,7 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             settings.play_pew,
             settings.custom_pew_file,
             settings.resolve_nostr_refs,
+            settings.show_hosted_wallet_ids,
         ]
     ) {
         Ok(_) => {
