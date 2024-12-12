@@ -13,6 +13,8 @@ $(document).ready(function () {
     let nodeInfo = null;
     let settings = null;
     let filters = {};
+    let nostrPool = null;
+    let nostrRelays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
 
     let config = {
         'listUrl': '/api/v1/boosts',
@@ -143,14 +145,11 @@ $(document).ready(function () {
                         boostPerson = `from ${element.sender}`;
                     }
 
-                    //Add njump links to nostr references
-                    boostMessage = boostMessage.replace(/(nostr:([\w\d]{63,}))/g, '<a href="https://njump.me/$2" target="_blank">$1</a>');
-
                     //Format the boost message
                     if (boostMessage.trim() != "") {
                         boostMessage = '' +
                             '      <hr>' +
-                            '      <p>' + boostMessage + '</p>';
+                            '      <p class="boost-message">' + boostMessage + '</p>';
                     }
 
                     //Show sat amount and more info
@@ -243,7 +242,7 @@ $(document).ready(function () {
                                 ${boostPodcastEpisode}
                                 <span class="remote_item">${boostRemoteInfo}</span>
                               </small>
-                              <div style="clear: both">
+                              <div class="boost-message" style="clear: both">
                                 ${boostMessage}
                               </div>
                             </div>
@@ -292,6 +291,12 @@ $(document).ready(function () {
                             });
 
                             renderReplyButton(boostIndex, boostReplySent);
+                        }
+
+                        if (boostMessage.indexOf('nostr:') !== -1) {
+                            replaceNostrReferences(boostMessage).then((message) => {
+                                $('div.outgoing_msg[data-msgid=' + boostIndex + '] .boost-message').html(message);
+                            });
                         }
 
                         //Update the tracking array
@@ -507,6 +512,52 @@ $(document).ready(function () {
             var $el = $(el);
             $el.find('a').text(prettyDate(new Date($el.attr('datetime'))));
         });
+    }
+
+    //Set up nostr simplepool if resolve_nostr_refs enabled
+    function initNostr() {
+        if (settings.resolve_nostr_refs) {
+            nostrPool = new NostrTools.SimplePool();
+        }
+    }
+
+    //Resolve a nostr profile reference into a name
+    async function resolveNostrName(ref) {
+        if (!nostrPool || !ref.profile) return null;
+
+        const cache = JSON.parse(localStorage.getItem("nostrNames")) || {};
+
+        if (!cache[ref.profile.pubkey]) {
+            const useRelays = ref.profile.relays.length ? ref.profile.relays : nostrRelays;
+            const results = await nostrPool.querySync(useRelays, {
+                authors: [ref.profile.pubkey],
+                kinds: [0]
+            });
+            const event = results.find(result => result.pubkey === ref.profile.pubkey);
+
+            if (!event) return null;
+
+            const { display_name, name } = JSON.parse(event.content);
+
+            cache[ref.profile.pubkey] = display_name || name;
+
+            localStorage.setItem("nostrNames", JSON.stringify(cache));
+        }
+
+        return cache[ref.profile.pubkey]
+    }
+
+    //Replace nostr npubs with an njump link or actual name
+    async function replaceNostrReferences(message) {
+        const refs = NostrTools.parseReferences({content: message});
+
+        for (let ref of refs) {
+            const name = await resolveNostrName(ref);
+            const displayName = name || ref.text;
+            message = message.replace(ref.text, `<a href="https://njump.me/${escapeHTML(ref.text)}" target="_blank">${escapeHTML(displayName)}</a>`);
+        }
+
+        return message;
     }
 
     //Get the most recent invoice index the node knows about
@@ -946,6 +997,7 @@ $(document).ready(function () {
         await getNumerologyList();
         renderBoostInfo();
         renderFilters();
+        initNostr();
         getIndex();
     }
 

@@ -105,6 +105,7 @@ pub struct SettingsRecord {
     pub hide_boosts_below: Option<u64>,
     pub play_pew: bool,
     pub custom_pew_file: Option<String>,
+    pub resolve_nostr_refs: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -377,6 +378,10 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
             eprintln!("{}", e);
             return Err(Box::new(HydraError(format!("Failed to create database settings table: [{}].", filepath))))
         }
+    }
+
+    if conn.execute("ALTER TABLE settings ADD COLUMN resolve_nostr_refs integer DEFAULT 0", []).is_ok() {
+        println!("Nostr refs setting added.");
     }
 
     //Create the webhooks table
@@ -1287,7 +1292,8 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
              hide_boosts,
              hide_boosts_below,
              play_pew,
-             custom_pew_file
+             custom_pew_file,
+             resolve_nostr_refs
         FROM
             settings
         WHERE
@@ -1303,6 +1309,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             hide_boosts_below: row.get(3).ok(),
             play_pew: row.get(4)?,
             custom_pew_file: row.get(5).ok(),
+            resolve_nostr_refs: row.get(6)?,
         })
     });
 
@@ -1315,6 +1322,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             hide_boosts_below: None,
             play_pew: true,
             custom_pew_file: None,
+            resolve_nostr_refs: false,
         }),
         Err(e) => Err(Box::new(e)),
     }
@@ -1331,17 +1339,19 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             hide_boosts,
             hide_boosts_below,
             play_pew,
-            custom_pew_file
+            custom_pew_file,
+            resolve_nostr_refs
         )
         VALUES
-            (1, ?1, ?2, ?3, ?4, ?5, ?6)
+            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7)
         ON CONFLICT(idx) DO UPDATE SET
             show_received_sats = excluded.show_received_sats,
             show_split_percentage = excluded.show_split_percentage,
             hide_boosts = excluded.hide_boosts,
             hide_boosts_below = excluded.hide_boosts_below,
             play_pew = excluded.play_pew,
-            custom_pew_file = excluded.custom_pew_file
+            custom_pew_file = excluded.custom_pew_file,
+            resolve_nostr_refs = excluded.resolve_nostr_refs
         "#,
         params![
             settings.show_received_sats,
@@ -1350,6 +1360,7 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             settings.hide_boosts_below,
             settings.play_pew,
             settings.custom_pew_file,
+            settings.resolve_nostr_refs,
         ]
     ) {
         Ok(_) => {

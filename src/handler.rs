@@ -751,6 +751,7 @@ pub struct GeneralSettingsMultipart {
     hide_boosts: Option<bool>,
     hide_boosts_below: Option<String>,
     play_pew: Option<bool>,
+    resolve_nostr_refs: Option<bool>,
 
     // The `unlimited arguments` means that this field will be limited to the
     // total size of the request body. If you want to limit the size of this
@@ -781,6 +782,7 @@ pub async fn general_settings_save(
     settings.hide_boosts = parts.hide_boosts.unwrap_or(false);
     settings.hide_boosts_below = hide_boosts_below;
     settings.play_pew = parts.play_pew.unwrap_or(false);
+    settings.resolve_nostr_refs = parts.resolve_nostr_refs.unwrap_or(false);
 
     if !settings.hide_boosts {
         settings.hide_boosts_below = None;

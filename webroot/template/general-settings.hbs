@@ -25,6 +25,10 @@
         <input class="form-control form-control-sm bg-dark text-light w-auto" type="number" id="hide-boosts-below" name="hide_boosts_below" placeholder="sats" value="{{ settings.hide_boosts_below }}"{{#if settings.hide_boosts}} required{{/if}}>
       </div>
     </div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="resolve-nostr-refs" name="resolve_nostr_refs" value="true"{{#if settings.resolve_nostr_refs}} checked{{/if}}>
+      <label class="form-check-label" for="resolve-nostr-refs" style="user-select: none">Resolve Nostr npub references to names</label>
+    </div>
   </div>
 
   <div class="form-group">

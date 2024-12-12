@@ -179,6 +179,13 @@ const numberFormat = (num) => {
     return new Intl.NumberFormat().format(num);
 }
 
+// Escape text
+const escapeHTML = (text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Capitalize the first letter of each word in a string
 const ucWords = (text) => {
     if (!text) return text;
