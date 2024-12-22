@@ -1132,7 +1132,7 @@ pub async fn report_generate(
         for boost in boosts {
             //Parse out a friendly date
             let dt = DateTime::from_timestamp(boost.time, 0).unwrap_or_else(|| panic!("Unable to parse boost time: {}", boost.time));
-            let boost_time = dt.format("%e %b %Y %H:%M:%S UTC").to_string();
+            let boost_time = dt.to_rfc3339().to_string();
 
             //Translate to sats
             let mut value_sat = 0;
@@ -1279,7 +1279,7 @@ pub async fn csv_export_boosts(
             for boost in boosts {
                 //Parse out a friendly date
                 let dt = DateTime::from_timestamp(boost.time, 0).unwrap_or_else(|| panic!("Unable to parse boost time: {}", boost.time));
-                let boost_time = dt.format("%e %b %Y %H:%M:%S UTC").to_string();
+                let boost_time = dt.to_rfc3339().to_string();
 
                 //Translate to sats
                 let mut value_sat = 0;
