@@ -619,7 +619,7 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
         "idx >= :idx"
     };
 
-    conditions.push(&cond);
+    conditions.push(cond);
 
     let strindex = index.to_string();
     bindings.insert(":idx", &strindex);
@@ -638,14 +638,14 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
 
     let start_date = filters.start_date.unwrap_or_default().to_string();
 
-    if start_date != "" && start_date != "0" {
+    if !start_date.is_empty() && start_date != "0" {
         conditions.push("time >= :start_date");
         bindings.insert(":start_date", &start_date);
     }
 
     let end_date = filters.end_date.unwrap_or_default().to_string();
 
-    if end_date != "" && end_date != "0" {
+    if !end_date.is_empty() && end_date != "0" {
         conditions.push("time <= :end_date");
         bindings.insert(":end_date", &end_date);
     }
@@ -874,7 +874,7 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
         "idx >= :idx"
     };
 
-    conditions.push(&cond);
+    conditions.push(cond);
 
     let strindex = index.to_string();
     bindings.insert(":idx", &strindex);
@@ -886,14 +886,14 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
 
     let start_date = filters.start_date.unwrap_or_default().to_string();
 
-    if start_date != "" && start_date != "0" {
+    if !start_date.is_empty() && start_date != "0" {
         conditions.push("time >= :start_date");
         bindings.insert(":start_date", &start_date);
     }
 
     let end_date = filters.end_date.unwrap_or_default().to_string();
 
-    if end_date != "" && end_date != "0" {
+    if !end_date.is_empty() && end_date != "0" {
         conditions.push("time <= :end_date");
         bindings.insert(":end_date", &end_date);
     }

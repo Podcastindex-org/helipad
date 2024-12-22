@@ -24,7 +24,6 @@ use std::{fs, str};
 use std::string::String;
 use url::Url;
 use tempfile::NamedTempFile;
-use reqwest;
 use std::collections::HashMap;
 //Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
@@ -1065,7 +1064,7 @@ pub async fn report_generate(
 
     let mut filters = BoostFilters::new();
 
-    if form.podcast != "" {
+    if !form.podcast.is_empty() {
         filters.podcast = Some(form.podcast);
     }
 
@@ -1104,7 +1103,7 @@ pub async fn report_generate(
     }
 
     csv.push_str(&headers);
-    csv.push_str("\n");
+    csv.push('\n');
 
     for list in lists {
         let results;
@@ -1183,7 +1182,7 @@ pub async fn report_generate(
                 }
             }
 
-            csv.push_str("\n");
+            csv.push('\n');
         }
     }
 
