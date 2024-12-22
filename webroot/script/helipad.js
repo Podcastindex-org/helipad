@@ -949,6 +949,7 @@ $(document).ready(function () {
             $('#filter-podcasts button').text(`Filtering by `).append($('<b>').text(filters.podcast));
             $('#inbox-filters').removeClass('d-none')
             $('.filter a').addClass('text-danger')
+            $('.clear-filters').removeClass('d-none')
         }
 
         $('.filter a').click((ev) => {
@@ -984,11 +985,28 @@ $(document).ready(function () {
                     $('.filter a').removeClass('text-danger')
                 }
 
+                $('.clear-filters').toggleClass('d-none', filters.podcast === null);
+
                 inbox.empty();
                 $dropdown.empty();
                 getBoosts(currentInvoiceIndex, 100, true, true, false);
                 sessionStorage.setItem(config.filterName, JSON.stringify(filters));
             });
+        });
+
+        $('.clear-filters').on('click', async (ev) => {
+            filters.podcast = null;
+
+            $('.filter a').removeClass('text-danger')
+            $('#filter-podcasts button').text(`Filter by podcast`);
+            $('.clear-filters').addClass('d-none');
+            $('#inbox-filters').toggleClass('d-none');
+
+            inbox.empty();
+            $('#filter-podcasts .dropdown-menu').empty();
+
+            getBoosts(currentInvoiceIndex, 100, true, true, false);
+            sessionStorage.setItem(config.filterName, JSON.stringify(filters));
         });
     }
 

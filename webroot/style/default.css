@@ -401,6 +401,10 @@ ul.navButtons li a[aria-selected="true"] {
     display: none;
 }
 
+a.clear-filters:hover {
+    opacity: 0.7;
+}
+
 .spinner {
     width: 1em;
     height: 1em;
