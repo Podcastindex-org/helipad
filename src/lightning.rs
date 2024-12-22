@@ -126,8 +126,8 @@ impl std::fmt::Display for BoostError {
 
 impl std::error::Error for BoostError {}
 
-pub async fn connect_to_lnd(node_address: String, cert_path: String, macaroon_path: String) -> Option<lnd::Lnd> {
-    let cert: Vec<u8> = match fs::read(cert_path.clone()) {
+pub async fn connect_to_lnd(node_address: &str, cert_path: &str, macaroon_path: &str) -> Option<lnd::Lnd> {
+    let cert: Vec<u8> = match fs::read(cert_path) {
         Ok(cert_content) => cert_content,
         Err(_) => {
             eprintln!("Cannot find a valid tls.cert file");
@@ -135,7 +135,7 @@ pub async fn connect_to_lnd(node_address: String, cert_path: String, macaroon_pa
         }
     };
 
-    let macaroon: Vec<u8> = match fs::read(macaroon_path.clone()) {
+    let macaroon: Vec<u8> = match fs::read(macaroon_path) {
         Ok(macaroon_content) => macaroon_content,
         Err(_) => {
             eprintln!("Cannot find a valid admin.macaroon file");
@@ -144,10 +144,11 @@ pub async fn connect_to_lnd(node_address: String, cert_path: String, macaroon_pa
     };
 
     //Make the connection to LND
-    let lightning = lnd::Lnd::connect_with_macaroon(node_address.clone(), &cert, &macaroon).await;
+    let address = String::from(node_address);
+    let lightning = lnd::Lnd::connect_with_macaroon(address.clone(), &cert, &macaroon).await;
 
     if lightning.is_err() {
-        println!("Could not connect to: [{}] using tls: [{}] and macaroon: [{}]", node_address, cert_path, macaroon_path);
+        println!("Could not connect to: [{}] using tls: [{}] and macaroon: [{}]", address, cert_path, macaroon_path);
         eprintln!("{:#?}", lightning.err());
         return None;
     }

@@ -361,7 +361,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
     //Make the connection to LND
     println!("\nConnecting to LND node address...");
     let mut lightning;
-    match lightning::connect_to_lnd(helipad_config.node_address, helipad_config.cert_path, helipad_config.macaroon_path).await {
+    match lightning::connect_to_lnd(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await {
         Some(lndconn) => {
             println!(" - Success.");
             lightning = lndconn;
@@ -402,21 +402,33 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         let mut updated = false;
 
         //Get lnd node channel balance
-        match lnd::Lnd::channel_balance(&mut lightning).await {
-            Ok(balance) => {
-                let mut current_balance: i64 = 0;
-                if let Some(bal) = balance.local_balance {
-                    println!("LND node local balance: {:#?}", bal.sat);
-                    current_balance = bal.sat as i64;
-                }
+        let balance = lnd::Lnd::channel_balance(&mut lightning).await;
 
-                if dbif::add_wallet_balance_to_db(&db_filepath, current_balance).is_err() {
-                    println!("Error adding wallet balance to the database.");
+        if let Err(status) = balance {
+            eprintln!("Error getting LND wallet balance: {:#?}", status);
+
+            if status.message() == "transport error" {
+                // Attempt reconnect to LND
+                if let Some(lndconn) = lightning::connect_to_lnd(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await {
+                    println!(" - Reconnected.");
+                    lightning = lndconn;
                 }
             }
-            Err(e) => {
-                eprintln!("Error getting LND wallet balance: {:#?}", e);
-            }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
+            continue;
+        }
+
+        let balance = balance.unwrap();
+        let mut current_balance: i64 = 0;
+
+        if let Some(bal) = balance.local_balance {
+            println!("LND node local balance: {:#?}", bal.sat);
+            current_balance = bal.sat as i64;
+        }
+
+        if dbif::add_wallet_balance_to_db(&db_filepath, current_balance).is_err() {
+            println!("Error adding wallet balance to the database.");
         }
 
         //Get a list of invoices
