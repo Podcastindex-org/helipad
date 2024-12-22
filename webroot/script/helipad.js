@@ -219,8 +219,9 @@ $(document).ready(function () {
                     }
 
                     if (!messageIds.includes(boostIndex)) {
-                        let dateTime = new Date(element.time * 1000).toISOString();
-                        let localDateTime = new Date(element.time * 1000).toLocaleString();
+                        let timestamp = new Date(element.time * 1000);
+                        let dateTime = timestamp.toISOString();
+                        let localDateTime = timestamp.toLocaleString();
 
                         $('div.nodata').remove();
 
@@ -309,7 +310,9 @@ $(document).ready(function () {
                         messageIds.push(boostIndex);
                         messageIds = messageIds.sort((a, b) => a - b);
 
-                        if (shouldPew && config.effects && settings.play_pew) {
+                        let now = new Date();
+
+                        if (shouldPew && config.effects && settings.play_pew && (now - timestamp) < 600000) { // if enabled/shouldPew and received within past 10 mins
                             //Pew pew pew!
                             playPew(boostSats);
                         }
