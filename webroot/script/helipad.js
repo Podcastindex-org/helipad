@@ -68,7 +68,7 @@ $(document).ready(function () {
         }
 
         //Override shouldPew for receiving our first boost
-        if ($('div.nodata').length) {
+        if ($('div.nodata').length && startIndex === 1) {
             shouldPew = true;
         }
 
