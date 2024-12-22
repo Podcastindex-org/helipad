@@ -506,7 +506,7 @@ pub async fn api_v1_reply(
     });
 
     let helipad_config = state.helipad_config.clone();
-    let lightning = match lightning::connect_to_lnd(helipad_config.node_address, helipad_config.cert_path, helipad_config.macaroon_path).await {
+    let lightning = match lightning::connect_to_lnd(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await {
         Some(lndconn) => lndconn,
         None => {
             return (StatusCode::INTERNAL_SERVER_ERROR, "** Error connecting to LND.").into_response();
