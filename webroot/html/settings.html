@@ -204,13 +204,14 @@
 window.addEventListener("load", () => {
     const oneYearAgo = new Date(Date.now() - (365 * 24 * 60 * 60 * 1000));
     const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60 * 1000;
 
     document.querySelector("#export-start-date").value = oneYearAgo.toISOString().slice(0,10);
     document.querySelector("#export-end-date").value = now.toISOString().slice(0,10);
 
     document.querySelector("#export-form").addEventListener("submit", () => {
-        document.querySelector("#export-start-date-ts").value = Math.floor(document.querySelector("#export-start-date").valueAsNumber / 1000);
-        document.querySelector("#export-end-date-ts").value = Math.floor(document.querySelector("#export-end-date").valueAsNumber / 1000);
+        document.querySelector("#export-start-date-ts").value = Math.floor((document.querySelector("#export-start-date").valueAsNumber + tzOffset) / 1000);
+        document.querySelector("#export-end-date-ts").value = Math.floor((document.querySelector("#export-end-date").valueAsNumber + tzOffset) / 1000);
     });
 });
 </script>
