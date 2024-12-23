@@ -202,8 +202,9 @@
 
 <script>
 window.addEventListener("load", () => {
-    const oneYearAgo = new Date(Date.now() - (365 * 24 * 60 * 60 * 1000));
     const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
     const tzOffset = now.getTimezoneOffset() * 60 * 1000;
 
     document.querySelector("#export-start-date").value = oneYearAgo.toISOString().slice(0,10);
