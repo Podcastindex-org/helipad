@@ -992,7 +992,7 @@ $(document).ready(function () {
 
                 inbox.empty();
                 $dropdown.empty();
-                getBoosts(currentInvoiceIndex, 100, true, true, false);
+                getIndex();
                 sessionStorage.setItem(config.filterName, JSON.stringify(filters));
             });
         });
@@ -1008,7 +1008,7 @@ $(document).ready(function () {
             inbox.empty();
             $('#filter-podcasts .dropdown-menu').empty();
 
-            getBoosts(currentInvoiceIndex, 100, true, true, false);
+            getIndex();
             sessionStorage.setItem(config.filterName, JSON.stringify(filters));
         });
     }
