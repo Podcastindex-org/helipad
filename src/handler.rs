@@ -1209,6 +1209,8 @@ pub async fn report_generate(
                     let value_usd_total = (value_sat_total as f64) * sat_price;
 
                     csv.push_str(format!(",{},{},{}", btc_price, value_usd, value_usd_total).as_str());
+                } else {
+                    csv.push_str(",,,");
                 }
             }
 
