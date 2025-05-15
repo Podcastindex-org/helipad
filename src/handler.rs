@@ -1014,38 +1014,68 @@ pub struct BtcPrices {
     bpi: HashMap<String, f64>,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct BlockchainResponse {
+    values: Vec<BlockchainDataPoint>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct BlockchainDataPoint {
+    x: i64,  // timestamp
+    y: f64,  // price value
+}
+
 pub async fn fetch_btc_prices(start_date: u64, end_date: u64) -> Result<Option<BtcPrices>, reqwest::Error> {
-    let start_str = DateTime::from_timestamp(start_date as i64, 0)
-        .map(|s| s.format("%Y-%m-%d").to_string());
+    println!("** Fetching BTC prices from {} to {}", start_date, end_date);
 
-    let end_str = DateTime::from_timestamp(end_date as i64, 0)
-        .map(|e| e.format("%Y-%m-%d").to_string());
-
-    if start_str.is_none() || end_str.is_none() {
-        return Ok(None);
-    }
-
-    let query = vec![
-        ("start", start_str.unwrap()),
-        ("end", end_str.unwrap()),
-    ];
+    // Calculate time span in days
+    let time_diff = end_date - start_date;
+    let days = (time_diff / 86400) + 1; // Convert seconds to days and add 1 to include end date
+    let timespan = format!("{}days", days);
 
     let client = reqwest::Client::new();
-    let response = client.get("https://api.coindesk.com/v1/bpi/historical/close.json")
-        .query(&query)
+
+    // Use Blockchain.com's market price chart API
+    let response = client.get("https://api.blockchain.info/charts/market-price")
+        .query(&[
+            ("timespan", timespan.as_str()),
+            ("format", "json")
+        ])
         .send()
         .await?;
 
-    let btc_prices = response.json::<BtcPrices>().await?;
+    let blockchain_data = response.json::<BlockchainResponse>().await?;
 
-    Ok(Some(btc_prices))
+    println!("** Received {} data points from Blockchain.com", blockchain_data.values.len());
+
+    // Convert Blockchain.com data to the format expected by the application
+    let mut bpi = HashMap::new();
+
+    for point in &blockchain_data.values {
+        let timestamp = point.x;
+
+        // Only include points within our requested range
+        if timestamp >= start_date as i64 && timestamp <= end_date as i64 {
+            if let Some(dt) = DateTime::from_timestamp(timestamp, 0) {
+                let date = dt.format("%Y-%m-%d").to_string();
+                bpi.insert(date, point.y);
+            }
+        }
+    }
+
+    if bpi.is_empty() {
+        println!("** No BTC price data found in the requested date range");
+        return Ok(None);
+    }
+
+    println!("** Processed {} daily price points", bpi.len());
+    Ok(Some(BtcPrices { bpi }))
 }
 
 pub async fn report_generate(
     State(state): State<AppState>,
     Form(form): Form<ReportGenerateForm>,
 ) -> impl IntoResponse {
-
     println!("** report_generate({:#?})", form.clone());
 
     let mut lists = Vec::new();
