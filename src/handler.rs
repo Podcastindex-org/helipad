@@ -1126,7 +1126,7 @@ pub async fn report_generate(
     let mut csv = String::new();
 
     //CSV column name header
-    let mut headers = "index,type,time,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value".to_string();
+    let mut headers = "index,type,time,timezone,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value".to_string();
 
     if btc_prices.is_some() {
         headers.push_str(",btc_close,value_usd,value_usd_total");
@@ -1162,7 +1162,8 @@ pub async fn report_generate(
         for boost in boosts {
             //Parse out a friendly date
             let dt = DateTime::from_timestamp(boost.time, 0).unwrap_or_else(|| panic!("Unable to parse boost time: {}", boost.time));
-            let boost_time = dt.to_rfc3339().to_string();
+            let boost_time = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+            let boost_timezone = dt.format("%Z").to_string();
 
             //Translate to sats
             let mut value_sat = 0;
@@ -1178,10 +1179,11 @@ pub async fn report_generate(
             //The main export data formatting
             csv.push_str(
                 format!(
-                    "{},{},\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
+                    "{},{},\"{}\",\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"",
                     boost.index,
                     list,
                     boost_time,
+                    boost_timezone,
                     boost.value_msat,
                     value_sat,
                     boost.value_msat_total,
@@ -1304,14 +1306,15 @@ pub async fn csv_export_boosts(
             let mut csv = String::new();
 
             //CSV column name header
-            csv.push_str("count,index,time,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value\n");
+            csv.push_str("count,index,time,timezone,value_msat,value_sat,value_msat_total,value_sat_total,action,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value\n");
 
             //Iterate the boost set
             let mut count: u64 = 1;
             for boost in boosts {
                 //Parse out a friendly date
                 let dt = DateTime::from_timestamp(boost.time, 0).unwrap_or_else(|| panic!("Unable to parse boost time: {}", boost.time));
-                let boost_time = dt.to_rfc3339().to_string();
+                let boost_time = dt.format("%Y-%m-%d %H:%M:%S").to_string();
+                let boost_timezone = dt.format("%Z").to_string();
 
                 //Translate to sats
                 let mut value_sat = 0;
@@ -1326,10 +1329,11 @@ pub async fn csv_export_boosts(
                 //The main export data formatting
                 csv.push_str(
                     format!(
-                        "{},{},\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
+                        "{},{},\"{}\",\"{}\",{},{},{},{},{},\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\",\"{}\"\n",
                         count,
                         boost.index,
                         boost_time,
+                        boost_timezone,
                         boost.value_msat,
                         value_sat,
                         boost.value_msat_total,
