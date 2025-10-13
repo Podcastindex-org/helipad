@@ -1,14 +1,16 @@
 //Modules ----------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
 use axum::{
-    http::Method,
+    http::{Method, header, HeaderValue as AxumHeaderValue},
     middleware,
     routing::{get, post, delete, patch},
     Router,
 };
 
+use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
+use tower_http::set_header::SetResponseHeaderLayer;
 
 use chrono::Utc;
 use drop_root::set_user_group;
@@ -333,7 +335,15 @@ async fn main() {
         .nest_service("/image", ServeDir::new(WEBROOT_PATH_IMAGE))
         .nest_service("/script", ServeDir::new(WEBROOT_PATH_SCRIPT))
         .nest_service("/style", ServeDir::new(WEBROOT_PATH_STYLE))
-        .nest_service("/sound", ServeDir::new(helipad_config.sound_path))
+        .nest_service(
+            "/sound",
+            ServiceBuilder::new()
+                .layer(SetResponseHeaderLayer::overriding(
+                    header::CACHE_CONTROL,
+                    AxumHeaderValue::from_static("no-cache")
+                ))
+                .service(ServeDir::new(helipad_config.sound_path))
+        )
 
         .nest_service("/pew.mp3", ServeFile::new("webroot/extra/pew.mp3"))
         .nest_service("/favicon.ico", ServeFile::new("webroot/extra/favicon.ico"))

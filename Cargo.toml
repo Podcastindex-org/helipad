@@ -32,7 +32,8 @@ axum-macros = "0.4.1"
 axum-extra = { version = "0.9.3", features = ["cookie"] }
 axum_typed_multipart = "0.11.0"
 tempfile = "3.10.1"
-tower-http = { version = "0.5.2", features = ["fs", "cors"] }
+tower-http = { version = "0.5.2", features = ["fs", "cors", "set-header"] }
+tower = "0.5.2"
 
 [build-dependencies]
 configure_me_codegen = "0.4.8"
