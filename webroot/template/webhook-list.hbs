@@ -41,6 +41,16 @@
           Edit
       </button>
       <button
+          class="btn btn-sm btn-info"
+          hx-post="/settings/webhooks/{{ index }}/test"
+          hx-target="#webhooks"
+          hx-swap="innerHTML"
+          hx-confirm="Send a test webhook to {{ url }}?"
+          hx-on::after-request="if(event.detail.xhr.status == 200) { alert('Test webhook sent successfully!'); } else { alert('Test webhook failed: ' + event.detail.xhr.responseText); }"
+      >
+          Test
+      </button>
+      <button
           class="btn btn-sm btn-danger"
           hx-delete="/settings/webhooks/{{ index }}"
           hx-target="closest tr"

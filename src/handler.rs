@@ -18,6 +18,8 @@ use crate::{AppState, lightning, podcastindex};
 use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord};
 use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
+use reqwest::redirect::Policy;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fs, str};
@@ -736,6 +738,135 @@ pub async fn webhook_settings_delete(
     println!("** delete_webhook_from_db({})", index);
 
     (StatusCode::OK, "")
+}
+
+pub async fn webhook_settings_test(
+    State(state): State<AppState>,
+    Path(idx): Path<String>
+) -> Response {
+    let index: u64 = match idx.parse() {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("** Invalid webhook index: {}.\n", e);
+            return (StatusCode::BAD_REQUEST, "Invalid webhook index").into_response();
+        }
+    };
+
+    let webhook = match dbif::load_webhook_from_db(&state.helipad_config.database_file_path, index) {
+        Ok(wh) => wh,
+        Err(e) => {
+            eprintln!("** Error loading webhook: {}.\n", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Error loading webhook").into_response();
+        }
+    };
+
+    // Create a sample boost payload for testing
+    let test_boost = dbif::BoostRecord {
+        index: 99999,
+        time: Utc::now().timestamp(),
+        value_msat: 100000,
+        value_msat_total: 100000,
+        action: 2, // boost action
+        sender: "Test Sender".to_string(),
+        app: "Helipad".to_string(),
+        message: "This is a test webhook message".to_string(),
+        podcast: "Test Podcast".to_string(),
+        episode: "Test Episode".to_string(),
+        tlv: json!({
+            "action": "boost",
+            "app_name": "Helipad",
+            "app_version": state.version,
+            "podcast": "Test Podcast",
+            "episode": "Test Episode",
+            "sender_name": "Test Sender",
+            "message": "This is a test webhook message",
+            "value_msat": 100000,
+            "value_msat_total": 100000
+        }).to_string(),
+        remote_podcast: None,
+        remote_episode: None,
+        reply_sent: false,
+        custom_key: None,
+        custom_value: None,
+        payment_info: None,
+    };
+
+    // Prepare headers
+    let mut headers = HeaderMap::new();
+
+    if let Ok(hdr) = HeaderValue::from_str("application/json") {
+        headers.insert(CONTENT_TYPE, hdr);
+    } else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create content type header").into_response();
+    }
+
+    let user_agent = format!("Helipad/{}", state.version);
+    if let Ok(hdr) = HeaderValue::from_str(user_agent.as_str()) {
+        headers.insert(USER_AGENT, hdr);
+    } else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create user agent header").into_response();
+    }
+
+    if !webhook.token.is_empty() {
+        let token = format!("Bearer {}", webhook.token);
+        if let Ok(hdr) = HeaderValue::from_str(&token) {
+            headers.insert(AUTHORIZATION, hdr);
+        } else {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create authorization header").into_response();
+        }
+    }
+
+    // Build HTTP client
+    let client = match reqwest::Client::builder().redirect(Policy::limited(5)).build() {
+        Ok(cli) => cli,
+        Err(e) => {
+            eprintln!("** Unable to build reqwest client: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to build HTTP client").into_response();
+        }
+    };
+
+    // Serialize test boost to JSON
+    let json = match serde_json::to_string_pretty(&test_boost) {
+        Ok(js) => js,
+        Err(e) => {
+            eprintln!("** Unable to encode test boost as JSON: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to encode test data").into_response();
+        }
+    };
+
+    // Send the webhook
+    let result = client.post(&webhook.url).body(json).headers(headers).send().await;
+    let timestamp = Utc::now().timestamp();
+    let mut successful = false;
+    let mut response_message = String::new();
+
+    if let Ok(res) = result {
+        let status = res.status();
+        let response_body = res.text().await;
+
+        if status == 200 {
+            successful = true;
+            response_message = format!("Test webhook sent successfully. Response: {}", response_body.unwrap_or_default());
+        } else {
+            response_message = format!("Test webhook failed with status {}: {}", status, response_body.unwrap_or_default());
+        }
+    } else if let Err(e) = result {
+        response_message = format!("Unable to send test webhook: {}", e);
+    }
+
+    // Update webhook last request status
+    if let Err(e) = dbif::set_webhook_last_request(&state.helipad_config.database_file_path, webhook.index, successful, timestamp) {
+        eprintln!("** Error setting webhook last request status: {}", e);
+    }
+
+    println!("** test_webhook({}) - {}", index, response_message);
+
+    // Return the updated webhook list
+    if successful {
+        webhook_list_response(&state.helipad_config.database_file_path).await
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, response_message).into_response()
+    }
 }
 
 pub async fn general_settings_load(State(state): State<AppState>) -> impl IntoResponse {

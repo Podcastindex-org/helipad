@@ -282,6 +282,7 @@ async fn main() {
             .route("/settings/webhooks/:idx", get(handler::webhook_settings_load))
             .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
             .route("/settings/webhooks/:idx", delete(handler::webhook_settings_delete))
+            .route("/settings/webhooks/:idx/test", post(handler::webhook_settings_test))
 
             .route("/settings/report/podcasts", get(handler::report_podcasts_list))
             .route("/settings/report/generate", post(handler::report_generate))
