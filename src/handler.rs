@@ -14,7 +14,7 @@ use axum_extra::{
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 
 use chrono::{DateTime, TimeDelta, Utc};
-use crate::{AppState, lightning, podcastindex};
+use crate::{AppState, WebhookPayload, lightning, podcastindex};
 use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord};
 use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
@@ -760,7 +760,7 @@ pub async fn webhook_settings_test(
         }
     };
 
-    // Create a sample boost payload for testing
+    // Create a sample boost record for testing
     let test_boost = dbif::BoostRecord {
         index: 99999,
         time: Utc::now().timestamp(),
@@ -789,6 +789,12 @@ pub async fn webhook_settings_test(
         custom_key: None,
         custom_value: None,
         payment_info: None,
+    };
+
+    // Create webhook payload with type
+    let test_payload = WebhookPayload {
+        direction: "incoming".to_string(),
+        boost: test_boost,
     };
 
     // Prepare headers
@@ -825,11 +831,11 @@ pub async fn webhook_settings_test(
         }
     };
 
-    // Serialize test boost to JSON
-    let json = match serde_json::to_string_pretty(&test_boost) {
+    // Serialize test payload to JSON
+    let json = match serde_json::to_string_pretty(&test_payload) {
         Ok(js) => js,
         Err(e) => {
-            eprintln!("** Unable to encode test boost as JSON: {}", e);
+            eprintln!("** Unable to encode test payload as JSON: {}", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to encode test data").into_response();
         }
     };

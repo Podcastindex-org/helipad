@@ -75,6 +75,7 @@ descend by `count`, showing older sent boosts.  Otherwise, they start at `index`
 Webhooks send an HTTP POST to a user defined URL whenever a new boost, stream, or sent boost is processed by Helipad. The body of the POST will contain the following JSON format:
 ```json
 {
+  "direction": "incoming",
   "index": 1234,
   "time": 1714548166,
   "value_msat": 100000,
@@ -95,6 +96,7 @@ Webhooks send an HTTP POST to a user defined URL whenever a new boost, stream, o
 
 The fields are as follows:
 
+* `direction`: Payment direction ("incoming" or "outgoing")
 * `index`: LND index of the invoice or payment
 * `time`: Unix Timestamp of the item
 * `value_msat`: Actual amount received/sent by our node
