@@ -322,15 +322,22 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
             }
 
             //Fetch podcast/episode name if remote feed/item guid present
-            if rawboost.remote_feed_guid.is_some() && rawboost.remote_item_guid.is_some() {
-                let remote_feed_guid = rawboost.remote_feed_guid.unwrap();
-                let remote_item_guid = rawboost.remote_item_guid.unwrap();
+            let remote_feed_guid = rawboost.remote_feed_guid.unwrap_or_default();
+            let remote_item_guid = rawboost.remote_item_guid.unwrap_or_default();
 
-                let episode_guid = remote_cache.get(remote_feed_guid, remote_item_guid).await;
+            if !remote_feed_guid.is_empty() {
+                if !remote_item_guid.is_empty() {
+                    let episode_guid = remote_cache.get(remote_feed_guid, remote_item_guid).await;
 
-                if let Ok(guid) = episode_guid {
-                    boost.remote_podcast = guid.podcast;
-                    boost.remote_episode = guid.episode;
+                    if let Ok(guid) = episode_guid {
+                        boost.remote_podcast = guid.podcast;
+                        boost.remote_episode = guid.episode;
+                    }
+                }
+                else {
+                    // no free api to look up just the feed guid
+                    boost.remote_podcast = Some(remote_feed_guid);
+                    boost.remote_episode = None;
                 }
             }
         }
