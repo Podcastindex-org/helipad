@@ -17,6 +17,8 @@ use rand::{distributions::Alphanumeric, Rng}; // 0.8
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
 use reqwest::redirect::Policy;
 
+use serde::Serialize;
+
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -65,6 +67,13 @@ pub struct HelipadConfig {
     pub node_address: String,
     pub password: String,
     pub secret: String,
+}
+
+#[derive(Serialize)]
+pub struct WebhookPayload {
+    pub direction: String,
+    #[serde(flatten)]
+    pub boost: dbif::BoostRecord,
 }
 
 //Configure_me
@@ -586,10 +595,23 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
             }
         };
 
-        let json = match serde_json::to_string_pretty(&boost) {
+        // Determine payment direction
+        let direction = if boost.payment_info.is_some() {
+            "outgoing".to_string()
+        } else {
+            "incoming".to_string()
+        };
+
+        // Create webhook payload with type
+        let payload = WebhookPayload {
+            direction: direction,
+            boost: boost.clone(),
+        };
+
+        let json = match serde_json::to_string_pretty(&payload) {
             Ok(js) => js,
             Err(e) => {
-                eprintln!("Unable to encode boost as JSON: {}", e);
+                eprintln!("Unable to encode webhook payload as JSON: {}", e);
                 continue;
             }
         };
