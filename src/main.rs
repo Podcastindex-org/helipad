@@ -24,6 +24,8 @@ use std::fs;
 use std::path::Path;
 use std::convert::TryInto;
 
+use futures::StreamExt;
+
 #[macro_use]
 extern crate configure_me;
 
@@ -257,6 +259,7 @@ async fn main() {
     //Start the LND polling thread.  This thread will poll LND every few seconds to
     //get the latest invoices and store them in the database.
     tokio::spawn(lnd_poller(helipad_config.clone()));
+    tokio::spawn(lnd_subscribe_invoices(helipad_config.clone()));
 
     //App State
     let state = AppState {
@@ -364,6 +367,97 @@ async fn main() {
     }
 }
 
+async fn lnd_subscribe_invoices(helipad_config: HelipadConfig) {
+    let db_filepath = helipad_config.database_file_path.clone();
+
+    //Make the connection to LND
+    println!("\nConnecting to LND node address...");
+    let mut lightning;
+    match lightning::connect_to_lnd(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await {
+        Some(lndconn) => {
+            println!(" - Success.");
+            lightning = lndconn;
+        }
+        None => {
+            std::process::exit(1);
+        }
+    }
+
+    //Instantiate a cache to use when resolving remote podcasts/episode guids
+    let mut remote_cache = podcastindex::GuidCache::new(REMOTE_GUID_CACHE_SIZE);
+    let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
+
+    //Get a list of invoices
+    println!("Getting existing invoices from LND...");
+    loop {
+        let mut updated = false;
+
+        match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false, 0, 0).await {
+            Ok(response) => {
+                for invoice in response.invoices {
+                    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
+
+                    if let Some(boost) = parsed {
+                        //Give some output
+                        println!("Boost: {:#?}", &boost);
+
+                        //Store in the database
+                        match dbif::add_invoice_to_db(&db_filepath, &boost) {
+                            Ok(_) => println!("New invoice added."),
+                            Err(e) => eprintln!("Error adding invoice: {:#?}", e)
+                        }
+
+                        //Send out webhooks (if any)
+                        send_webhooks(&db_filepath, &boost).await;
+                    }
+
+                    current_index = invoice.add_index;
+                    updated = true;
+                }
+            }
+            Err(e) => {
+                eprintln!("lnd::Lnd::list_invoices failed: {}", e);
+            }
+        }
+
+        if !updated {
+            break;
+        }
+    }
+
+    // Make sure we are tracking our position properly
+    println!("Current invoice index: {}", current_index);
+
+    //Subscribe to invoices
+    println!("Subscribing to new invoices from LND...");
+    let mut invoices = lightning.subscribe_invoices(0, 0).await.unwrap();
+    while let Some(invoice) = invoices.next().await {
+        println!("Invoice: {:#?}", invoice);
+        match invoice {
+            Ok(invoice) => {
+                let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
+
+                if let Some(boost) = parsed {
+                    //Give some output
+                    println!("Boost: {:#?}", &boost);
+
+                    //Store in the database
+                    match dbif::add_invoice_to_db(&db_filepath, &boost) {
+                        Ok(_) => println!("New invoice added."),
+                        Err(e) => eprintln!("Error adding invoice: {:#?}", e)
+                    }
+
+                    //Send out webhooks (if any)
+                    send_webhooks(&db_filepath, &boost).await;
+                }
+            }
+            Err(e) => {
+                eprintln!("Error subscribing to invoices: {:#?}", e);
+            }
+        }
+    }
+}
+
 //The LND poller runs in a thread and pulls new invoices
 async fn lnd_poller(helipad_config: HelipadConfig) {
     let db_filepath = helipad_config.database_file_path.clone();
@@ -405,7 +499,6 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
     let mut remote_cache = podcastindex::GuidCache::new(REMOTE_GUID_CACHE_SIZE);
 
     //The main loop
-    let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
     let mut current_payment = dbif::get_last_payment_index_from_db(&db_filepath).unwrap();
 
     loop {
@@ -440,38 +533,6 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         if dbif::add_wallet_balance_to_db(&db_filepath, current_balance).is_err() {
             println!("Error adding wallet balance to the database.");
         }
-
-        //Get a list of invoices
-        match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false, 0, 0).await {
-            Ok(response) => {
-                for invoice in response.invoices {
-                    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
-
-                    if let Some(boost) = parsed {
-                        //Give some output
-                        println!("Boost: {:#?}", &boost);
-
-                        //Store in the database
-                        match dbif::add_invoice_to_db(&db_filepath, &boost) {
-                            Ok(_) => println!("New invoice added."),
-                            Err(e) => eprintln!("Error adding invoice: {:#?}", e)
-                        }
-
-                        //Send out webhooks (if any)
-                        send_webhooks(&db_filepath, &boost).await;
-                    }
-
-                    current_index = invoice.add_index;
-                    updated = true;
-                }
-            }
-            Err(e) => {
-                eprintln!("lnd::Lnd::list_invoices failed: {}", e);
-            }
-        }
-
-        //Make sure we are tracking our position properly
-        println!("Current index: {}", current_index);
 
         match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false, false, 0, 0).await {
             Ok(response) => {

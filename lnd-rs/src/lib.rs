@@ -9,7 +9,7 @@ use lnrpc::lnrpc::{
     ChannelBalanceResponse, Invoice, ListPaymentsRequest, ListPaymentsResponse, PayReq,
     PayReqString, PaymentHash, SendRequest, SendResponse, WalletBalanceRequest,
     WalletBalanceResponse, ListInvoiceRequest, ListInvoiceResponse, GetInfoRequest, GetInfoResponse,
-    Payment
+    InvoiceSubscription, Payment
 };
 use lnrpc::routerrpc::router_client::RouterClient;
 use lnrpc::routerrpc::SendPaymentRequest;
@@ -241,6 +241,22 @@ impl Lnd {
                 account,
                 min_confs,
             })
+            .await
+            .map(Response::into_inner)
+    }
+
+    pub async fn subscribe_invoices(
+        &mut self,
+        add_index: u64,
+        settle_index: u64,
+    ) -> Result<Streaming<Invoice>, Status> {
+        let subscription = InvoiceSubscription {
+            add_index,
+            settle_index,
+        };
+
+        self.lightning_client
+            .subscribe_invoices(subscription)
             .await
             .map(Response::into_inner)
     }
