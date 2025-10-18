@@ -1,13 +1,14 @@
 use crate::podcastindex;
 use data_encoding::HEXLOWER;
-use lnd::lnrpc::lnrpc::{SendRequest, Payment, Invoice};
+use lnd::lnrpc::lnrpc::{Payment, Invoice, payment::PaymentStatus};
+use lnd::lnrpc::routerrpc::{SendPaymentRequest};
 use serde_json::Value;
 use sha2::{Sha256, Digest};
 use std::collections::HashMap;
 use std::fs;
 use std::error::Error;
 use rand::RngCore;
-use serde::{Deserialize, Deserializer};
+use serde::{Serialize, Deserialize, Deserializer};
 
 // TLV keys (see https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md)
 pub const TLV_PODCASTING20: u64 = 7629169;
@@ -242,32 +243,31 @@ pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key
     }
 
     // assemble the lnd payment
-    let req = SendRequest {
+    let req = SendPaymentRequest {
         dest: raw_pubkey.clone(),
         amt: sats as i64,
         payment_hash: payment_hash.to_vec(),
         dest_custom_records,
+        timeout_seconds: 60,
         ..Default::default()
     };
 
-    // send payment and get payment hash
-    let response = lnd::Lnd::send_payment_sync(&mut lightning, req).await?;
-    let sent_payment_hash = HEXLOWER.encode(&response.payment_hash);
+    println!("Sending payment to: {:#?}", req);
 
-    if !response.payment_error.is_empty() {
-        return Err(Box::new(BoostError(response.payment_error)));
-    }
+    // send payment using send_payment_v2 and get payment stream
+    let mut payment_stream = lightning.send_payment_v2(req).await?;
 
-    // get detailed payment info from list_payments
-    let payment_list = lnd::Lnd::list_payments(&mut lightning, false, 0, 500, true).await?;
-
-    for payment in payment_list.payments {
-        if sent_payment_hash == payment.payment_hash {
-            return Ok(payment);
+    // wait for payment to succeed or fail
+    while let Some(payment_update) = payment_stream.message().await? {
+        if payment_update.status == PaymentStatus::Succeeded as i32 {
+            return Ok(payment_update);
+        }
+        else if payment_update.status == PaymentStatus::Failed as i32 {
+            return Err(Box::new(BoostError("Payment failed".into())));
         }
     }
 
-    Err(Box::new(BoostError("Failed to find payment sent".into())))
+    Err(Box::new(BoostError("Payment timed out".into())))
 }
 
 
