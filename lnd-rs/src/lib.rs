@@ -9,8 +9,11 @@ use lnrpc::lnrpc::{
     ChannelBalanceResponse, Invoice, ListPaymentsRequest, ListPaymentsResponse, PayReq,
     PayReqString, PaymentHash, SendRequest, SendResponse, WalletBalanceRequest,
     WalletBalanceResponse, ListInvoiceRequest, ListInvoiceResponse, GetInfoRequest, GetInfoResponse,
+    Payment
 };
 use lnrpc::routerrpc::router_client::RouterClient;
+use lnrpc::routerrpc::SendPaymentRequest;
+use tonic::Streaming;
 use openssl::{
     error::ErrorStack,
     ssl::{SslConnector, SslMethod},
@@ -242,4 +245,13 @@ impl Lnd {
             .map(Response::into_inner)
     }
 
+    pub async fn send_payment_v2(
+        &mut self,
+        request: SendPaymentRequest,
+    ) -> Result<Streaming<Payment>, Status> {
+        self.router_client
+            .send_payment_v2(request)
+            .await
+            .map(Response::into_inner)
+    }
 }
