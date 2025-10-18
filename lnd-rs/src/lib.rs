@@ -8,8 +8,9 @@ use lnrpc::lnrpc::{
     lightning_client::LightningClient, AddInvoiceResponse, ChannelBalanceRequest,
     ChannelBalanceResponse, Invoice, ListPaymentsRequest, ListPaymentsResponse, PayReq,
     PayReqString, PaymentHash, SendRequest, SendResponse, WalletBalanceRequest,
-    WalletBalanceResponse, ListInvoiceRequest, ListInvoiceResponse, GetInfoRequest, GetInfoResponse
+    WalletBalanceResponse, ListInvoiceRequest, ListInvoiceResponse, GetInfoRequest, GetInfoResponse,
 };
+use lnrpc::routerrpc::router_client::RouterClient;
 use openssl::{
     error::ErrorStack,
     ssl::{SslConnector, SslMethod},
@@ -27,6 +28,7 @@ use tonic::{
 #[derive(Debug, Clone)]
 pub struct Lnd {
     lightning_client: LightningClient<InterceptedService<Channel, LndInterceptor>>,
+    router_client: RouterClient<InterceptedService<Channel, LndInterceptor>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -57,9 +59,10 @@ impl Lnd {
             .await
             .map_err(LndConnectError::Transport)?;
 
-        let lightning_client = LightningClient::with_interceptor(transport, LndInterceptor::noop());
+        let lightning_client = LightningClient::with_interceptor(transport.clone(), LndInterceptor::noop());
+        let router_client = RouterClient::with_interceptor(transport, LndInterceptor::noop());
 
-        Ok(Lnd { lightning_client })
+        Ok(Lnd { lightning_client, router_client })
     }
 
     pub async fn connect_with_macaroon<D>(
@@ -83,9 +86,10 @@ impl Lnd {
             .await
             .map_err(LndConnectError::Transport)?;
 
-        let lightning_client = LightningClient::with_interceptor(transport, interceptor);
+        let lightning_client = LightningClient::with_interceptor(transport.clone(), interceptor.clone());
+        let router_client = RouterClient::with_interceptor(transport, interceptor);
 
-        Ok(Lnd { lightning_client })
+        Ok(Lnd { lightning_client, router_client })
     }
 
     fn connector(certificate_bytes: &[u8]) -> Result<HttpsConnector<HttpConnector>, ErrorStack> {
@@ -166,6 +170,9 @@ impl Lnd {
         index_offset: u64,
         max_payments: u64,
         reversed: bool,
+        count_total_payments: bool,
+        creation_date_start: u64,
+        creation_date_end: u64,
     ) -> Result<ListPaymentsResponse, Status> {
         self.lightning_client
             .list_payments(ListPaymentsRequest {
@@ -173,6 +180,9 @@ impl Lnd {
                 index_offset,
                 max_payments,
                 reversed,
+                count_total_payments,
+                creation_date_start,
+                creation_date_end,
             })
             .await
             .map(Response::into_inner)
@@ -184,6 +194,8 @@ impl Lnd {
         index_offset: u64,
         num_max_invoices: u64,
         reversed: bool,
+        creation_date_start: u64,
+        creation_date_end: u64,
     ) -> Result<ListInvoiceResponse, Status> {
         self.lightning_client
             .list_invoices(ListInvoiceRequest {
@@ -191,6 +203,8 @@ impl Lnd {
                 index_offset,
                 num_max_invoices,
                 reversed,
+                creation_date_start,
+                creation_date_end,
             })
             .await
             .map(Response::into_inner)
@@ -218,10 +232,14 @@ impl Lnd {
             .map(Response::into_inner)
     }
 
-    pub async fn wallet_balance(&mut self) -> Result<WalletBalanceResponse, Status> {
+    pub async fn wallet_balance(&mut self, account: String, min_confs: i32) -> Result<WalletBalanceResponse, Status> {
         self.lightning_client
-            .wallet_balance(WalletBalanceRequest {})
+            .wallet_balance(WalletBalanceRequest {
+                account,
+                min_confs,
+            })
             .await
             .map(Response::into_inner)
     }
+
 }

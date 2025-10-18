@@ -5,5 +5,5 @@ fn main() -> Result<(), std::io::Error> {
         .build_server(false)
         .out_dir("src/lnrpc")
         .format(false)
-        .compile(&["protos/rpc.proto"], &["protos"])
+        .compile(&["protos/lightning.proto", "protos/router.proto"], &["protos"])
 }
