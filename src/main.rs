@@ -3,8 +3,10 @@
 use axum::{
     http::{Method, header, HeaderValue as AxumHeaderValue},
     middleware,
-    routing::{get, post, delete, patch},
+    routing::{get, post, delete, patch, any},
     Router,
+    extract::{State, ws::WebSocket, ws::WebSocketUpgrade},
+    response::Response,
 };
 
 use tower::ServiceBuilder;
@@ -20,13 +22,16 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, Header
 use reqwest::redirect::Policy;
 
 use serde::Serialize;
-
+use serde_json::json;
 use std::env;
 use std::fs;
 use std::path::Path;
 use std::convert::TryInto;
 
 use futures::StreamExt;
+
+use std::sync::Arc;
+use tokio::sync::broadcast;
 
 #[macro_use]
 extern crate configure_me;
@@ -59,6 +64,7 @@ const WEBROOT_PATH_SCRIPT: &str = "webroot/script";
 pub struct AppState {
     pub helipad_config: HelipadConfig,
     pub version: String,
+    pub ws_tx: Arc<broadcast::Sender<WebSocketEvent>>,
 }
 
 #[derive(Clone, Debug)]
@@ -258,16 +264,17 @@ async fn main() {
         println!(" - Trying localhost default: [{}].", helipad_config.node_address);
     }
 
-    //Start the LND polling thread.  This thread will poll LND every few seconds to
-    //get the latest invoices and store them in the database.
-    tokio::spawn(lnd_poller(helipad_config.clone()));
-    tokio::spawn(lnd_subscribe_invoices(helipad_config.clone()));
-
     //App State
     let state = AppState {
         helipad_config: helipad_config.clone(),
         version: version.to_string(),
+        ws_tx: Arc::new(broadcast::Sender::new(100)),
     };
+
+    //Start the LND polling thread.  This thread will poll LND every few seconds to
+    //get the latest invoices and store them in the database.
+    tokio::spawn(lnd_poller(helipad_config.clone(), state.ws_tx.clone()));
+    tokio::spawn(lnd_subscribe_invoices(helipad_config.clone(), state.ws_tx.clone()));
 
     // Api routes
 
@@ -315,6 +322,7 @@ async fn main() {
                 .route("/sent_index", get(handler::api_v1_sent_index))
                 .route("/podcasts", get(handler::api_v1_podcasts))
                 .route("/sent_podcasts", get(handler::api_v1_sent_podcasts))
+                .route("/ws", any(websocket_handler))
 
                 // allow all origins to GET from public api
                 .route_layer(CorsLayer::new().allow_methods([Method::GET]).allow_origin(Any))
@@ -377,7 +385,29 @@ async fn main() {
     }
 }
 
-async fn lnd_subscribe_invoices(helipad_config: HelipadConfig) {
+
+async fn websocket_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_websocket(socket, state))
+}
+
+async fn handle_websocket(mut socket: WebSocket, state: AppState) {
+    let mut rx = state.ws_tx.subscribe();
+
+    while let Ok(msg) = rx.recv().await {
+        let json = serde_json::to_string(&msg).unwrap();
+        if let Err(e) = socket.send(json.into()).await {
+            eprintln!("Error sending message to WebSocket: {}", e);
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WebSocketEvent(String, serde_json::Value);
+
+async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sender<WebSocketEvent>>) {
     let db_filepath = helipad_config.database_file_path.clone();
 
     //Make the connection to LND
@@ -415,6 +445,14 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig) {
                         match dbif::add_invoice_to_db(&db_filepath, &boost) {
                             Ok(_) => println!("New invoice added."),
                             Err(e) => eprintln!("Error adding invoice: {:#?}", e)
+                        }
+
+                        match ws_tx.send(WebSocketEvent(
+                            boost.action_name(),
+                            serde_json::to_value(&boost).unwrap()
+                        )) {
+                            Ok(_) => println!("WebSocket event sent."),
+                            Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
                         }
 
                         //Send out webhooks (if any)
@@ -457,6 +495,14 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig) {
                         Err(e) => eprintln!("Error adding invoice: {:#?}", e)
                     }
 
+                    match ws_tx.send(WebSocketEvent(
+                        boost.action_name(),
+                        serde_json::to_value(&boost).unwrap()
+                    )) {
+                        Ok(_) => println!("WebSocket event sent."),
+                        Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
+                    }
+
                     //Send out webhooks (if any)
                     send_webhooks(&db_filepath, &boost).await;
                 }
@@ -469,7 +515,7 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig) {
 }
 
 //The LND poller runs in a thread and pulls new invoices
-async fn lnd_poller(helipad_config: HelipadConfig) {
+async fn lnd_poller(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sender<WebSocketEvent>>) {
     let db_filepath = helipad_config.database_file_path.clone();
 
     //Make the connection to LND
@@ -510,7 +556,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
 
     //The main loop
     let mut current_payment = dbif::get_last_payment_index_from_db(&db_filepath).unwrap();
-
+    let mut last_balance = 0;
     loop {
         let mut updated = false;
 
@@ -544,6 +590,15 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
             println!("Error adding wallet balance to the database.");
         }
 
+        if current_balance != last_balance {
+            match ws_tx.send(WebSocketEvent("balance".to_string(), serde_json::to_value(&current_balance).unwrap())) {
+                Ok(_) => println!("WebSocket event sent."),
+                Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
+            }
+        }
+
+        last_balance = current_balance;
+
         match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false, false, 0, 0).await {
             Ok(response) => {
                 for payment in response.payments {
@@ -557,6 +612,14 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
                         match dbif::add_payment_to_db(&db_filepath, &boost) {
                             Ok(_) => println!("New payment added."),
                             Err(e) => eprintln!("Error adding payment: {:#?}", e)
+                        }
+
+                        match ws_tx.send(WebSocketEvent(
+                            "payment".to_string(),
+                            serde_json::to_value(&boost).unwrap()
+                        )) {
+                            Ok(_) => println!("WebSocket event sent."),
+                            Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
                         }
 
                         //Send out webhooks (if any)

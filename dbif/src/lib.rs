@@ -50,6 +50,17 @@ impl BoostRecord {
     pub fn parse_tlv(&self) -> Result<Value, Box<dyn Error>> {
         Ok(serde_json::from_str(self.tlv.as_str())?)
     }
+
+    // Returns the name of the action
+    pub fn action_name(&self) -> String {
+        match self.action {
+            1 => "stream".to_string(),
+            2 => "boost".to_string(),
+            3 => "invalid".to_string(),
+            4 => "auto".to_string(),
+            _ => "unknown".to_string(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
