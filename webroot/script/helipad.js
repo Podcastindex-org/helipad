@@ -537,6 +537,36 @@ $(document).ready(function () {
         return message;
     }
 
+    function initWebsocket() {
+        ws = new WebSocket("/api/v1/ws");
+        ws.onmessage = (msg) => {
+            const data = JSON.parse(msg.data);
+
+            if (data[0] == "balance") {
+                Balance.setBalance(data[1]);
+            }
+            else if (
+                (data[0] == "payment" && config.singularName == "sent boost") ||
+                (data[0] == "boost" && config.singularName == "boost") ||
+                (data[0] == "stream" && config.singularName == "stream")
+            ) {
+                renderBoosts([data[1]], 0, true, true);
+            }
+        }
+        ws.onclose = () => {
+            console.log("WebSocket closed");
+            setTimeout(() => {
+                initWebsocket();
+            }, 5000);
+        }
+        ws.onerror = (err) => {
+            console.log("WebSocket error", err);
+        }
+        ws.onopen = () => {
+            console.log("WebSocket opened");
+        }
+    }
+
     //Get the most recent invoice index the node knows about
     function getIndex() {
         //Get the current boost index number
@@ -992,6 +1022,7 @@ $(document).ready(function () {
         await getNumerologyList();
         renderBoostInfo();
         renderFilters();
+        initWebsocket();
         initNostr();
         getIndex();
     }
