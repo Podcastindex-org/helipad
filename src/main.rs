@@ -22,7 +22,6 @@ use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, Header
 use reqwest::redirect::Policy;
 
 use serde::Serialize;
-use serde_json::json;
 use std::env;
 use std::fs;
 use std::path::Path;
