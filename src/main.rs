@@ -442,7 +442,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         }
 
         //Get a list of invoices
-        match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false).await {
+        match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false, 0, 0).await {
             Ok(response) => {
                 for invoice in response.invoices {
                     let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
@@ -473,7 +473,7 @@ async fn lnd_poller(helipad_config: HelipadConfig) {
         //Make sure we are tracking our position properly
         println!("Current index: {}", current_index);
 
-        match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false).await {
+        match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false, false, 0, 0).await {
             Ok(response) => {
                 for payment in response.payments {
                     let parsed = lightning::parse_boost_from_payment(payment.clone(), &mut remote_cache).await;
