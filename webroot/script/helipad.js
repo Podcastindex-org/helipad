@@ -226,7 +226,7 @@ $(document).ready(function () {
                         ${prettyDate(dateTime)}
                     </a>
                     </time>
-                    <div class="reply-to-boost-div">
+                    <div class="reply-to-boost-div mb-2">
                     </div>
                 </div>
                 <h5 class="sats">
@@ -287,6 +287,15 @@ $(document).ready(function () {
                 renderReplyButton(boostIndex, boostReplySent);
             }
 
+            // Show fetch button for invoices with payment metadata (RSS payment or Podcast Guru)
+            let rssMarker = "rss::payment::" + config.singularName.toLowerCase();
+            let guruMarker = "V4V: https://boost.podcastguru.io/";
+            if (element.action === 5 && element.message &&
+                (element.message.indexOf(rssMarker) !== -1 || element.message.indexOf(guruMarker) !== -1)) {
+                renderFetchMetadataButton(boostIndex);
+            }
+
+            // Replace Nostr npub references with names
             if (boostMessage.indexOf('nostr:') !== -1) {
                 replaceNostrReferences(boostMessage).then((message) => {
                     $('div.outgoing_msg[data-msgid=' + boostIndex + '] .boost-message').html(message);
@@ -940,6 +949,74 @@ $(document).ready(function () {
                 ${icon} ${title}
             </a>
         `);
+    }
+
+    function renderFetchMetadataButton(index) {
+        const loadingIcon = `<svg class="mr-1 fa-spin" xmlns="http://www.w3.org/2000/svg" height="1em" viewBox="0 0 512 512" fill="currentColor"><!--!Font Awesome Free v6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2025 Fonticons, Inc.--><path d="M304 48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zm0 416a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM48 304a48 48 0 1 0 0-96 48 48 0 1 0 0 96zm464-48a48 48 0 1 0 -96 0 48 48 0 1 0 96 0zM142.9 437A48 48 0 1 0 75 369.1 48 48 0 1 0 142.9 437zm0-294.2A48 48 0 1 0 75 75a48 48 0 1 0 67.9 67.9zM369.1 437A48 48 0 1 0 437 369.1 48 48 0 1 0 369.1 437z"/></svg>`;
+        const icon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" class="mr-1" height="1em" fill="currentColor"><!--!Font Awesome Free v7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc.--><path d="M256 32c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 210.7-41.4-41.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3l96 96c12.5 12.5 32.8 12.5 45.3 0l96-96c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L256 242.7 256 32zM64 320c-35.3 0-64 28.7-64 64l0 32c0 35.3 28.7 64 64 64l320 0c35.3 0 64-28.7 64-64l0-32c0-35.3-28.7-64-64-64l-46.9 0-56.6 56.6c-31.2 31.2-81.9 31.2-113.1 0L110.9 320 64 320zm304 56a24 24 0 1 1 0 48 24 24 0 1 1 0-48z"/></svg>`;
+        const $div = $('div.outgoing_msg[data-msgid=' + index + '] .reply-to-boost-div');
+
+        $div.html(`
+            <a
+                href="#"
+                class="fetch-metadata btn btn-sm btn-outline-primary position-relative d-inline-flex align-items-center ml-2"
+                title="Fetch metadata"
+            >
+                ${icon} Fetch metadata
+            </a>
+        `);
+
+        const setLoading = (btn, loading) => {
+            btn.prop('disabled', loading);
+            btn.html(`${loading ? loadingIcon : icon} ${loading ? 'Fetching...' : 'Fetch metadata'}`);
+        }
+
+        // Attach click handler
+        $div.find('.fetch-metadata').click(function(e) {
+            e.preventDefault();
+            const $btn = $(this);
+
+            // Disable button and show loading state
+            setLoading($btn, true);
+
+            $.ajax({
+                url: '/api/v1/fetch_metadata/' + index,
+                type: 'POST',
+                contentType: 'application/json; charset=utf-8',
+                error: function(xhr) {
+                    if (xhr.status === 403) {
+                        window.location.href = "/login";
+                        return;
+                    }
+
+                    let errorMsg = 'Failed to fetch metadata';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    alert(errorMsg);
+                    setLoading($btn, false);
+                },
+                success: function(data) {
+                    if (data.success && data.boost) {
+                        // Remove the old boost from display
+                        $('div.outgoing_msg[data-msgid=' + index + ']').remove();
+
+                        // Remove from messageIds array
+                        const idx = messageIds.indexOf(index);
+                        if (idx > -1) {
+                            messageIds.splice(idx, 1);
+                        }
+
+                        // Re-render the boost with new data
+                        renderBoosts([data.boost], 0, false, false);
+                    } else {
+                        alert(data.message || 'Failed to fetch metadata');
+                        setLoading($btn, false);
+                    }
+                }
+            });
+        });
     }
 
     function renderFilters() {

@@ -56,6 +56,10 @@ impl ActionType {
     }
 }
 
+pub fn map_action_to_code(action: &str) -> u8 {
+    ActionType::from_str(action) as u8
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeInfoRecord {
     pub lnd_alias: String,
@@ -172,6 +176,7 @@ pub struct SettingsRecord {
     pub resolve_nostr_refs: bool,
     pub show_hosted_wallet_ids: bool,
     pub show_lightning_invoices: bool,
+    pub fetch_metadata: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -459,6 +464,10 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         println!("Show lightning invoices setting added.");
     }
 
+    if conn.execute("ALTER TABLE settings ADD COLUMN fetch_metadata integer DEFAULT 1", []).is_ok() {
+        println!("Fetch metadata setting added.");
+    }
+
     //Create the webhooks table
     match conn.execute(
         "CREATE TABLE IF NOT EXISTS webhooks (
@@ -703,6 +712,54 @@ pub fn mark_boost_as_replied(filepath: &String, index: u64) -> Result<bool, Box<
     let conn = connect_to_database(false, filepath)?;
     conn.execute("UPDATE boosts SET reply_sent = 1 WHERE idx = ?1", params![index])?;
     Ok(true)
+}
+
+//Update an existing invoice with new data (e.g., from payment metadata fetch)
+pub fn update_invoice_in_db(filepath: &String, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
+    let conn = connect_to_database(false, filepath)?;
+
+    match conn.execute(
+        "UPDATE boosts SET
+            value_msat = ?1,
+            value_msat_total = ?2,
+            action = ?3,
+            sender = ?4,
+            app = ?5,
+            message = ?6,
+            podcast = ?7,
+            episode = ?8,
+            tlv = ?9,
+            remote_podcast = ?10,
+            remote_episode = ?11,
+            custom_key = ?12,
+            custom_value = ?13
+        WHERE idx = ?14
+        ",
+        params![
+            boost.value_msat,
+            boost.value_msat_total,
+            boost.action,
+            boost.sender,
+            boost.app,
+            boost.message,
+            boost.podcast,
+            boost.episode,
+            boost.tlv,
+            boost.remote_podcast,
+            boost.remote_episode,
+            boost.custom_key,
+            boost.custom_value,
+            boost.index
+        ]
+    ) {
+        Ok(_) => {
+            Ok(true)
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+            Err(Box::new(HydraError(format!("Failed to update boost: [{}].", boost.index))))
+        }
+    }
 }
 
 //Get all of the invoices from the database
@@ -1437,7 +1494,8 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
              custom_pew_file,
              resolve_nostr_refs,
              show_hosted_wallet_ids,
-             show_lightning_invoices
+             show_lightning_invoices,
+             fetch_metadata
         FROM
             settings
         WHERE
@@ -1456,6 +1514,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             resolve_nostr_refs: row.get(6)?,
             show_hosted_wallet_ids: row.get(7)?,
             show_lightning_invoices: row.get(8)?,
+            fetch_metadata: row.get(9).unwrap_or(true),
         })
     });
 
@@ -1471,6 +1530,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             resolve_nostr_refs: false,
             show_hosted_wallet_ids: false,
             show_lightning_invoices: true,
+            fetch_metadata: true,
         }),
         Err(e) => Err(Box::new(e)),
     }
@@ -1490,10 +1550,11 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             custom_pew_file,
             resolve_nostr_refs,
             show_hosted_wallet_ids,
-            show_lightning_invoices
+            show_lightning_invoices,
+            fetch_metadata
         )
         VALUES
-            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         ON CONFLICT(idx) DO UPDATE SET
             show_received_sats = excluded.show_received_sats,
             show_split_percentage = excluded.show_split_percentage,
@@ -1503,7 +1564,8 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             custom_pew_file = excluded.custom_pew_file,
             resolve_nostr_refs = excluded.resolve_nostr_refs,
             show_hosted_wallet_ids = excluded.show_hosted_wallet_ids,
-            show_lightning_invoices = excluded.show_lightning_invoices
+            show_lightning_invoices = excluded.show_lightning_invoices,
+            fetch_metadata = excluded.fetch_metadata
         "#,
         params![
             settings.show_received_sats,
@@ -1515,6 +1577,7 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             settings.resolve_nostr_refs,
             settings.show_hosted_wallet_ids,
             settings.show_lightning_invoices,
+            settings.fetch_metadata,
         ]
     ) {
         Ok(_) => {
