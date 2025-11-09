@@ -682,6 +682,82 @@ pub async fn api_v1_mark_replied(
     }).into_response()
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FetchMetadataResponse {
+    success: bool,
+    boost: Option<BoostRecord>,
+    message: String,
+}
+
+pub async fn api_v1_fetch_metadata(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+) -> Response {
+    let index: u64 = match idx.parse() {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("** Invalid boost index: {}", e);
+            return (StatusCode::BAD_REQUEST, Json(FetchMetadataResponse {
+                success: false,
+                boost: None,
+                message: "Invalid boost index".to_string(),
+            })).into_response();
+        }
+    };
+
+    // Get the boost from database
+    let mut boost = match dbif::get_single_invoice_from_db(&state.helipad_config.database_file_path, index, true) {
+        Ok(Some(boost)) => boost,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(FetchMetadataResponse {
+                success: false,
+                boost: None,
+                message: "Boost not found".to_string(),
+            })).into_response();
+        },
+        Err(e) => {
+            eprintln!("** Error finding boost: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(FetchMetadataResponse {
+                success: false,
+                boost: None,
+                message: format!("Error finding boost: {}", e),
+            })).into_response();
+        }
+    };
+
+    // Fetch payment metadata
+    let mut remote_cache = podcastindex::GuidCache::new(1);
+    let comment = boost.message.clone();
+
+    if !boost::fetch_boost_metadata(&mut boost, &comment, &mut remote_cache).await {
+        return (StatusCode::BAD_REQUEST, Json(FetchMetadataResponse {
+            success: false,
+            boost: None,
+            message: "No payment metadata found for boost".to_string(),
+        })).into_response();
+    }
+
+    // Update the boost in the database
+    match dbif::update_invoice_in_db(&state.helipad_config.database_file_path, &boost) {
+        Ok(_) => {
+            println!("** Successfully fetched and updatedpayment metadata for boost {}", index);
+            (StatusCode::OK, Json(FetchMetadataResponse {
+                success: true,
+                boost: Some(boost),
+                message: "Payment metadata fetched successfully".to_string(),
+            })).into_response()
+        }
+        Err(e) => {
+            eprintln!("** Error updating boost in database: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(FetchMetadataResponse {
+                success: false,
+                boost: None,
+                message: format!("Error updating boost: {}", e),
+            })).into_response()
+        }
+    }
+}
+
 async fn webhook_list_response(db_filepath: &String) -> Response {
     let webhooks = match dbif::get_webhooks_from_db(db_filepath, None) {
         Ok(wh) => wh,
@@ -992,6 +1068,7 @@ pub struct GeneralSettingsMultipart {
     resolve_nostr_refs: Option<bool>,
     show_hosted_wallet_ids: Option<bool>,
     show_lightning_invoices: Option<bool>,
+    fetch_metadata: Option<bool>,
 
     // The `unlimited arguments` means that this field will be limited to the
     // total size of the request body. If you want to limit the size of this
@@ -1025,6 +1102,7 @@ pub async fn general_settings_save(
     settings.resolve_nostr_refs = parts.resolve_nostr_refs.unwrap_or(false);
     settings.show_hosted_wallet_ids = parts.show_hosted_wallet_ids.unwrap_or(false);
     settings.show_lightning_invoices = parts.show_lightning_invoices.unwrap_or(false);
+    settings.fetch_metadata = parts.fetch_metadata.unwrap_or(false);
 
     if !settings.hide_boosts {
         settings.hide_boosts_below = None;
@@ -1046,6 +1124,8 @@ pub async fn general_settings_save(
     }
 
     dbif::save_settings_to_db(&state.helipad_config.database_file_path, &settings).unwrap();
+
+    *state.settings.write().await = settings.clone();
 
     HtmlTemplate("webroot/template/general-settings.hbs", json!({"settings": settings, "saved": true}))
 }

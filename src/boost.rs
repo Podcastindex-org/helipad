@@ -1,4 +1,9 @@
+use serde::Deserialize;
+use std::error::Error;
+use std::collections::HashMap;
 use crate::podcastindex;
+use crate::metadata;
+use dbif::map_action_to_code;
 use lnd::lnrpc::lnrpc::{Payment, Invoice, invoice::InvoiceState};
 use crate::deserializers::{d_action, d_blank, d_zero, de_optional_string_or_number};
 
@@ -10,113 +15,58 @@ pub const TLV_HIVE_ACCOUNT: u64 = 818818;
 pub const TLV_FOUNTAIN_KEY: u64 = 906608;
 pub const TLV_KEYSEND: u64 = 5482373484;
 
-
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
 pub struct RawBoost {
     #[serde(default = "d_action")]
-    action: Option<String>,
+    pub action: Option<String>,
 
     #[serde(default = "d_blank")]
-    app_name: Option<String>,
+    pub app_name: Option<String>,
 
     #[serde(default = "d_blank")]
-    message: Option<String>,
+    pub message: Option<String>,
 
     #[serde(default = "d_blank")]
-    sender_name: Option<String>,
+    pub sender_name: Option<String>,
 
     #[serde(default = "d_blank")]
-    podcast: Option<String>,
+    pub podcast: Option<String>,
 
     #[serde(default = "d_blank")]
-    episode: Option<String>,
+    pub episode: Option<String>,
 
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    value_msat: Option<u64>,
+    pub value_msat: Option<u64>,
 
     #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
-    value_msat_total: Option<u64>,
+    pub value_msat_total: Option<u64>,
 
     #[serde(default = "d_blank")]
-    remote_feed_guid: Option<String>,
+    pub remote_feed_guid: Option<String>,
 
     #[serde(default = "d_blank")]
-    remote_item_guid: Option<String>,
+    pub remote_item_guid: Option<String>,
+
+    #[serde(default = "d_blank")]
+    pub tlv: Option<String>,
 }
 
-pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote_cache: &mut podcastindex::GuidCache) {
-    let tlv = std::str::from_utf8(val).unwrap();
-    println!("TLV: {:#?}", tlv);
+impl RawBoost {
+    pub fn from_json(json: &str) -> Result<Self, Box<dyn Error>> {
+        let mut rawboost = serde_json::from_str::<RawBoost>(json)?;
+        rawboost.tlv = Some(json.to_string());
+        Ok(rawboost)
+    }
 
-    boost.tlv = tlv.to_string();
-
-    let json_result = serde_json::from_str::<RawBoost>(tlv);
-    match json_result {
-        Ok(rawboost) => {
-            //Determine an action type for later filtering ability
-            if rawboost.action.is_some() {
-                boost.action = dbif::ActionType::from_str(rawboost.action.unwrap().as_str()) as u8;
-            }
-
-            //Was a sender name given in the tlv?
-            if rawboost.sender_name.is_some() && !rawboost.sender_name.clone().unwrap().is_empty() {
-                boost.sender = rawboost.sender_name.unwrap();
-            }
-
-            //Was there a message in this tlv?
-            if rawboost.message.is_some() {
-                boost.message = rawboost.message.unwrap();
-            }
-
-            //Was an app name given?
-            if rawboost.app_name.is_some() {
-                boost.app = rawboost.app_name.unwrap();
-            }
-
-            //Was a podcast name given?
-            if rawboost.podcast.is_some() {
-                boost.podcast = rawboost.podcast.unwrap();
-            }
-
-            //Episode name?
-            if rawboost.episode.is_some() {
-                boost.episode = rawboost.episode.unwrap();
-            }
-
-            //Look for an original sat value in the tlv
-            if rawboost.value_msat_total.is_some() {
-                boost.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
-            }
-
-            //Fetch podcast/episode name if remote feed/item guid present
-            let remote_feed_guid = rawboost.remote_feed_guid.unwrap_or_default();
-            let remote_item_guid = rawboost.remote_item_guid.unwrap_or_default();
-
-            if !remote_feed_guid.is_empty() {
-                if !remote_item_guid.is_empty() {
-                    let episode_guid = remote_cache.get(remote_feed_guid, remote_item_guid).await;
-
-                    if let Ok(guid) = episode_guid {
-                        boost.remote_podcast = guid.podcast;
-                        boost.remote_episode = guid.episode;
-                    }
-                }
-                else {
-                    // no free api to look up just the feed guid
-                    boost.remote_podcast = Some(remote_feed_guid);
-                    boost.remote_episode = None;
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("{}", e);
-        }
+    pub fn from_json_bytes(bytes: &[u8]) -> Result<Self, Box<dyn Error>> {
+        let json = std::str::from_utf8(bytes)?;
+        Self::from_json(json)
     }
 }
 
-pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
+pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache, fetch_metadata: bool) -> Option<dbif::BoostRecord> {
     if invoice.state != InvoiceState::Settled as i32 {
         return None; // invoice hasn't been fulfilled yet
     }
@@ -142,33 +92,24 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
         payment_info: None,
     };
 
-    for htlc in invoice.htlcs {
-        if !htlc.custom_records.contains_key(&TLV_PODCASTING20) {
-            continue; // ignore invoices without a podcasting 2.0 tlv
+    for htlc in &invoice.htlcs {
+        if htlc.custom_records.contains_key(&TLV_PODCASTING20) {
+            // Parse boost and custodial wallet TLVs
+            parse_custom_records(&mut boost, &htlc.custom_records, remote_cache).await;
+            return Some(boost);
         }
-
-        // Parse boost and custodial wallet TLVs
-        for (key, val) in htlc.custom_records {
-            if key == TLV_PODCASTING20 {
-                // Parse boost TLV
-                parse_podcast_tlv(&mut boost, &val, remote_cache).await;
-            }
-            else if key == TLV_WALLET_KEY || key == TLV_WALLET_ID || key == TLV_HIVE_ACCOUNT || key == TLV_FOUNTAIN_KEY {
-                // Parse custodial wallet info
-                let custom_value = std::str::from_utf8(&val).unwrap().to_string();
-                boost.custom_key = Some(key);
-                boost.custom_value = Some(custom_value);
-            }
-        }
-
-        return Some(boost);
     }
 
     if invoice.payment_request.is_empty() {
         return None; // unrelated keysend/amp payment
     }
 
-    // Use what we have for a "Lightning Invoice" boost
+    // Fetch any RSS payment or Podcast Guru payment metadata from the invoice memo
+    if fetch_metadata && fetch_boost_metadata(&mut boost, &invoice.memo, remote_cache).await {
+        return Some(boost);
+    }
+
+    // Else use what we have for a "Lightning Invoice" boost
     if !invoice.memo.is_empty() {
         boost.action = 5;
         boost.app = "Lightning Invoice".to_string();
@@ -225,28 +166,111 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
         };
 
         // Parse boost and custodial wallet TLVs
-        for (key, val) in hop.custom_records {
-            if key == TLV_PODCASTING20 {
-                // Parse boost TLV
-                parse_podcast_tlv(&mut boost, &val, remote_cache).await;
-            }
-            else if key == TLV_WALLET_KEY || key == TLV_WALLET_ID || key == TLV_HIVE_ACCOUNT || key == TLV_FOUNTAIN_KEY {
-                // Parse custodial wallet info
-                let custom_value = std::str::from_utf8(&val).unwrap().to_string();
-
-                boost.payment_info = Some(dbif::PaymentRecord {
-                    payment_hash: payment.payment_hash.clone(),
-                    pubkey: hop.pub_key.clone(),
-                    custom_key: key,
-                    custom_value,
-                    fee_msat: payment.fee_msat,
-                    reply_to_idx: None,
-                });
-            }
-        }
-
+        parse_custom_records(&mut boost, &hop.custom_records, remote_cache).await;
         return Some(boost);
     }
 
     None
+}
+
+
+async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &HashMap<u64, Vec<u8>>, remote_cache: &mut podcastindex::GuidCache) {
+    // Parse boost and custodial wallet TLVs
+    for (key, val) in custom_records {
+        if *key == TLV_PODCASTING20 {
+            // Parse boost TLV
+            let rawboost = match RawBoost::from_json_bytes(val) {
+                Ok(rawboost) => rawboost,
+                Err(e) => {
+                    eprintln!("** Error parsing boost TLV: {}", e);
+                    continue;
+                }
+            };
+            map_rawboost_to_boost(rawboost, boost, remote_cache).await;
+        }
+        else if *key == TLV_WALLET_KEY || *key == TLV_WALLET_ID || *key == TLV_HIVE_ACCOUNT || *key == TLV_FOUNTAIN_KEY {
+            // Parse custodial wallet info
+            if let Ok(custom_value) = std::str::from_utf8(val) {
+                boost.custom_key = Some(*key);
+                boost.custom_value = Some(custom_value.to_string());
+            }
+        }
+    }
+}
+
+pub async fn fetch_boost_metadata(boost: &mut dbif::BoostRecord, comment: &str, remote_cache: &mut podcastindex::GuidCache) -> bool {
+    let metadata = match metadata::fetch_payment_metadata(comment).await {
+        Ok(Some(metadata)) => metadata,
+        Ok(None) => {
+            eprintln!("** No payment metadata found for boost: {}", boost.index);
+            return false;
+        },
+        Err(e) => {
+            eprintln!("** Error fetching payment metadata: {}", e);
+            return false;
+        }
+    };
+
+    map_rawboost_to_boost(metadata, boost, remote_cache).await;
+    true
+}
+
+pub async fn map_rawboost_to_boost(rawboost: RawBoost, boost: &mut dbif::BoostRecord, remote_cache: &mut podcastindex::GuidCache) {
+    // Determine an action type for later filtering ability
+    boost.action = 0;
+    if let Some(action) = rawboost.action {
+        boost.action = map_action_to_code(&action);
+    }
+
+    //Was a sender name given in the tlv?
+    boost.sender = rawboost.sender_name.unwrap_or_default();
+
+    //Was there a message in this tlv?
+    boost.message = rawboost.message.unwrap_or_default();
+
+    //Was an app name given?
+    boost.app = rawboost.app_name.unwrap_or_default();
+
+    //Was a podcast name given?
+    boost.podcast = rawboost.podcast.unwrap_or_default();
+
+    //Episode name?
+    boost.episode = rawboost.episode.unwrap_or_default();
+
+    //Look for an original sat value in the tlv
+    boost.value_msat_total = rawboost.value_msat_total.unwrap_or_default() as i64;
+
+    // Copy the tlv from the rawboost to the boost record
+    boost.tlv = rawboost.tlv.unwrap_or_default();
+
+    // Fetch podcast/episode name if remote feed/item GUID present
+    populate_remote_guids(
+        boost,
+        rawboost.remote_feed_guid,
+        rawboost.remote_item_guid,
+        remote_cache,
+    ).await;
+}
+
+async fn populate_remote_guids(
+    boost: &mut dbif::BoostRecord,
+    remote_feed_guid: Option<String>,
+    remote_item_guid: Option<String>,
+    remote_cache: &mut podcastindex::GuidCache,
+) {
+    let feed_guid = remote_feed_guid.unwrap_or_default();
+    let item_guid = remote_item_guid.unwrap_or_default();
+
+    if !feed_guid.is_empty() {
+        if !item_guid.is_empty() {
+            if let Ok(guid) = remote_cache.get(feed_guid.clone(), item_guid).await {
+                boost.remote_podcast = guid.podcast;
+                boost.remote_episode = guid.episode;
+            }
+        } else {
+            // no free api to look up just the feed guid
+            boost.remote_podcast = Some(feed_guid);
+            boost.remote_episode = None;
+        }
+    }
 }

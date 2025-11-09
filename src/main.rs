@@ -29,7 +29,7 @@ use std::convert::TryInto;
 use futures::StreamExt;
 
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, RwLock};
 
 use lnd::lnrpc::lnrpc::Invoice;
 
@@ -43,6 +43,7 @@ mod handler;
 mod lightning;
 mod podcastindex;
 mod lnaddress;
+mod metadata;
 mod boost;
 mod deserializers;
 
@@ -68,6 +69,7 @@ pub struct AppState {
     pub helipad_config: HelipadConfig,
     pub version: String,
     pub ws_tx: Arc<broadcast::Sender<WebSocketEvent>>,
+    pub settings: Arc<RwLock<dbif::SettingsRecord>>,
 }
 
 #[derive(Clone, Debug)]
@@ -269,17 +271,39 @@ async fn main() {
         println!(" - Trying localhost default: [{}].", helipad_config.node_address);
     }
 
+    //Load initial settings from database
+    let initial_settings = match dbif::load_settings_from_db(&helipad_config.database_file_path) {
+        Ok(settings) => settings,
+        Err(e) => {
+            eprintln!("Error loading initial settings: {:#?}", e);
+            dbif::SettingsRecord {
+                show_received_sats: false,
+                show_split_percentage: false,
+                hide_boosts: false,
+                hide_boosts_below: None,
+                play_pew: true,
+                custom_pew_file: None,
+                resolve_nostr_refs: false,
+                show_hosted_wallet_ids: false,
+                show_lightning_invoices: true,
+                fetch_metadata: true,
+            }
+        }
+    };
+    let shared_settings = Arc::new(RwLock::new(initial_settings));
+
     //App State
     let state = AppState {
         helipad_config: helipad_config.clone(),
         version: version.to_string(),
         ws_tx: Arc::new(broadcast::Sender::new(100)),
+        settings: shared_settings.clone(),
     };
 
     //Start the LND polling thread.  This thread will poll LND every few seconds to
     //get the latest invoices and store them in the database.
     tokio::spawn(lnd_poller(helipad_config.clone(), state.ws_tx.clone()));
-    tokio::spawn(lnd_subscribe_invoices(helipad_config.clone(), state.ws_tx.clone()));
+    tokio::spawn(lnd_subscribe_invoices(helipad_config.clone(), state.ws_tx.clone(), shared_settings.clone()));
 
     // Api routes
 
@@ -336,6 +360,7 @@ async fn main() {
             // protected api
             .route("/api/v1/reply", post(handler::api_v1_reply))
             .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
+            .route("/api/v1/fetch_metadata/:idx", post(handler::api_v1_fetch_metadata))
 
             // require auth for above routes
             .route_layer(middleware::from_fn_with_state(state.clone(), handler::auth_middleware))
@@ -415,7 +440,11 @@ async fn handle_websocket(mut socket: WebSocket, state: AppState) {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WebSocketEvent(String, serde_json::Value);
 
-async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sender<WebSocketEvent>>) {
+async fn lnd_subscribe_invoices(
+    helipad_config: HelipadConfig,
+    ws_tx: Arc<broadcast::Sender<WebSocketEvent>>,
+    settings: Arc<RwLock<dbif::SettingsRecord>>,
+) {
     let db_filepath = helipad_config.database_file_path.clone();
 
     //Make the connection to LND
@@ -443,7 +472,8 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadc
         match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false, 0, 0).await {
             Ok(response) => {
                 for invoice in response.invoices {
-                    process_invoice(&invoice, &mut remote_cache, &db_filepath, &ws_tx).await;
+                    let fetch_metadata = false; // don't fetch metadata for old invoices
+                    process_invoice(&invoice, &mut remote_cache, &db_filepath, fetch_metadata, &ws_tx).await;
                     current_index = invoice.add_index;
                     updated = true;
                 }
@@ -468,7 +498,8 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadc
         println!("Invoice: {:#?}", invoice);
         match invoice {
             Ok(invoice) => {
-                process_invoice(&invoice, &mut remote_cache, &db_filepath, &ws_tx).await;
+                let fetch_metadata = settings.read().await.fetch_metadata;
+                process_invoice(&invoice, &mut remote_cache, &db_filepath, fetch_metadata, &ws_tx).await;
             }
             Err(e) => {
                 eprintln!("Error subscribing to invoices: {:#?}", e);
@@ -477,8 +508,14 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadc
     }
 }
 
-async fn process_invoice(invoice: &Invoice, remote_cache: &mut podcastindex::GuidCache, db_filepath: &String, ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>) {
-    let parsed = boost::parse_boost_from_invoice(invoice.clone(), remote_cache).await;
+async fn process_invoice(
+    invoice: &Invoice,
+    remote_cache: &mut podcastindex::GuidCache,
+    db_filepath: &String,
+    fetch_metadata: bool,
+    ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>,
+) {
+    let parsed = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, fetch_metadata).await;
 
     if let Some(boost) = parsed {
         //Give some output
