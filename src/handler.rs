@@ -27,24 +27,30 @@ use std::string::String;
 use url::Url;
 use tempfile::NamedTempFile;
 use std::collections::HashMap;
+
+// JWT session times
+const JWT_SESSION_HOURS: i64 = 1;             // 1 hour for normal login
+const JWT_LONG_SESSION_HOURS: i64 = 30 * 24;  // 30 days for "stay logged in"
+
 //Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
    // sub: String,
    iat: usize,
    exp: usize,
+   long_lived: Option<bool>, // true if "stay logged in" was selected
 }
 
-pub fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> bool {
+fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> Option<JwtClaims> {
     if secret.is_empty() {
-        return false; // no secret
+        return None; // no secret
     }
 
     let jwt = match jar.get("HELIPAD_JWT") {
         Some(jwt) => jwt.value_trimmed(),
         None => {
             eprintln!("No HELIPAD_JWT cookie found");
-            return false; // no cookie
+            return None; // no cookie
         }
     };
 
@@ -52,7 +58,7 @@ pub fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> bool {
         Ok(token) => token,
         Err(_) => {
             eprintln!("Unable to decode HELIPAD_JWT cookie");
-            return false;
+            return None;
         }
     };
 
@@ -60,28 +66,33 @@ pub fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> bool {
 
     if token.claims.exp <= timestamp {
         eprintln!("Expired HELIPAD_JWT cookie");
-        return false; // expired
+        return None; // expired
     }
 
-    true
+    Some(token.claims)
 }
 
-pub fn new_jwt_cookie(jar: CookieJar, secret: String) -> CookieJar {
+fn new_jwt_cookie_with_duration(jar: CookieJar, secret: String, duration_hours: i64) -> CookieJar {
     let iat = Utc::now().timestamp();
     let exp = Utc::now()
-        .checked_add_signed(TimeDelta::try_hours(1).unwrap())
+        .checked_add_signed(TimeDelta::try_hours(duration_hours).unwrap())
         .expect("invalid timestamp")
         .timestamp();
+
+    // Preserve long-lived flag if set to a long duration
+    let long_lived = duration_hours >= JWT_LONG_SESSION_HOURS;
 
     let my_claims = JwtClaims {
         iat: iat as usize,
         exp: exp as usize,
+        long_lived: Some(long_lived),
     };
 
     let jwt = encode(&Header::default(), &my_claims, &EncodingKey::from_secret(secret.as_ref())).unwrap();
 
     let cookie = Cookie::build(("HELIPAD_JWT", jwt))
         .path("/")
+        .max_age(cookie::time::Duration::seconds(duration_hours * 3600))
         .secure(false) // Do not require HTTPS.
         .http_only(true)
         .same_site(cookie::SameSite::Lax)
@@ -108,10 +119,16 @@ pub async fn auth_middleware(
         return next.run(req).await; // no password required for certain paths
     }
 
-    if verify_jwt_cookie(&jar, &state.helipad_config.secret) {
+    if let Some(claims) = verify_jwt_cookie(&jar, &state.helipad_config.secret) {
         // valid jwt: refresh and add to response
+        // preserve the original session duration (long-lived or short)
+        let duration_hours = if claims.long_lived.unwrap_or(false) {
+            JWT_LONG_SESSION_HOURS
+        } else {
+            JWT_SESSION_HOURS
+        };
         let resp = next.run(req).await;
-        let cookie = new_jwt_cookie(jar, state.helipad_config.secret);
+        let cookie = new_jwt_cookie_with_duration(jar, state.helipad_config.secret, duration_hours);
         return (cookie, resp).into_response();
     }
 
@@ -132,6 +149,7 @@ pub async fn auth_middleware(
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginForm {
     password: String,
+    stay_logged_in: Option<String>,
 }
 
 pub async fn login(State(state): State<AppState>) -> Response {
@@ -150,7 +168,13 @@ pub async fn handle_login(
 
     if state.helipad_config.password == *post_vars.password {
         // valid password: set cookie and redirect
-        let cookie = new_jwt_cookie(jar, state.helipad_config.secret);
+        let stay_logged_in = post_vars.stay_logged_in.is_some();
+        let duration_hours = if stay_logged_in {
+            JWT_LONG_SESSION_HOURS
+        } else {
+            JWT_SESSION_HOURS
+        };
+        let cookie = new_jwt_cookie_with_duration(jar, state.helipad_config.secret, duration_hours);
         let resp = Redirect::to("/");
         return (cookie, resp).into_response();
     }
