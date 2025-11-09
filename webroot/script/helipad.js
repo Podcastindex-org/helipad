@@ -165,7 +165,7 @@ $(document).ready(function () {
 
             let boostWalletInfo = '';
             if (settings.show_hosted_wallet_ids && boostCustomValue) {
-                boostWalletInfo = `<small>[Wallet #${escapeHTML(boostCustomValue)}]</small>`;
+                boostWalletInfo = `<small>[${escapeHTML(boostTlv.name ?? 'Wallet')} #${escapeHTML(boostCustomValue)}]</small>`;
             }
 
             //Show clock icon for automated boosts
