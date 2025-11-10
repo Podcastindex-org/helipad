@@ -110,5 +110,9 @@
     "wherever": {
         "icon": "wherever",
         "url": "https://wherever.audio/"
+    },
+    "lightning invoice": {
+        "icon": "lightning",
+        "url": "https://lightning.network/"
     }
 }
