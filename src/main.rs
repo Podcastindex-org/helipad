@@ -16,7 +16,6 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 use chrono::Utc;
 use drop_root::set_user_group;
-use rand::{distributions::Alphanumeric, Rng}; // 0.8
 
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
 use reqwest::redirect::Policy;
@@ -204,13 +203,15 @@ async fn main() {
         println!("Found password in config file({})", HELIPAD_CONFIG_FILE);
     }
 
-    //Generate secret for JWT if password set
+    //Get or generate secret for JWT if password set
     if !helipad_config.password.is_empty() {
-        helipad_config.secret = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(40)
-            .map(char::from)
-            .collect();
+        helipad_config.secret = match dbif::get_or_create_jwt_secret(&helipad_config.database_file_path) {
+            Ok(secret) => secret,
+            Err(e) => {
+                eprintln!("Warning: Failed to get JWT secret from database: {}", e);
+                return;
+            }
+        };
     }
 
     //Get the macaroon and cert files.  Look in the local directory first as an override.
