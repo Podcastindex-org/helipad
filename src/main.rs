@@ -339,6 +339,9 @@ async fn main() {
         // login page
         .route("/login", get(handler::login).post(handler::handle_login))
 
+        // api login endpoint
+        .route("/api/v1/login", post(handler::api_v1_login))
+
         // static assets
         .nest_service("/image", ServeDir::new(WEBROOT_PATH_IMAGE))
         .nest_service("/script", ServeDir::new(WEBROOT_PATH_SCRIPT))

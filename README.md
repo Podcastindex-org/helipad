@@ -43,6 +43,9 @@ convenience as it's a very common thing to change during testing.
 ## API
 The very simplistic API consists of the following endpoints:
 
+#### /api/v1/login
+This call accepts a JSON body with `password` and optional `stay_logged_in` fields and returns a JWT token for API authentication. Use the token in the `Authorization: Bearer <token>` header for API requests. Tokens expire after 1 hour by default or 30 days if `stay_logged_in` is included.
+
 #### /api/v1/balance
 This call returns the current channel balance that LND is reporting.
 
