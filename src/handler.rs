@@ -17,7 +17,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use crate::{AppState, WebhookPayload, lightning, podcastindex};
 use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord};
 use handlebars::{Handlebars, JsonRender};
-use jsonwebtoken::{decode, encode, Algorithm, Header, DecodingKey, EncodingKey, Validation};
+use jsonwebtoken::{Algorithm, Header, DecodingKey, EncodingKey, Validation};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
 use reqwest::redirect::Policy;
 use serde::{Deserialize, Serialize};
@@ -54,7 +54,7 @@ fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> Option<JwtClaims> {
         }
     };
 
-    let token = match decode::<JwtClaims>(jwt, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256)) {
+    let token = match jsonwebtoken::decode::<JwtClaims>(jwt, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256)) {
         Ok(token) => token,
         Err(_) => {
             eprintln!("Unable to decode HELIPAD_JWT cookie");
@@ -72,15 +72,52 @@ fn verify_jwt_cookie(jar: &CookieJar, secret: &String) -> Option<JwtClaims> {
     Some(token.claims)
 }
 
-fn new_jwt_cookie_with_duration(jar: CookieJar, secret: String, duration_hours: i64) -> CookieJar {
+fn verify_jwt_header(req: &Request, secret: &String) -> Option<JwtClaims> {
+    let authorization = match req.headers().get(header::AUTHORIZATION) {
+        Some(val) => val.to_str().unwrap_or(""),
+        None => {
+            eprintln!("No authorization header found");
+            return None; // no authorization header
+        }
+    };
+
+    if !authorization.starts_with("Bearer ") {
+        eprintln!("Invalid authorization header: not a bearer token");
+        return None; // not a bearer token
+    }
+
+    let jwt = match authorization.split("Bearer ").nth(1) {
+        Some(jwt) => jwt,
+        None => {
+            eprintln!("No JWT found in authorization header");
+            return None; // no JWT
+        }
+    };
+
+    let token = match jsonwebtoken::decode::<JwtClaims>(jwt, &DecodingKey::from_secret(secret.as_ref()), &Validation::new(Algorithm::HS256)) {
+        Ok(token) => token,
+        Err(_) => {
+            eprintln!("Unable to decode authorization JWT");
+            return None;
+        }
+    };
+
+    let timestamp = Utc::now().timestamp() as usize;
+
+    if token.claims.exp <= timestamp {
+        eprintln!("Expired authorization JWT");
+        return None; // expired
+    }
+
+    Some(token.claims)
+}
+
+fn new_jwt_token(secret: String, long_lived: bool, duration_hours: i64) -> String {
     let iat = Utc::now().timestamp();
     let exp = Utc::now()
         .checked_add_signed(TimeDelta::try_hours(duration_hours).unwrap())
         .expect("invalid timestamp")
         .timestamp();
-
-    // Preserve long-lived flag if set to a long duration
-    let long_lived = duration_hours >= JWT_LONG_SESSION_HOURS;
 
     let my_claims = JwtClaims {
         iat: iat as usize,
@@ -88,18 +125,25 @@ fn new_jwt_cookie_with_duration(jar: CookieJar, secret: String, duration_hours: 
         long_lived: Some(long_lived),
     };
 
-    let jwt = encode(&Header::default(), &my_claims, &EncodingKey::from_secret(secret.as_ref())).unwrap();
+    return jsonwebtoken::encode(&Header::default(), &my_claims, &EncodingKey::from_secret(secret.as_ref())).unwrap();
+}
 
-    let cookie = Cookie::build(("HELIPAD_JWT", jwt))
+fn new_jwt_cookie(secret: String, long_lived: bool) -> Cookie<'static> {
+    let duration_hours = if long_lived {
+        JWT_LONG_SESSION_HOURS
+    } else {
+        JWT_SESSION_HOURS
+    };
+
+    let jwt = new_jwt_token(secret, long_lived, duration_hours);
+
+    return Cookie::build(("HELIPAD_JWT", jwt))
         .path("/")
         .max_age(cookie::time::Duration::seconds(duration_hours * 3600))
         .secure(false) // Do not require HTTPS.
         .http_only(true)
         .same_site(cookie::SameSite::Lax)
         .build();
-
-    // Add cookie to jar and return
-    jar.add(cookie)
 }
 
 pub async fn auth_middleware(
@@ -115,21 +159,22 @@ pub async fn auth_middleware(
 
     let path = req.uri().path();
 
-    if path == "/login" || path.starts_with("/script") || path.starts_with("/style") {
+    if path == "/login" || path == "/api/v1/login" || path.starts_with("/script") || path.starts_with("/style") {
         return next.run(req).await; // no password required for certain paths
     }
 
     if let Some(claims) = verify_jwt_cookie(&jar, &state.helipad_config.secret) {
         // valid jwt: refresh and add to response
-        // preserve the original session duration (long-lived or short)
-        let duration_hours = if claims.long_lived.unwrap_or(false) {
-            JWT_LONG_SESSION_HOURS
-        } else {
-            JWT_SESSION_HOURS
-        };
         let resp = next.run(req).await;
-        let cookie = new_jwt_cookie_with_duration(jar, state.helipad_config.secret, duration_hours);
-        return (cookie, resp).into_response();
+        let long_lived = claims.long_lived.unwrap_or(false);
+        let cookie = new_jwt_cookie(state.helipad_config.secret, long_lived);
+        let jar = jar.add(cookie);
+        return (jar, resp).into_response();
+    }
+
+    if let Some(_) = verify_jwt_header(&req, &state.helipad_config.secret) {
+        // valid jwt
+        return next.run(req).await.into_response();
     }
 
     let ctype = match req.headers().get(header::CONTENT_TYPE) {
@@ -169,14 +214,10 @@ pub async fn handle_login(
     if state.helipad_config.password == *post_vars.password {
         // valid password: set cookie and redirect
         let stay_logged_in = post_vars.stay_logged_in.is_some();
-        let duration_hours = if stay_logged_in {
-            JWT_LONG_SESSION_HOURS
-        } else {
-            JWT_SESSION_HOURS
-        };
-        let cookie = new_jwt_cookie_with_duration(jar, state.helipad_config.secret, duration_hours);
+        let cookie = new_jwt_cookie(state.helipad_config.secret, stay_logged_in);
+        let jar = jar.add(cookie);
         let resp = Redirect::to("/");
-        return (cookie, resp).into_response();
+        return (jar, resp).into_response();
     }
 
     HtmlTemplate("webroot/html/login.html", json!({
@@ -185,6 +226,38 @@ pub async fn handle_login(
     })).into_response()
 }
 
+//API - authenticate and return JWT token for API clients
+pub async fn api_v1_login(
+    State(state): State<AppState>,
+    Json(post_vars): Json<LoginForm>,
+) -> Response {
+
+    if state.helipad_config.password.is_empty() {
+        let resp = json!({
+            "success": true,
+            "message": "No password required",
+        });
+        return (StatusCode::OK, Json(resp)).into_response();
+    }
+
+    if state.helipad_config.password == *post_vars.password {
+        // valid password: set cookie and redirect
+        let stay_logged_in = post_vars.stay_logged_in.is_some();
+        let cookie = new_jwt_cookie(state.helipad_config.secret, stay_logged_in);
+        let resp = json!({
+            "success": true,
+            "message": "Login successful",
+            "token": cookie.clone().value().to_string(),
+        });
+        return (StatusCode::OK, Json(resp)).into_response();
+    }
+
+    let resp = json!({
+        "success": false,
+        "message": "Invalid password",
+    });
+    return (StatusCode::UNAUTHORIZED, Json(resp)).into_response();
+}
 
 struct HtmlTemplate<'a, T>(&'a str, T);
 
