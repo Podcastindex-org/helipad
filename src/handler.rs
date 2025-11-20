@@ -15,7 +15,7 @@ use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 
 use chrono::{DateTime, TimeDelta, Utc};
 use crate::{AppState, WebhookPayload, lightning, podcastindex};
-use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord};
+use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord, ActionType};
 use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{Algorithm, Header, DecodingKey, EncodingKey, Validation};
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
@@ -27,6 +27,7 @@ use std::string::String;
 use url::Url;
 use tempfile::NamedTempFile;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 // JWT session times
 const JWT_SESSION_HOURS: i64 = 1;             // 1 hour for normal login
@@ -763,6 +764,7 @@ pub struct WebhookSaveForm {
     token: String,
     on_boost: Option<bool>,
     on_stream: Option<bool>,
+    on_auto: Option<bool>,
     on_sent: Option<bool>,
     equality: Option<String>,
     amount: Option<String>,
@@ -799,6 +801,7 @@ pub async fn webhook_settings_save(
         token: form.token,
         on_boost: form.on_boost.unwrap_or(false),
         on_stream: form.on_stream.unwrap_or(false),
+        on_auto: form.on_auto.unwrap_or(false),
         on_sent: form.on_sent.unwrap_or(false),
         equality,
         amount,
@@ -1236,6 +1239,7 @@ pub async fn numerology_settings_patch(
 pub struct ReportGenerateForm {
     list_boosts: Option<bool>,
     list_streams: Option<bool>,
+    list_auto: Option<bool>,
     list_sent: Option<bool>,
     podcast: String,
     start_date: Option<u64>,
@@ -1312,21 +1316,28 @@ pub async fn report_generate(
 ) -> impl IntoResponse {
     println!("** report_generate({:#?})", form.clone());
 
-    let mut lists = Vec::new();
+    let mut lists = HashSet::new();
+    let mut filters = BoostFilters::new();
 
     if form.list_boosts.is_some() {
-        lists.push("boost");
+        lists.insert("boost");
+        filters.actions.push(ActionType::Boost);
+    }
+
+    if form.list_auto.is_some() {
+        lists.insert("boost");
+        filters.actions.push(ActionType::Auto);
     }
 
     if form.list_streams.is_some() {
-        lists.push("stream");
+        lists.insert("stream");
+        filters.actions.push(ActionType::Stream);
     }
 
     if form.list_sent.is_some() {
-        lists.push("sent");
+        lists.insert("sent");
+        filters.actions.push(ActionType::Invoice);
     }
-
-    let mut filters = BoostFilters::new();
 
     if !form.podcast.is_empty() {
         filters.podcast = Some(form.podcast);

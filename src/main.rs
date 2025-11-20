@@ -649,8 +649,12 @@ async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
             continue; // stream
         }
 
-        if (boost.action == 2 || boost.action == 4) && !webhook.on_boost {
-            continue; // boost or auto
+        if boost.action == 2 && !webhook.on_boost {
+            continue; // boost
+        }
+
+        if boost.action == 4 && !webhook.on_auto {
+            continue; // auto
         }
 
         let sats: u64 = if boost.value_msat_total > 0 {

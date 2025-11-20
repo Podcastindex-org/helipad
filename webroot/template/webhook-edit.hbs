@@ -56,6 +56,11 @@
         </div>
 
         <div class="form-check">
+          <input id="edit-wh-on-auto" name="on_auto" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_auto}} checked{{/if}}>
+          <label class="form-check-label" for="edit-wh-on-auto">New auto boosts</label>
+        </div>
+
+        <div class="form-check">
           <input id="edit-wh-on-stream" name="on_stream" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_stream}} checked{{/if}}>
           <label class="form-check-label" for="edit-wh-on-stream">New streams</label>
         </div>

@@ -130,6 +130,7 @@ pub struct WebhookRecord {
     pub token: String,
     pub on_boost: bool,
     pub on_stream: bool,
+    pub on_auto: bool,
     pub on_sent: bool,
     pub equality: String,
     pub amount: u64,
@@ -164,6 +165,7 @@ pub struct BoostFilters {
     pub podcast: Option<String>,
     pub start_date: Option<u64>,
     pub end_date: Option<u64>,
+    pub actions: Vec<ActionType>,
 }
 
 impl BoostFilters {
@@ -470,6 +472,13 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         println!("Webhook amounts added");
     }
 
+    if conn.execute("ALTER TABLE webhooks ADD COLUMN on_auto integer DEFAULT 0", []).is_ok() {
+        // Set on_auto to 1 if on_boost is 1 for backward compatibility
+        if conn.execute("UPDATE webhooks SET on_auto = 1 WHERE on_boost = 1", []).is_ok() {
+            println!("Webhook on_auto field added and migrated from on_boost");
+        }
+    }
+
     //Create the jwt_secret table
     match conn.execute(
         "CREATE TABLE IF NOT EXISTS jwt_secret (
@@ -697,6 +706,30 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
     }
     else if invtype == "stream" {
         conditions.push("action NOT IN (2, 4)");
+    }
+
+    let mut action_filters= HashMap::new();
+    let action_condition_string;
+
+    if !filters.actions.is_empty() {
+        for (idx, action) in filters.actions.iter().enumerate() {
+            let key = format!(":action{}", idx);
+            let value = (*action as u8).to_string();
+            action_filters.insert(key, value);
+        }
+
+        let action_condition_list = action_filters
+            .keys()
+            .map(|k| k.as_str())
+            .collect::<Vec<&str>>()
+            .join(", ");
+
+        action_condition_string = format!("action IN ({})", action_condition_list);
+        conditions.push(action_condition_string.as_str());
+
+        for (key, value) in &action_filters {
+            bindings.insert(key.as_str(), value.as_str());
+        }
     }
 
     if let Some(podcast) = &filters.podcast {
@@ -1197,6 +1230,7 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             token,
             on_boost,
             on_stream,
+            on_auto,
             on_sent,
             equality,
             amount,
@@ -1217,12 +1251,13 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             token: row.get(2)?,
             on_boost: row.get(3)?,
             on_stream: row.get(4)?,
-            on_sent: row.get(5)?,
-            equality: row.get(6)?,
-            amount: row.get(7)?,
-            enabled: row.get(8)?,
-            request_successful: row.get(9).ok(),
-            request_timestamp: row.get(10).ok(),
+            on_auto: row.get(5)?,
+            on_sent: row.get(6)?,
+            equality: row.get(7)?,
+            amount: row.get(8)?,
+            enabled: row.get(9)?,
+            request_successful: row.get(10).ok(),
+            request_timestamp: row.get(11).ok(),
         })
     }).unwrap();
 
@@ -1243,6 +1278,7 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             token,
             on_boost,
             on_stream,
+            on_auto,
             on_sent,
             equality,
             amount,
@@ -1263,12 +1299,13 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             token: row.get(2)?,
             on_boost: row.get(3)?,
             on_stream: row.get(4)?,
-            on_sent: row.get(5)?,
-            equality: row.get(6)?,
-            amount: row.get(7)?,
-            enabled: row.get(8)?,
-            request_successful: row.get(9).ok(),
-            request_timestamp: row.get(10).ok(),
+            on_auto: row.get(5)?,
+            on_sent: row.get(6)?,
+            equality: row.get(7)?,
+            amount: row.get(8)?,
+            enabled: row.get(9)?,
+            request_successful: row.get(10).ok(),
+            request_timestamp: row.get(11).ok(),
         })
     })?;
 
@@ -1291,6 +1328,7 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
             token,
             on_boost,
             on_stream,
+            on_auto,
             on_sent,
             equality,
             amount,
@@ -1299,12 +1337,13 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
             request_timestamp
         )
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
         ON CONFLICT(idx) DO UPDATE SET
             url = excluded.url,
             token = excluded.token,
             on_boost = excluded.on_boost,
             on_stream = excluded.on_stream,
+            on_auto = excluded.on_auto,
             on_sent = excluded.on_sent,
             equality = excluded.equality,
             amount = excluded.amount,
@@ -1319,6 +1358,7 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
         webhook.token,
         webhook.on_boost,
         webhook.on_stream,
+        webhook.on_auto,
         webhook.on_sent,
         webhook.equality,
         webhook.amount,
