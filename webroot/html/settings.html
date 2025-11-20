@@ -203,16 +203,24 @@
 <script>
 window.addEventListener("load", () => {
     const now = new Date();
-    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
-    const tzOffset = now.getTimezoneOffset() * 60 * 1000;
+    const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
-    document.querySelector("#export-start-date").value = oneYearAgo.toISOString().slice(0,10);
-    document.querySelector("#export-end-date").value = now.toISOString().slice(0,10);
+    const formatDate = (date) => {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear().toString();
+        return year + '-' + month + '-' + day;
+    };
+
+    document.querySelector("#export-start-date").value = formatDate(oneMonthAgo);
+    document.querySelector("#export-end-date").value = formatDate(now);
 
     document.querySelector("#export-form").addEventListener("submit", () => {
-        document.querySelector("#export-start-date-ts").value = Math.floor((document.querySelector("#export-start-date").valueAsNumber + tzOffset) / 1000);
-        document.querySelector("#export-end-date-ts").value = Math.floor((document.querySelector("#export-end-date").valueAsNumber + tzOffset) / 1000);
+        const startDate = document.querySelector("#export-start-date").value + " 00:00:00";
+        const endDate = document.querySelector("#export-end-date").value + " 23:59:59";
+
+        document.querySelector("#export-start-date-ts").value = Math.floor(new Date(startDate).getTime() / 1000);
+        document.querySelector("#export-end-date-ts").value = Math.floor(new Date(endDate).getTime() / 1000);
     });
 });
 </script>
