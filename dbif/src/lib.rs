@@ -8,6 +8,50 @@ use chrono::DateTime;
 use std::collections::HashMap;
 use rand::{distr::Alphanumeric, Rng}; // 0.8
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum ActionType {
+    Unknown = 0, // no action type set
+    Stream = 1, // streaming payments
+    Boost = 2, // manual boost or boost-a-gram
+    Invalid = 3, // invalid action or empty string (set to 3 for legacy reasons)
+    Auto = 4, // automated boost
+}
+
+impl ActionType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ActionType::Unknown => "unknown",
+            ActionType::Stream => "stream",
+            ActionType::Boost => "boost",
+            ActionType::Invalid => "invalid",
+            ActionType::Auto => "auto",
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => ActionType::Unknown,
+            1 => ActionType::Stream,
+            2 => ActionType::Boost,
+            3 => ActionType::Invalid,
+            4 => ActionType::Auto,
+            _ => ActionType::Invalid,
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "unknown" => ActionType::Unknown,
+            "stream" => ActionType::Stream,
+            "boost" => ActionType::Boost,
+            "invalid" => ActionType::Invalid,
+            "auto" => ActionType::Auto,
+            _ => ActionType::Invalid,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeInfoRecord {
     pub lnd_alias: String,
@@ -54,13 +98,7 @@ impl BoostRecord {
 
     // Returns the name of the action
     pub fn action_name(&self) -> String {
-        match self.action {
-            1 => "stream".to_string(),
-            2 => "boost".to_string(),
-            3 => "invalid".to_string(),
-            4 => "auto".to_string(),
-            _ => "unknown".to_string(),
-        }
+        ActionType::from_u8(self.action).as_str().to_string()
     }
 }
 

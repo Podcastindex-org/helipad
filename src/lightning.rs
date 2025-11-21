@@ -283,12 +283,7 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
         Ok(rawboost) => {
             //Determine an action type for later filtering ability
             if rawboost.action.is_some() {
-                boost.action = match rawboost.action.unwrap().as_str() {
-                    "stream" => 1, //This indicates a per-minute podcast payment
-                    "boost"  => 2, //This is a manual boost or boost-a-gram
-                    "auto"   => 4, //This is an automated boost
-                    _        => 3, //Invalid action or empty string (set to 3 for legacy reasons)
-                }
+                boost.action = dbif::ActionType::from_str(rawboost.action.unwrap().as_str()) as u8;
             }
 
             //Was a sender name given in the tlv?
