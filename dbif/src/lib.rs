@@ -799,9 +799,9 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
     Ok(boosts)
 }
 
-pub fn get_single_invoice_from_db(filepath: &String, invtype: &str, index: u64, escape_html: bool) -> Result<Option<BoostRecord>, Box<dyn Error>> {
+pub fn get_single_invoice_from_db(filepath: &String, index: u64, escape_html: bool) -> Result<Option<BoostRecord>, Box<dyn Error>> {
     let filters = BoostFilters::new();
-    let invoices = get_invoices_from_db(filepath, invtype, index, 1, true, escape_html, filters)?;
+    let invoices = get_invoices_from_db(filepath, "", index, 1, true, escape_html, filters)?;
 
     if !invoices.is_empty() && invoices[0].index == index {
         Ok(Some(invoices[0].clone()))

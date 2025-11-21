@@ -552,7 +552,7 @@ pub async fn api_v1_reply(
     let sender = params.sender.unwrap_or("Anonymous".into());
     let message = params.message.unwrap_or("".into());
 
-    let boost = match dbif::get_single_invoice_from_db(&state.helipad_config.database_file_path, "", index, true) {
+    let boost = match dbif::get_single_invoice_from_db(&state.helipad_config.database_file_path, index, true) {
         Ok(Some(boost)) => boost,
         Ok(None) => {
             return (StatusCode::INTERNAL_SERVER_ERROR, "** Unknown boost index.").into_response();
