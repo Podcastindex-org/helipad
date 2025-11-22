@@ -18,6 +18,7 @@ $(document).ready(function () {
 
     let config = {
         'listUrl': '/api/v1/boosts',
+        'listType': 'boosts',
         'indexUrl': '/api/v1/index',
         'podcastsUrl': '/api/v1/podcasts',
         'singularName': 'boost',
@@ -335,15 +336,11 @@ $(document).ready(function () {
         $('div.nodata span.invindex').text(currentInvoiceIndex);
 
         //Update the csv export link
-        const list = (config.pluralName == 'sent boosts')
-            ? 'sent'
-            : config.pluralName;
-
         const bcount = $('div.outgoing_msg').length;
         const csvindex = $('div.outgoing_msg:first').data('msgid') ?? currentInvoiceIndex;
         const endex = $('div.outgoing_msg:last').data('msgid') ?? 1;
 
-        $('span.csv a').attr('href', '/csv?list=' + list + '&index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
+        $('span.csv a').attr('href', '/csv?list=' + config.listType + '&index=' + csvindex + '&count=' + bcount + '&old=true' + '&end=' + endex);
 
         //Load more link
         const isMore = (data.length == max);
@@ -1032,16 +1029,19 @@ $(document).ready(function () {
 
         if (pathname == "/") {
             config.listUrl = '/api/v1/boosts';
+            config.listType = 'boosts';
             config.singularName = 'boost';
             config.pluralName = 'boosts';
         }
         else if (pathname == "/streams") {
             config.listUrl = '/api/v1/streams';
+            config.listType = 'streams';
             config.singularName = 'stream';
             config.pluralName = 'streams';
         }
         else if (pathname == "/sent") {
             config.listUrl = '/api/v1/sent';
+            config.listType = 'sent';
             config.indexUrl = '/api/v1/sent_index';
             config.podcastsUrl = '/api/v1/sent_podcasts';
             config.singularName = 'sent boost';
