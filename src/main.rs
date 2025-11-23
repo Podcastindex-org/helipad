@@ -31,6 +31,8 @@ use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
+use lnd::lnrpc::lnrpc::Invoice;
+
 #[macro_use]
 extern crate configure_me;
 
@@ -438,30 +440,7 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadc
         match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false, 0, 0).await {
             Ok(response) => {
                 for invoice in response.invoices {
-                    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
-
-                    if let Some(boost) = parsed {
-                        //Give some output
-                        println!("Boost: {:#?}", &boost);
-
-                        //Store in the database
-                        match dbif::add_invoice_to_db(&db_filepath, &boost) {
-                            Ok(_) => println!("New invoice added."),
-                            Err(e) => eprintln!("Error adding invoice: {:#?}", e)
-                        }
-
-                        match ws_tx.send(WebSocketEvent(
-                            boost.action_name(),
-                            serde_json::to_value(&boost).unwrap()
-                        )) {
-                            Ok(_) => println!("WebSocket event sent."),
-                            Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
-                        }
-
-                        //Send out webhooks (if any)
-                        send_webhooks(&db_filepath, &boost).await;
-                    }
-
+                    process_invoice(&invoice, &mut remote_cache, &db_filepath, &ws_tx).await;
                     current_index = invoice.add_index;
                     updated = true;
                 }
@@ -486,34 +465,38 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadc
         println!("Invoice: {:#?}", invoice);
         match invoice {
             Ok(invoice) => {
-                let parsed = lightning::parse_boost_from_invoice(invoice.clone(), &mut remote_cache).await;
-
-                if let Some(boost) = parsed {
-                    //Give some output
-                    println!("Boost: {:#?}", &boost);
-
-                    //Store in the database
-                    match dbif::add_invoice_to_db(&db_filepath, &boost) {
-                        Ok(_) => println!("New invoice added."),
-                        Err(e) => eprintln!("Error adding invoice: {:#?}", e)
-                    }
-
-                    match ws_tx.send(WebSocketEvent(
-                        boost.action_name(),
-                        serde_json::to_value(&boost).unwrap()
-                    )) {
-                        Ok(_) => println!("WebSocket event sent."),
-                        Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
-                    }
-
-                    //Send out webhooks (if any)
-                    send_webhooks(&db_filepath, &boost).await;
-                }
+                process_invoice(&invoice, &mut remote_cache, &db_filepath, &ws_tx).await;
             }
             Err(e) => {
                 eprintln!("Error subscribing to invoices: {:#?}", e);
             }
         }
+    }
+}
+
+async fn process_invoice(invoice: &Invoice, remote_cache: &mut podcastindex::GuidCache, db_filepath: &String, ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>) {
+    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), remote_cache).await;
+
+    if let Some(boost) = parsed {
+        //Give some output
+        println!("Boost: {:#?}", &boost);
+
+        //Store in the database
+        match dbif::add_invoice_to_db(&db_filepath, &boost) {
+            Ok(_) => println!("New invoice added."),
+            Err(e) => eprintln!("Error adding invoice: {:#?}", e)
+        }
+
+        match ws_tx.send(WebSocketEvent(
+            boost.action_name(),
+            serde_json::to_value(&boost).unwrap()
+        )) {
+            Ok(_) => println!("WebSocket event sent."),
+            Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
+        }
+
+        //Send out webhooks (if any)
+        send_webhooks(&db_filepath, &boost).await;
     }
 }
 
