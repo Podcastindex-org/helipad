@@ -766,6 +766,7 @@ pub struct WebhookSaveForm {
     on_stream: Option<bool>,
     on_auto: Option<bool>,
     on_sent: Option<bool>,
+    on_invoice: Option<bool>,
     equality: Option<String>,
     amount: Option<String>,
     enabled: Option<bool>,
@@ -803,6 +804,7 @@ pub async fn webhook_settings_save(
         on_stream: form.on_stream.unwrap_or(false),
         on_auto: form.on_auto.unwrap_or(false),
         on_sent: form.on_sent.unwrap_or(false),
+        on_invoice: form.on_invoice.unwrap_or(false),
         equality,
         amount,
         enabled: form.enabled.unwrap_or(false),
@@ -989,6 +991,7 @@ pub struct GeneralSettingsMultipart {
     play_pew: Option<bool>,
     resolve_nostr_refs: Option<bool>,
     show_hosted_wallet_ids: Option<bool>,
+    show_lightning_invoices: Option<bool>,
 
     // The `unlimited arguments` means that this field will be limited to the
     // total size of the request body. If you want to limit the size of this
@@ -1021,6 +1024,7 @@ pub async fn general_settings_save(
     settings.play_pew = parts.play_pew.unwrap_or(false);
     settings.resolve_nostr_refs = parts.resolve_nostr_refs.unwrap_or(false);
     settings.show_hosted_wallet_ids = parts.show_hosted_wallet_ids.unwrap_or(false);
+    settings.show_lightning_invoices = parts.show_lightning_invoices.unwrap_or(false);
 
     if !settings.hide_boosts {
         settings.hide_boosts_below = None;
@@ -1241,6 +1245,7 @@ pub struct ReportGenerateForm {
     list_streams: Option<bool>,
     list_auto: Option<bool>,
     list_sent: Option<bool>,
+    list_invoices: Option<bool>,
     podcast: String,
     start_date: Option<u64>,
     end_date: Option<u64>,
@@ -1336,6 +1341,11 @@ pub async fn report_generate(
 
     if form.list_sent.is_some() {
         lists.insert("sent");
+        filters.actions.push(ActionType::Invoice);
+    }
+
+    if form.list_invoices.is_some() {
+        lists.insert("boost");
         filters.actions.push(ActionType::Invoice);
     }
 

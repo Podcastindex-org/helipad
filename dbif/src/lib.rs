@@ -16,6 +16,7 @@ pub enum ActionType {
     Boost = 2, // manual boost or boost-a-gram
     Invalid = 3, // invalid action or empty string (set to 3 for legacy reasons)
     Auto = 4, // automated boost
+    Invoice = 5, // lightning invoice w/message
 }
 
 impl ActionType {
@@ -26,6 +27,7 @@ impl ActionType {
             ActionType::Boost => "boost",
             ActionType::Invalid => "invalid",
             ActionType::Auto => "auto",
+            ActionType::Invoice => "invoice",
         }
     }
 
@@ -36,6 +38,7 @@ impl ActionType {
             2 => ActionType::Boost,
             3 => ActionType::Invalid,
             4 => ActionType::Auto,
+            5 => ActionType::Invoice,
             _ => ActionType::Invalid,
         }
     }
@@ -47,6 +50,7 @@ impl ActionType {
             "boost" => ActionType::Boost,
             "invalid" => ActionType::Invalid,
             "auto" => ActionType::Auto,
+            "invoice" => ActionType::Invoice,
             _ => ActionType::Invalid,
         }
     }
@@ -132,6 +136,7 @@ pub struct WebhookRecord {
     pub on_stream: bool,
     pub on_auto: bool,
     pub on_sent: bool,
+    pub on_invoice: bool,
     pub equality: String,
     pub amount: u64,
     pub enabled: bool,
@@ -158,6 +163,7 @@ pub struct SettingsRecord {
     pub custom_pew_file: Option<String>,
     pub resolve_nostr_refs: bool,
     pub show_hosted_wallet_ids: bool,
+    pub show_lightning_invoices: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -441,6 +447,10 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         println!("Hosted wallet id setting added.");
     }
 
+    if conn.execute("ALTER TABLE settings ADD COLUMN show_lightning_invoices integer DEFAULT 1", []).is_ok() {
+        println!("Show lightning invoices setting added.");
+    }
+
     //Create the webhooks table
     match conn.execute(
         "CREATE TABLE IF NOT EXISTS webhooks (
@@ -477,6 +487,10 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
         if conn.execute("UPDATE webhooks SET on_auto = 1 WHERE on_boost = 1", []).is_ok() {
             println!("Webhook on_auto field added and migrated from on_boost");
         }
+    }
+
+    if conn.execute("ALTER TABLE webhooks ADD COLUMN on_invoice integer DEFAULT 0", []).is_ok() {
+        println!("Webhook on_invoice field added");
     }
 
     //Create the jwt_secret table
@@ -702,10 +716,10 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
     bindings.insert(":idx", &strindex);
 
     if invtype == "boost" {
-        conditions.push("action IN (2, 4)");
+        conditions.push("action IN (2, 4, 5)");
     }
     else if invtype == "stream" {
-        conditions.push("action NOT IN (2, 4)");
+        conditions.push("action NOT IN (2, 4, 5)");
     }
 
     let mut action_filters= HashMap::new();
@@ -1232,6 +1246,7 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             on_stream,
             on_auto,
             on_sent,
+            on_invoice,
             equality,
             amount,
             enabled,
@@ -1253,11 +1268,12 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
             on_stream: row.get(4)?,
             on_auto: row.get(5)?,
             on_sent: row.get(6)?,
-            equality: row.get(7)?,
-            amount: row.get(8)?,
-            enabled: row.get(9)?,
-            request_successful: row.get(10).ok(),
-            request_timestamp: row.get(11).ok(),
+            on_invoice: row.get(7)?,
+            equality: row.get(8)?,
+            amount: row.get(9)?,
+            enabled: row.get(10)?,
+            request_successful: row.get(11).ok(),
+            request_timestamp: row.get(12).ok(),
         })
     }).unwrap();
 
@@ -1280,6 +1296,7 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             on_stream,
             on_auto,
             on_sent,
+            on_invoice,
             equality,
             amount,
             enabled,
@@ -1301,11 +1318,12 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
             on_stream: row.get(4)?,
             on_auto: row.get(5)?,
             on_sent: row.get(6)?,
-            equality: row.get(7)?,
-            amount: row.get(8)?,
-            enabled: row.get(9)?,
-            request_successful: row.get(10).ok(),
-            request_timestamp: row.get(11).ok(),
+            on_invoice: row.get(7)?,
+            equality: row.get(8)?,
+            amount: row.get(9)?,
+            enabled: row.get(10)?,
+            request_successful: row.get(11).ok(),
+            request_timestamp: row.get(12).ok(),
         })
     })?;
 
@@ -1330,6 +1348,7 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
             on_stream,
             on_auto,
             on_sent,
+            on_invoice,
             equality,
             amount,
             enabled,
@@ -1337,7 +1356,7 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
             request_timestamp
         )
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
         ON CONFLICT(idx) DO UPDATE SET
             url = excluded.url,
             token = excluded.token,
@@ -1345,6 +1364,7 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
             on_stream = excluded.on_stream,
             on_auto = excluded.on_auto,
             on_sent = excluded.on_sent,
+            on_invoice = excluded.on_invoice,
             equality = excluded.equality,
             amount = excluded.amount,
             enabled = excluded.enabled
@@ -1360,6 +1380,7 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
         webhook.on_stream,
         webhook.on_auto,
         webhook.on_sent,
+        webhook.on_invoice,
         webhook.equality,
         webhook.amount,
         webhook.enabled,
@@ -1407,7 +1428,8 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
              play_pew,
              custom_pew_file,
              resolve_nostr_refs,
-             show_hosted_wallet_ids
+             show_hosted_wallet_ids,
+             show_lightning_invoices
         FROM
             settings
         WHERE
@@ -1425,6 +1447,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             custom_pew_file: row.get(5).ok(),
             resolve_nostr_refs: row.get(6)?,
             show_hosted_wallet_ids: row.get(7)?,
+            show_lightning_invoices: row.get(8)?,
         })
     });
 
@@ -1439,6 +1462,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             custom_pew_file: None,
             resolve_nostr_refs: false,
             show_hosted_wallet_ids: false,
+            show_lightning_invoices: true,
         }),
         Err(e) => Err(Box::new(e)),
     }
@@ -1457,10 +1481,11 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             play_pew,
             custom_pew_file,
             resolve_nostr_refs,
-            show_hosted_wallet_ids
+            show_hosted_wallet_ids,
+            show_lightning_invoices
         )
         VALUES
-            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
         ON CONFLICT(idx) DO UPDATE SET
             show_received_sats = excluded.show_received_sats,
             show_split_percentage = excluded.show_split_percentage,
@@ -1469,7 +1494,8 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             play_pew = excluded.play_pew,
             custom_pew_file = excluded.custom_pew_file,
             resolve_nostr_refs = excluded.resolve_nostr_refs,
-            show_hosted_wallet_ids = excluded.show_hosted_wallet_ids
+            show_hosted_wallet_ids = excluded.show_hosted_wallet_ids,
+            show_lightning_invoices = excluded.show_lightning_invoices
         "#,
         params![
             settings.show_received_sats,
@@ -1480,6 +1506,7 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             settings.custom_pew_file,
             settings.resolve_nostr_refs,
             settings.show_hosted_wallet_ids,
+            settings.show_lightning_invoices,
         ]
     ) {
         Ok(_) => {

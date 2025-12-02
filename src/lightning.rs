@@ -1,6 +1,6 @@
 use crate::podcastindex;
 use data_encoding::HEXLOWER;
-use lnd::lnrpc::lnrpc::{Payment, Invoice, payment::PaymentStatus};
+use lnd::lnrpc::lnrpc::{Payment, Invoice, payment::PaymentStatus, invoice::InvoiceState};
 use lnd::lnrpc::routerrpc::{SendPaymentRequest};
 use serde_json::Value;
 use sha2::{Sha256, Digest};
@@ -343,33 +343,31 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
 }
 
 pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
+    //Initialize a boost record
+    let mut boost = dbif::BoostRecord {
+        index: invoice.add_index,
+        time: invoice.settle_date,
+        value_msat: invoice.amt_paid_sat * 1000,
+        value_msat_total: invoice.amt_paid_sat * 1000,
+        action: 0,
+        sender: "".to_string(),
+        app: "".to_string(),
+        message: "".to_string(),
+        podcast: "".to_string(),
+        episode: "".to_string(),
+        tlv: "".to_string(),
+        remote_podcast: None,
+        remote_episode: None,
+        reply_sent: false,
+        custom_key: None,
+        custom_value: None,
+        payment_info: None,
+    };
 
     for htlc in invoice.htlcs {
-
         if !htlc.custom_records.contains_key(&TLV_PODCASTING20) {
             continue; // ignore invoices without a podcasting 2.0 tlv
         }
-
-        //Initialize a boost record
-        let mut boost = dbif::BoostRecord {
-            index: invoice.add_index,
-            time: invoice.settle_date,
-            value_msat: invoice.amt_paid_sat * 1000,
-            value_msat_total: invoice.amt_paid_sat * 1000,
-            action: 0,
-            sender: "".to_string(),
-            app: "".to_string(),
-            message: "".to_string(),
-            podcast: "".to_string(),
-            episode: "".to_string(),
-            tlv: "".to_string(),
-            remote_podcast: None,
-            remote_episode: None,
-            reply_sent: false,
-            custom_key: None,
-            custom_value: None,
-            payment_info: None,
-        };
 
         // Parse boost and custodial wallet TLVs
         for (key, val) in htlc.custom_records {
@@ -385,6 +383,19 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
             }
         }
 
+        return Some(boost);
+    }
+
+    if invoice.state != InvoiceState::Settled as i32 {
+        return None; // invoice hasn't been fulfilled yet
+    }
+
+    // Use what we have for a "Lightning Invoice" boost
+    if !invoice.memo.is_empty() {
+        boost.action = 5;
+        boost.app = "Lightning Invoice".to_string();
+        boost.sender = "Lightning Invoice".to_string();
+        boost.message = invoice.memo;
         return Some(boost);
     }
 
