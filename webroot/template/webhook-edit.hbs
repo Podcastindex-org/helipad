@@ -69,6 +69,11 @@
           <input id="edit-wh-on-sent" name="on_sent" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_sent}} checked{{/if}}>
           <label class="form-check-label" for="edit-wh-on-sent">New sent boosts</label>
         </div>
+
+        <div class="form-check">
+          <input id="edit-wh-on-invoice" name="on_invoice" type="checkbox" class="form-check-input" value="true"{{#if webhook.on_invoice}} checked{{/if}}>
+          <label class="form-check-label" for="edit-wh-on-invoice">Lightning invoices</label>
+        </div>
       </div>
     </div>
     <div class="modal-footer">

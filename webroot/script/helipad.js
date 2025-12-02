@@ -109,6 +109,10 @@ $(document).ready(function () {
                 return; // boost amount lower than minimum
             }
 
+            if (!settings.show_lightning_invoices && boostAction === 5) {
+                return; // lightning invoices hidden
+            }
+
             try {
                 boostTlv = JSON.parse(element.tlv)
                 boostReplyAddress = boostTlv.reply_address;
