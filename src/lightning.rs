@@ -343,6 +343,10 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
 }
 
 pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
+    if invoice.state != InvoiceState::Settled as i32 {
+        return None; // invoice hasn't been fulfilled yet
+    }
+
     //Initialize a boost record
     let mut boost = dbif::BoostRecord {
         index: invoice.add_index,
@@ -386,8 +390,8 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
         return Some(boost);
     }
 
-    if invoice.state != InvoiceState::Settled as i32 {
-        return None; // invoice hasn't been fulfilled yet
+    if invoice.payment_request.is_empty() {
+        return None; // unrelated keysend/amp payment
     }
 
     // Use what we have for a "Lightning Invoice" boost
