@@ -475,7 +475,19 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadc
 }
 
 async fn process_invoice(invoice: &Invoice, remote_cache: &mut podcastindex::GuidCache, db_filepath: &String, ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>) {
-    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), remote_cache).await;
+    let settings = dbif::load_settings_from_db(db_filepath).unwrap_or_else(|_| dbif::SettingsRecord {
+        show_received_sats: false,
+        show_split_percentage: false,
+        hide_boosts: false,
+        hide_boosts_below: None,
+        play_pew: true,
+        custom_pew_file: None,
+        resolve_nostr_refs: false,
+        show_hosted_wallet_ids: false,
+        show_lightning_invoices: true,
+        fetch_rss_payments: true,
+    });
+    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), remote_cache, settings.fetch_rss_payments).await;
 
     if let Some(boost) = parsed {
         //Give some output

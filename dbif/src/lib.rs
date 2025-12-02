@@ -164,6 +164,7 @@ pub struct SettingsRecord {
     pub resolve_nostr_refs: bool,
     pub show_hosted_wallet_ids: bool,
     pub show_lightning_invoices: bool,
+    pub fetch_rss_payments: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -449,6 +450,10 @@ pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
 
     if conn.execute("ALTER TABLE settings ADD COLUMN show_lightning_invoices integer DEFAULT 1", []).is_ok() {
         println!("Show lightning invoices setting added.");
+    }
+
+    if conn.execute("ALTER TABLE settings ADD COLUMN fetch_rss_payments integer DEFAULT 1", []).is_ok() {
+        println!("Fetch RSS payments setting added.");
     }
 
     //Create the webhooks table
@@ -1429,7 +1434,8 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
              custom_pew_file,
              resolve_nostr_refs,
              show_hosted_wallet_ids,
-             show_lightning_invoices
+             show_lightning_invoices,
+             fetch_rss_payments
         FROM
             settings
         WHERE
@@ -1448,6 +1454,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             resolve_nostr_refs: row.get(6)?,
             show_hosted_wallet_ids: row.get(7)?,
             show_lightning_invoices: row.get(8)?,
+            fetch_rss_payments: row.get(9).unwrap_or(true),
         })
     });
 
@@ -1463,6 +1470,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
             resolve_nostr_refs: false,
             show_hosted_wallet_ids: false,
             show_lightning_invoices: true,
+            fetch_rss_payments: true,
         }),
         Err(e) => Err(Box::new(e)),
     }
@@ -1482,10 +1490,11 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             custom_pew_file,
             resolve_nostr_refs,
             show_hosted_wallet_ids,
-            show_lightning_invoices
+            show_lightning_invoices,
+            fetch_rss_payments
         )
         VALUES
-            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         ON CONFLICT(idx) DO UPDATE SET
             show_received_sats = excluded.show_received_sats,
             show_split_percentage = excluded.show_split_percentage,
@@ -1495,7 +1504,8 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             custom_pew_file = excluded.custom_pew_file,
             resolve_nostr_refs = excluded.resolve_nostr_refs,
             show_hosted_wallet_ids = excluded.show_hosted_wallet_ids,
-            show_lightning_invoices = excluded.show_lightning_invoices
+            show_lightning_invoices = excluded.show_lightning_invoices,
+            fetch_rss_payments = excluded.fetch_rss_payments
         "#,
         params![
             settings.show_received_sats,
@@ -1507,6 +1517,7 @@ pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Resu
             settings.resolve_nostr_refs,
             settings.show_hosted_wallet_ids,
             settings.show_lightning_invoices,
+            settings.fetch_rss_payments,
         ]
     ) {
         Ok(_) => {

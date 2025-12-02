@@ -9,6 +9,7 @@ use std::fs;
 use std::error::Error;
 use rand::RngCore;
 use serde::{Serialize, Deserialize, Deserializer};
+use urlencoding::decode as url_decode;
 
 // TLV keys (see https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md)
 pub const TLV_PODCASTING20: u64 = 7629169;
@@ -270,7 +271,32 @@ pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key
     Err(Box::new(BoostError("Payment timed out".into())))
 }
 
+fn map_action_to_code(action: &str) -> u8 {
+    dbif::ActionType::from_str(action) as u8
+}
 
+async fn populate_remote_guids(
+    boost: &mut dbif::BoostRecord,
+    remote_feed_guid: Option<String>,
+    remote_item_guid: Option<String>,
+    remote_cache: &mut podcastindex::GuidCache,
+) {
+    let feed_guid = remote_feed_guid.unwrap_or_default();
+    let item_guid = remote_item_guid.unwrap_or_default();
+
+    if !feed_guid.is_empty() {
+        if !item_guid.is_empty() {
+            if let Ok(guid) = remote_cache.get(feed_guid.clone(), item_guid).await {
+                boost.remote_podcast = guid.podcast;
+                boost.remote_episode = guid.episode;
+            }
+        } else {
+            // no free api to look up just the feed guid
+            boost.remote_podcast = Some(feed_guid);
+            boost.remote_episode = None;
+        }
+    }
+}
 
 pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote_cache: &mut podcastindex::GuidCache) {
     let tlv = std::str::from_utf8(val).unwrap();
@@ -281,9 +307,9 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
     let json_result = serde_json::from_str::<RawBoost>(tlv);
     match json_result {
         Ok(rawboost) => {
-            //Determine an action type for later filtering ability
+            // Determine an action type for later filtering ability
             if rawboost.action.is_some() {
-                boost.action = dbif::ActionType::from_str(rawboost.action.unwrap().as_str()) as u8;
+                boost.action = map_action_to_code(&rawboost.action.unwrap());
             }
 
             //Was a sender name given in the tlv?
@@ -316,25 +342,13 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
                 boost.value_msat_total = rawboost.value_msat_total.unwrap() as i64;
             }
 
-            //Fetch podcast/episode name if remote feed/item guid present
-            let remote_feed_guid = rawboost.remote_feed_guid.unwrap_or_default();
-            let remote_item_guid = rawboost.remote_item_guid.unwrap_or_default();
-
-            if !remote_feed_guid.is_empty() {
-                if !remote_item_guid.is_empty() {
-                    let episode_guid = remote_cache.get(remote_feed_guid, remote_item_guid).await;
-
-                    if let Ok(guid) = episode_guid {
-                        boost.remote_podcast = guid.podcast;
-                        boost.remote_episode = guid.episode;
-                    }
-                }
-                else {
-                    // no free api to look up just the feed guid
-                    boost.remote_podcast = Some(remote_feed_guid);
-                    boost.remote_episode = None;
-                }
-            }
+            // Fetch podcast/episode name if remote feed/item GUID present
+            populate_remote_guids(
+                boost,
+                rawboost.remote_feed_guid,
+                rawboost.remote_item_guid,
+                remote_cache,
+            ).await;
         }
         Err(e) => {
             eprintln!("{}", e);
@@ -342,7 +356,7 @@ pub async fn parse_podcast_tlv(boost: &mut dbif::BoostRecord, val: &[u8], remote
     }
 }
 
-pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
+pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache, fetch_rss_payments: bool) -> Option<dbif::BoostRecord> {
     //Initialize a boost record
     let mut boost = dbif::BoostRecord {
         index: invoice.add_index,
@@ -390,8 +404,21 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
         return None; // invoice hasn't been fulfilled yet
     }
 
-    // Use what we have for a "Lightning Invoice" boost
-    if !invoice.memo.is_empty() {
+    // If the memo field has the rss::payment:: marker, grab the boost info from its url
+    if fetch_rss_payments && invoice.memo.contains("rss::payment::") {
+        let url = parse_rss_payment_url(&invoice.memo);
+
+        if !url.is_empty() {
+            if let Err(e) = load_from_rss_payment_url(&url, &mut boost, remote_cache).await {
+                eprintln!("Error loading from RSS payment URL: {}", e);
+            } else {
+                return Some(boost);
+            }
+        }
+    }
+
+    // Only assign action = 5 for regular invoices (not keysend/amp) with a memo attached
+    if !invoice.memo.is_empty() && !invoice.payment_request.is_empty() {
         boost.action = 5;
         boost.app = "Lightning Invoice".to_string();
         boost.sender = "Lightning Invoice".to_string();
@@ -471,4 +498,111 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
     }
 
     None
+}
+
+
+#[derive(Deserialize, Debug)]
+pub struct RssPayment {
+    #[serde(default = "d_blank")]
+    action: Option<String>, // String("STREAM"),
+
+    #[serde(default = "d_blank")]
+    app_name: Option<String>, // String("Fountain"),
+
+    #[serde(default = "d_blank")]
+    feed_title: Option<String>, // String("Podcasting 2.0"),
+
+    #[serde(default = "d_blank")]
+    item_title: Option<String>, // String("Episode 241: RSS NutJobs"),
+
+    #[serde(default = "d_blank")]
+    message: Option<String>, // Null,
+
+    #[serde(default = "d_blank")]
+    remote_feed_guid: Option<String>, // Null,
+
+    #[serde(default = "d_blank")]
+    remote_item_guid: Option<String>, // Null,
+
+    #[serde(default = "d_blank")]
+    sender_name: Option<String>, // String("rpodcast@fountain.fm"),
+
+    #[serde(default = "d_zero", deserialize_with = "de_optional_string_or_number")]
+    value_msat_total: Option<u64>, // Number(20000),
+}
+
+fn parse_rss_payment_url(memo: &str) -> String {
+    let parts: Vec<&str> = memo.split_whitespace().collect();
+
+    for (i, part) in parts.iter().enumerate() {
+        if part.contains("rss::payment::") && i + 1 < parts.len() {
+            return parts[i + 1].to_string();
+        }
+    }
+
+    String::new()
+}
+
+async fn load_from_rss_payment_url(url: &str, boost: &mut dbif::BoostRecord, remote_cache: &mut podcastindex::GuidCache) -> Result<(), Box<dyn Error>> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()?;
+
+    let response = client
+        .head(url)
+        .send()
+        .await?;
+
+    let x_rss_payment = response
+        .headers()
+        .get("x-rss-payment")
+        .ok_or(Box::new(BoostError("RSS Payment header not found".into())))?;
+
+    let x_rss_payment_value = x_rss_payment.to_str()?;
+    let decoded = url_decode(x_rss_payment_value).expect("UTF-8");
+    println!("X-RSS-Payment: {}", decoded);
+
+    let rss_payment: RssPayment = serde_json::from_str(&decoded)?;
+    println!("RSS Payment: {:#?}", rss_payment);
+
+    boost.tlv = decoded.to_string();
+
+    // Populate boost record from RSS payment data
+    if let Some(action) = rss_payment.action {
+        boost.action = map_action_to_code(&action.to_lowercase());
+    }
+
+    if let Some(sender_name) = rss_payment.sender_name {
+        boost.sender = sender_name;
+    }
+
+    if let Some(message) = rss_payment.message {
+        boost.message = message;
+    }
+
+    if let Some(app_name) = rss_payment.app_name {
+        boost.app = app_name;
+    }
+
+    if let Some(feed_title) = rss_payment.feed_title {
+        boost.podcast = feed_title;
+    }
+
+    if let Some(item_title) = rss_payment.item_title {
+        boost.episode = item_title;
+    }
+
+    if let Some(value_msat_total) = rss_payment.value_msat_total {
+        boost.value_msat_total = value_msat_total as i64;
+    }
+
+    // Fetch podcast/episode name if remote feed/item GUID present
+    populate_remote_guids(
+        boost,
+        rss_payment.remote_feed_guid,
+        rss_payment.remote_item_guid,
+        remote_cache,
+    ).await;
+
+    Ok(())
 }
