@@ -368,9 +368,6 @@ async fn main() {
     let binding = format!("0.0.0.0:{}", &listen_port);
     let listener = tokio::net::TcpListener::bind(&binding).await.unwrap();
 
-    println!("\nHelipad is listening on http://{}", binding);
-    axum::serve(listener, app).await.unwrap();
-
     //If a "run as" user is set in the "HELIPAD_RUN_AS" environment variable, then switch to that user
     //and drop root privileges after we've bound to the low range socket
     match env::var("HELIPAD_RUNAS_USER") {
@@ -388,6 +385,9 @@ async fn main() {
             eprintln!("ALERT: Use the HELIPAD_RUNAS_USER env var to avoid running as root.");
         }
     }
+
+    println!("\nHelipad is listening on http://{}", binding);
+    axum::serve(listener, app).await.unwrap();
 }
 
 
