@@ -104,6 +104,14 @@ impl BoostRecord {
     pub fn action_name(&self) -> String {
         ActionType::from_u8(self.action).as_str().to_string()
     }
+
+    // Returns the name of the action for the list
+    pub fn list_type(&self) -> String {
+        match self.action_name().as_str() {
+            "boost" | "auto" | "invoice" => "boost",
+            _ => "stream", // everything else goes into the stream list
+        }.to_string()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

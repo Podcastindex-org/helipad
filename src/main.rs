@@ -488,7 +488,7 @@ async fn process_invoice(invoice: &Invoice, remote_cache: &mut podcastindex::Gui
         }
 
         match ws_tx.send(WebSocketEvent(
-            boost.action_name(),
+            boost.list_type(),
             serde_json::to_value(&boost).unwrap()
         )) {
             Ok(_) => println!("WebSocket event sent."),
