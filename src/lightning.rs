@@ -1,4 +1,5 @@
 use crate::podcastindex;
+use crate::lnaddress::{LnAddress, KeysendAddress, LnurlpAddress};
 use data_encoding::HEXLOWER;
 use lnd::lnrpc::lnrpc::{Payment, Invoice, payment::PaymentStatus, invoice::InvoiceState};
 use lnd::lnrpc::routerrpc::{SendPaymentRequest};
@@ -8,7 +9,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::error::Error;
 use rand::RngCore;
-use serde::{Serialize, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer};
 
 // TLV keys (see https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md)
 pub const TLV_PODCASTING20: u64 = 7629169;
@@ -87,35 +88,6 @@ fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) -> R
     )
 }
 
-
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct KeysendAddressResponse {
-    status: String,
-    tag: String,
-    pubkey: String,
-    custom_data: Vec<KeysendAddressCustomData>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct KeysendAddressCustomData {
-    custom_key: String,
-    custom_value: String,
-}
-
-#[derive(Debug)]
-pub struct KeysendAddressError(String);
-
-impl std::fmt::Display for KeysendAddressError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "There is an error: {}", self.0)
-    }
-}
-
-impl std::error::Error for KeysendAddressError {}
-
 #[derive(Debug)]
 pub struct BoostError(String);
 
@@ -157,105 +129,92 @@ pub async fn connect_to_lnd(node_address: &str, cert_path: &str, macaroon_path: 
     lightning.ok()
 }
 
-pub async fn resolve_keysend_address(address: &str) -> Result<KeysendAddressResponse, Box<dyn Error>> {
-    if !address.contains('@') {
-        return Err(Box::new(KeysendAddressError("Invalid keysend address".to_string())));
+
+async fn create_boost_request(addr: LnAddress, sats: u64, tlv: Value) -> Result<SendPaymentRequest, Box<dyn Error>> {
+    // figure out the destination pubkey/lnaddress
+    match addr {
+        LnAddress::Keysend(keysend) => {
+            create_keysend_request(keysend, sats, tlv)
+        }
+        LnAddress::Lnurlp(lnurlp) => {
+            create_bolt11_request(lnurlp, sats, tlv).await
+        }
+        LnAddress::None => Err(Box::new(BoostError("Destination not found".into())) as Box<dyn Error>),
     }
-
-    if !email_address::EmailAddress::is_valid(address) {
-        return Err(Box::new(KeysendAddressError("Invalid keysend address".to_string())));
-    }
-
-    let parts: Vec<&str> = address.split('@').collect();
-
-    if parts.len() != 2 {
-        return Err(Box::new(KeysendAddressError("Invalid keysend address".to_string())));
-    }
-
-    let url = format!("https://{}/.well-known/keysend/{}", parts[1], parts[0]);
-    let response = reqwest::get(url.clone()).await?.text().await?;
-    let data: KeysendAddressResponse = serde_json::from_str(&response)?;
-
-    print!("Keysend address {}: pub_key={}", address, data.pubkey);
-
-    for item in &data.custom_data {
-        print!(" custom_key={}, custom_value={}", item.custom_key, item.custom_value);
-    }
-
-    Ok(data)
 }
 
-pub async fn send_boost(mut lightning: lnd::Lnd, destination: String, custom_key: Option<u64>, custom_value: Option<String>, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error>> {
+fn create_keysend_request(addr: KeysendAddress, sats: u64, tlv: Value) -> Result<SendPaymentRequest, Box<dyn Error>> {
     // thanks to BrianOfLondon and Mostro for keysend details:
     // https://peakd.com/@brianoflondon/lightning-keysend-is-strange-and-how-to-send-keysend-payment-in-lightning-with-the-lnd-rest-api-via-python
     // https://github.com/MostroP2P/mostro/blob/52a4f86c3942c26bd42dc55f1e53db5da9f7542b/src/lightning/mod.rs#L18
 
-    let recipient_pubkey: String;
-    let mut recipient_custom_data: HashMap<u64, String> = HashMap::new();
-
-    // convert keysend address into pub_key/custom keyvalue format
-    if destination.contains('@') {
-        let ln_info = resolve_keysend_address(&destination).await?;
-
-        recipient_pubkey = ln_info.pubkey;
-
-        for item in ln_info.custom_data {
-            let ckey_u64 = item.custom_key.parse::<u64>()?;
-
-            recipient_custom_data.insert(
-                ckey_u64,
-                item.custom_value.clone()
-            );
-        }
-    }
-    else {
-        recipient_pubkey = destination;
-
-        if let Some(ckey) = custom_key {
-            if let Some(cvalue) = custom_value {
-                recipient_custom_data.insert(ckey, cvalue);
-            }
-        }
-    }
-
     // convert pub key hash to raw bytes
-    let raw_pubkey = HEXLOWER.decode(recipient_pubkey.as_bytes()).unwrap();
+    let raw_pubkey = HEXLOWER.decode(addr.pubkey.as_bytes())?;
 
     // generate 32 random bytes for pre_image
     let mut pre_image = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut pre_image);
 
     // and convert to sha256 hash
-    let mut hasher = Sha256::new();
-    hasher.update(pre_image);
-    let payment_hash = hasher.finalize();
+    let payment_hash = Sha256::digest(&pre_image);
 
     // TLV custom records
     // https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md
     let mut dest_custom_records = HashMap::new();
     let tlv_json = serde_json::to_string_pretty(&tlv).unwrap();
 
-    dest_custom_records.insert(TLV_KEYSEND, pre_image.to_vec());
     dest_custom_records.insert(TLV_PODCASTING20, tlv_json.as_bytes().to_vec());
+    dest_custom_records.insert(TLV_KEYSEND, pre_image.to_vec());
 
-    for (key, value) in recipient_custom_data {
-        dest_custom_records.insert(key, value.as_bytes().to_vec());
+    if let (Some(custom_key), Some(custom_value)) = (addr.custom_key, addr.custom_value) {
+        dest_custom_records.insert(custom_key, custom_value.as_bytes().to_vec());
     }
 
-    // assemble the lnd payment
-    let req = SendPaymentRequest {
-        dest: raw_pubkey.clone(),
+    Ok(SendPaymentRequest {
+        dest: raw_pubkey,
         amt: sats as i64,
         payment_hash: payment_hash.to_vec(),
         dest_custom_records,
         timeout_seconds: 60,
         ..Default::default()
+    })
+}
+
+async fn create_bolt11_request(addr: LnurlpAddress, sats: u64, tlv: Value) -> Result<SendPaymentRequest, Box<dyn Error>> {
+    let sender_name = tlv["sender_name"].as_str().unwrap_or_default().to_string();
+    let comment = tlv["message"].as_str().unwrap_or_default().to_string();
+
+    let payment_request = match addr.request_invoice(sats, comment, sender_name).await? {
+        Some(payment_request) => payment_request,
+        None => return Err(Box::new(BoostError("Payment request not found".into()))),
     };
 
-    println!("Sending payment to: {:#?}", req);
+    // TLV custom records
+    // https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md
+    let mut dest_custom_records = HashMap::new();
+    let tlv_json = serde_json::to_string_pretty(&tlv).unwrap();
+
+    dest_custom_records.insert(TLV_PODCASTING20, tlv_json.as_bytes().to_vec());
+
+    Ok(SendPaymentRequest {
+        payment_request,
+        dest_custom_records,
+        timeout_seconds: 60,
+        ..Default::default()
+    })
+}
+
+pub async fn send_boost(lightning: lnd::Lnd, address: String, custom_key: Option<u64>, custom_value: Option<String>, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error>> {
+    let dest = LnAddress::resolve(address, custom_key, custom_value).await?;
+    let req = create_boost_request(dest, sats, tlv).await?;
+    send_payment(lightning, req).await
+}
+
+pub async fn send_payment(mut lightning: lnd::Lnd, payment_request: SendPaymentRequest) -> Result<Payment, Box<dyn Error>> {
+    println!("Sending payment to: {:#?}", payment_request);
 
     // send payment using send_payment_v2 and get payment stream
-    let mut payment_stream = lightning.send_payment_v2(req).await?;
+    let mut payment_stream = lightning.send_payment_v2(payment_request).await?;
 
     // wait for payment to succeed or fail
     while let Some(payment_update) = payment_stream.message().await? {

@@ -42,6 +42,7 @@ extern crate configure_me;
 mod handler;
 mod lightning;
 mod podcastindex;
+mod lnaddress;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
