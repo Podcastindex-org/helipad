@@ -43,6 +43,8 @@ mod handler;
 mod lightning;
 mod podcastindex;
 mod lnaddress;
+mod boost;
+mod deserializers;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
@@ -476,7 +478,7 @@ async fn lnd_subscribe_invoices(helipad_config: HelipadConfig, ws_tx: Arc<broadc
 }
 
 async fn process_invoice(invoice: &Invoice, remote_cache: &mut podcastindex::GuidCache, db_filepath: &String, ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>) {
-    let parsed = lightning::parse_boost_from_invoice(invoice.clone(), remote_cache).await;
+    let parsed = boost::parse_boost_from_invoice(invoice.clone(), remote_cache).await;
 
     if let Some(boost) = parsed {
         //Give some output
@@ -589,7 +591,7 @@ async fn lnd_poller(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sender<
         match lnd::Lnd::list_payments(&mut lightning, false, current_payment, 500, false, false, 0, 0).await {
             Ok(response) => {
                 for payment in response.payments {
-                    let parsed = lightning::parse_boost_from_payment(payment.clone(), &mut remote_cache).await;
+                    let parsed = boost::parse_boost_from_payment(payment.clone(), &mut remote_cache).await;
 
                     if let Some(boost) = parsed {
                         //Give some output

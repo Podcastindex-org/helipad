@@ -14,7 +14,7 @@ use axum_extra::{
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 
 use chrono::{DateTime, TimeDelta, Utc};
-use crate::{AppState, WebhookPayload, lightning, podcastindex};
+use crate::{AppState, WebhookPayload, lightning, podcastindex, boost};
 use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord, ActionType};
 use handlebars::{Handlebars, JsonRender};
 use jsonwebtoken::{Algorithm, Header, DecodingKey, EncodingKey, Validation};
@@ -622,7 +622,7 @@ pub async fn api_v1_reply(
 
     let mut cache = podcastindex::GuidCache::new(1);
 
-    let mut boost = match lightning::parse_boost_from_payment(payment, &mut cache).await {
+    let mut boost = match boost::parse_boost_from_payment(payment, &mut cache).await {
         Some(boost) => boost,
         None => {
             eprintln!("** Error parsing sent boost");
