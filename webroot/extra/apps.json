@@ -114,5 +114,9 @@
     "lightning invoice": {
         "icon": "lightning",
         "url": "https://lightning.network/"
+    },
+    "v4vmusic-com": {
+        "icon": "v4vmusic",
+        "url": "https://v4vmusic.com"
     }
 }
