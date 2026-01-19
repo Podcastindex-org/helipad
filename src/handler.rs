@@ -1465,7 +1465,7 @@ pub async fn report_generate(
     let mut csv = String::new();
 
     //CSV column name header
-    let mut headers = "index,type,time,timezone,value_msat,value_sat,value_msat_total,value_sat_total,action,action_name,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value".to_string();
+    let mut headers = "index,type,time,timezone,value_sat,value_sat_total,value_msat,value_msat_total,action,action_name,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value".to_string();
 
     if btc_prices.is_some() {
         headers.push_str(",btc_close,value_usd,value_usd_total");
@@ -1506,12 +1506,12 @@ pub async fn report_generate(
 
             //Translate to sats
             let mut value_sat = 0;
-            if boost.value_msat > 1000 {
+            if boost.value_msat >= 1000 {
                 value_sat = boost.value_msat / 1000;
             }
 
             let mut value_sat_total = 0;
-            if boost.value_msat_total > 1000 {
+            if boost.value_msat_total >= 1000 {
                 value_sat_total = boost.value_msat_total / 1000;
             }
 
@@ -1523,10 +1523,10 @@ pub async fn report_generate(
                     list,
                     boost_time,
                     boost_timezone,
-                    boost.value_msat,
                     value_sat,
-                    boost.value_msat_total,
                     value_sat_total,
+                    boost.value_msat,
+                    boost.value_msat_total,
                     boost.action,
                     boost.action_name(),
                     BoostRecord::escape_for_csv(boost.sender),
@@ -1646,7 +1646,7 @@ pub async fn csv_export_boosts(
             let mut csv = String::new();
 
             //CSV column name header
-            csv.push_str("count,index,time,timezone,value_msat,value_sat,value_msat_total,value_sat_total,action,action_name,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value\n");
+            csv.push_str("count,index,time,timezone,value_sat,value_sat_total,value_msat,value_msat_total,action,action_name,sender,app,message,podcast,episode,remote_podcast,remote_episode,custom_key,custom_value\n");
 
             //Iterate the boost set
             let mut count: u64 = 1;
@@ -1658,11 +1658,11 @@ pub async fn csv_export_boosts(
 
                 //Translate to sats
                 let mut value_sat = 0;
-                if boost.value_msat > 1000 {
+                if boost.value_msat >= 1000 {
                     value_sat = boost.value_msat / 1000;
                 }
                 let mut value_sat_total = 0;
-                if boost.value_msat_total > 1000 {
+                if boost.value_msat_total >= 1000 {
                     value_sat_total = boost.value_msat_total / 1000;
                 }
 
@@ -1674,10 +1674,10 @@ pub async fn csv_export_boosts(
                         boost.index,
                         boost_time,
                         boost_timezone,
-                        boost.value_msat,
                         value_sat,
-                        boost.value_msat_total,
                         value_sat_total,
+                        boost.value_msat,
+                        boost.value_msat_total,
                         boost.action,
                         boost.action_name(),
                         BoostRecord::escape_for_csv(boost.sender),
