@@ -494,7 +494,15 @@ async fn lnd_subscribe_invoices(
     //Subscribe to invoices
     println!("Subscribing to new invoices from LND...");
     loop {
-        let mut invoices = lightning.subscribe_invoices(0, 0).await.unwrap();
+        let invoices = lightning.subscribe_invoices(0, 0).await;
+
+        if let Err(e) = invoices {
+            eprintln!("Error subscribing to invoices: {:#?}", e);
+            tokio::time::sleep(tokio::time::Duration::from_millis(60000)).await;
+            continue;
+        }
+
+        let mut invoices = invoices.unwrap();
 
         while let Some(invoice) = invoices.next().await {
             println!("Invoice: {:#?}", invoice);
