@@ -82,8 +82,10 @@ pub async fn fetch_payment_metadata(comment: &str) -> Result<Option<RawBoost>, B
 }
 
 pub async fn fetch_rss_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Error>> {
+    let app_version = env!("CARGO_PKG_VERSION");
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
+        .user_agent(format!("Helipad/{}", app_version))
         .build()?;
 
     let response = client
@@ -122,8 +124,10 @@ pub async fn fetch_rss_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Er
  * Fetch Podcast Guru payment metadata via HTTP GET request
  */
 async fn fetch_podcast_guru_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Error>> {
+    let app_version = env!("CARGO_PKG_VERSION");
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
+        .user_agent(format!("Helipad/{}", app_version))
         .build()?;
 
     let response = client

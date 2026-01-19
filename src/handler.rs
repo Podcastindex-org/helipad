@@ -1001,7 +1001,9 @@ pub async fn webhook_settings_test(
     }
 
     // Build HTTP client
-    let client = match reqwest::Client::builder().redirect(Policy::limited(5)).build() {
+    let client = match reqwest::Client::builder()
+        .redirect(Policy::limited(5))
+        .build() {
         Ok(cli) => cli,
         Err(e) => {
             eprintln!("** Unable to build reqwest client: {}", e);
@@ -1356,10 +1358,12 @@ pub async fn fetch_btc_prices(start_date: u64, end_date: u64) -> Result<Option<B
     let days = (time_diff / 86400) + 1; // Convert seconds to days and add 1 to include end date
     let timespan = format!("{}days", days);
 
+    let app_version = env!("CARGO_PKG_VERSION");
     let client = reqwest::Client::new();
 
     // Use Blockchain.com's market price chart API
     let response = client.get("https://api.blockchain.info/charts/market-price")
+        .header(USER_AGENT, format!("Helipad/{}", app_version))
         .query(&[
             ("timespan", timespan.as_str()),
             ("format", "json")

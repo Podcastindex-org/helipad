@@ -132,7 +132,14 @@ impl LnurlpAddress {
 
         println!("Lnurlp Callback URL: {}", url);
 
-        let text = reqwest::get(&url).await?.text().await?;
+        let app_version = env!("CARGO_PKG_VERSION");
+        let client = reqwest::Client::new();
+        let text = client.get(&url)
+            .header("User-Agent", format!("Helipad/{}", app_version))
+            .send()
+            .await?
+            .text()
+            .await?;
         let data: LnurlpCallbackResponse = serde_json::from_str(&text)?;
 
         println!("Lnurlp Callback: {:#?}", data);
@@ -211,7 +218,12 @@ fn parse_lnaddress(address: &str) -> Result<(&str, &str), Box<dyn Error>> {
 }
 
 async fn fetch_endpoint(url: &str) -> Result<Option<String>, Box<dyn Error>> {
-    let response = reqwest::get(url).await?;
+    let app_version = env!("CARGO_PKG_VERSION");
+    let client = reqwest::Client::new();
+    let response = client.get(url)
+        .header("User-Agent", format!("Helipad/{}", app_version))
+        .send()
+        .await?;
 
     // Return None for 404 (endpoint doesn't exist)
     if response.status() == reqwest::StatusCode::NOT_FOUND {
