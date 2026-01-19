@@ -464,37 +464,10 @@ async fn lnd_subscribe_invoices(
     let mut remote_cache = podcastindex::GuidCache::new(REMOTE_GUID_CACHE_SIZE);
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
 
-    //Get a list of invoices
-    println!("Getting existing invoices from LND...");
-    loop {
-        let mut updated = false;
-
-        match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false, 0, 0).await {
-            Ok(response) => {
-                for invoice in response.invoices {
-                    let fetch_metadata = false; // don't fetch metadata for old invoices
-                    process_invoice(&invoice, &mut remote_cache, &db_filepath, fetch_metadata, &ws_tx).await;
-                    current_index = invoice.add_index;
-                    updated = true;
-                }
-            }
-            Err(e) => {
-                eprintln!("lnd::Lnd::list_invoices failed: {}", e);
-            }
-        }
-
-        if !updated {
-            break;
-        }
-    }
-
-    // Make sure we are tracking our position properly
-    println!("Current invoice index: {}", current_index);
-
     //Subscribe to invoices
-    println!("Subscribing to new invoices from LND...");
     loop {
-        let invoices = lightning.subscribe_invoices(0, 0).await;
+        println!("Subscribing to LND invoices starting at index: {}", current_index);
+        let invoices = lightning.subscribe_invoices(current_index, 0).await;
 
         if let Err(e) = invoices {
             eprintln!("Error subscribing to invoices: {:#?}", e);
@@ -506,16 +479,20 @@ async fn lnd_subscribe_invoices(
 
         while let Some(invoice) = invoices.next().await {
             println!("Invoice: {:#?}", invoice);
+
             match invoice {
                 Ok(invoice) => {
                     let fetch_metadata = settings.read().await.fetch_metadata;
                     process_invoice(&invoice, &mut remote_cache, &db_filepath, fetch_metadata, &ws_tx).await;
+                    current_index = invoice.add_index;
                 }
                 Err(e) => {
                     eprintln!("Error reading from invoice subscription: {:#?}", e);
                     break; // Break inner loop to reconnect
                 }
             }
+
+            println!("Current index: {}", current_index);
         }
 
         // If we get here, the stream ended
