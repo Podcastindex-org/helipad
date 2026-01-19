@@ -493,18 +493,26 @@ async fn lnd_subscribe_invoices(
 
     //Subscribe to invoices
     println!("Subscribing to new invoices from LND...");
-    let mut invoices = lightning.subscribe_invoices(0, 0).await.unwrap();
-    while let Some(invoice) = invoices.next().await {
-        println!("Invoice: {:#?}", invoice);
-        match invoice {
-            Ok(invoice) => {
-                let fetch_metadata = settings.read().await.fetch_metadata;
-                process_invoice(&invoice, &mut remote_cache, &db_filepath, fetch_metadata, &ws_tx).await;
-            }
-            Err(e) => {
-                eprintln!("Error subscribing to invoices: {:#?}", e);
+    loop {
+        let mut invoices = lightning.subscribe_invoices(0, 0).await.unwrap();
+
+        while let Some(invoice) = invoices.next().await {
+            println!("Invoice: {:#?}", invoice);
+            match invoice {
+                Ok(invoice) => {
+                    let fetch_metadata = settings.read().await.fetch_metadata;
+                    process_invoice(&invoice, &mut remote_cache, &db_filepath, fetch_metadata, &ws_tx).await;
+                }
+                Err(e) => {
+                    eprintln!("Error reading from invoice subscription: {:#?}", e);
+                    break; // Break inner loop to reconnect
+                }
             }
         }
+
+        // If we get here, the stream ended
+        eprintln!("Invoice subscription stream ended. Attempting to reconnect...");
+        tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
     }
 }
 
