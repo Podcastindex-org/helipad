@@ -465,6 +465,35 @@ async fn lnd_subscribe_invoices(
     let mut remote_cache = podcastindex::GuidCache::new(REMOTE_GUID_CACHE_SIZE);
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
 
+    //Get a list of invoices for the first run
+    println!("Getting existing invoices from LND...");
+    loop {
+        let mut updated = false;
+
+        match lnd::Lnd::list_invoices(&mut lightning, false, current_index, 500, false, 0, 0).await {
+            Ok(response) => {
+                for invoice in response.invoices {
+                    //Give some output
+                    println!("Invoice: {:#?}", &invoice);
+                    process_invoice(&invoice, &mut remote_cache, &db_filepath, false, &ws_tx).await;
+
+                    current_index = invoice.add_index;
+                    updated = true;
+                }
+            }
+            Err(e) => {
+                eprintln!("lnd::Lnd::list_invoices failed: {}", e);
+            }
+        }
+
+        if !updated {
+            break;
+        }
+    }
+
+    // Make sure we are tracking our position properly
+    println!("Current invoice index: {}", current_index);
+
     //Subscribe to invoices
     loop {
         println!("Subscribing to LND invoices starting at index: {}", current_index);
