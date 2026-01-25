@@ -433,6 +433,7 @@ async fn handle_websocket(mut socket: WebSocket, state: AppState) {
         let json = serde_json::to_string(&msg).unwrap();
         if let Err(e) = socket.send(json.into()).await {
             eprintln!("Error sending message to WebSocket: {}", e);
+            break;
         }
     }
 }
