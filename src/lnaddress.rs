@@ -95,6 +95,15 @@ impl LnurlpAddress {
 
         println!("Lnurlp {}: {:#?}", address, data);
 
+        if data.status != "OK" {
+            if let Some(reason) = data.reason {
+                return Err(format!("Lnurlp error: {}", reason).into());
+            }
+            else {
+                return Err(format!("Lnurlp error: Unknown error").into());
+            }
+        }
+
         Ok(Some(LnurlpAddress {
             comment_allowed: data.comment_allowed,
             callback: data.callback,
@@ -171,7 +180,8 @@ struct KeysendAddressCustomData {
 #[serde(rename_all = "camelCase")]
 struct LnurlpResponse {
     status: String,
-    tag: String,
+    reason: Option<String>,
+    tag: Option<String>,
     #[serde(default)]
     comment_allowed: u32,
     callback: String,
