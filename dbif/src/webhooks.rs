@@ -76,7 +76,7 @@ pub fn create_webhooks_table(conn: &Connection) -> Result<bool, Box<dyn Error>> 
     Ok(true)
 }
 
-pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<Vec<WebhookRecord>, Box<dyn Error>> {
+pub fn get_webhooks_from_db(filepath: &str, enabled: Option<bool>) -> Result<Vec<WebhookRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut webhooks: Vec<WebhookRecord> = Vec::new();
 
@@ -133,7 +133,7 @@ pub fn get_webhooks_from_db(filepath: &String, enabled: Option<bool>) -> Result<
     Ok(webhooks)
 }
 
-pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookRecord, Box<dyn Error>> {
+pub fn load_webhook_from_db(filepath: &str, index: u64) -> Result<WebhookRecord, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let mut stmt = conn.prepare(
@@ -179,7 +179,7 @@ pub fn load_webhook_from_db(filepath: &String, index: u64) -> Result<WebhookReco
     Ok(webhook)
 }
 
-pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<u64, Box<dyn Error>> {
+pub fn save_webhook_to_db(filepath: &str, webhook: &WebhookRecord) -> Result<u64, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let index = if webhook.index > 0 {
@@ -245,7 +245,7 @@ pub fn save_webhook_to_db(filepath: &String, webhook: &WebhookRecord) -> Result<
     Ok(idx)
 }
 
-pub fn set_webhook_last_request(filepath: &String, index: u64, successful: bool, timestamp: i64) -> Result<bool, Box<dyn Error>> {
+pub fn set_webhook_last_request(filepath: &str, index: u64, successful: bool, timestamp: i64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     conn.execute(
@@ -257,7 +257,7 @@ pub fn set_webhook_last_request(filepath: &String, index: u64, successful: bool,
 
 }
 
-pub fn delete_webhook_from_db(filepath: &String, index: u64) -> Result<bool, Box<dyn Error>> {
+pub fn delete_webhook_from_db(filepath: &str, index: u64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     conn.execute(r#"DELETE FROM webhooks WHERE idx = ?1"#, params![index])?;

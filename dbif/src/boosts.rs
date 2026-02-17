@@ -189,7 +189,7 @@ pub fn create_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
 
 
 //Add an invoice to the database
-pub fn add_invoice_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
+pub fn add_invoice_to_db(filepath: &str, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     match conn.execute(
@@ -228,14 +228,14 @@ pub fn add_invoice_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool,
 }
 
 //Set the boost as replied to
-pub fn mark_boost_as_replied(filepath: &String, index: u64) -> Result<bool, Box<dyn Error>> {
+pub fn mark_boost_as_replied(filepath: &str, index: u64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     conn.execute("UPDATE boosts SET reply_sent = 1 WHERE idx = ?1", params![index])?;
     Ok(true)
 }
 
 //Update an existing invoice with new data (e.g., from payment metadata fetch)
-pub fn update_invoice_in_db(filepath: &String, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
+pub fn update_invoice_in_db(filepath: &str, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     match conn.execute(
@@ -283,7 +283,7 @@ pub fn update_invoice_in_db(filepath: &String, boost: &BoostRecord) -> Result<bo
 }
 
 //Get all of the invoices from the database
-pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let mut conditions: Vec<&str> = Vec::new();
@@ -431,7 +431,7 @@ pub fn get_invoices_from_db(filepath: &String, invtype: &str, index: u64, max: u
     Ok(boosts)
 }
 
-pub fn get_single_invoice_from_db(filepath: &String, index: u64, escape_html: bool) -> Result<Option<BoostRecord>, Box<dyn Error>> {
+pub fn get_single_invoice_from_db(filepath: &str, index: u64, escape_html: bool) -> Result<Option<BoostRecord>, Box<dyn Error>> {
     let filters = BoostFilters::new();
     let invoices = get_invoices_from_db(filepath, "", index, 1, true, escape_html, filters)?;
 
@@ -443,17 +443,17 @@ pub fn get_single_invoice_from_db(filepath: &String, index: u64, escape_html: bo
     }
 }
 
-pub fn get_boosts_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_boosts_from_db(filepath: &str, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     get_invoices_from_db(filepath, "boost", index, max, direction, escape_html, filters)
 }
 
 //Get all of the non-boosts from the database
-pub fn get_streams_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_streams_from_db(filepath: &str, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     get_invoices_from_db(filepath, "stream", index, max, direction, escape_html, filters)
 }
 
 //Get the last boost index number from the database
-pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Error>> {
+pub fn get_last_boost_index_from_db(filepath: &str) -> Result<u64, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut boosts: Vec<BoostRecord> = Vec::new();
     let max = 1;
@@ -507,7 +507,7 @@ pub fn get_last_boost_index_from_db(filepath: &String) -> Result<u64, Box<dyn Er
 }
 
 //Get podcasts that received boosts to this node
-pub fn get_podcasts_from_db(filepath: &String) -> Result<Vec<String>, Box<dyn Error>> {
+pub fn get_podcasts_from_db(filepath: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let query = "SELECT DISTINCT podcast FROM boosts WHERE podcast <> '' ORDER BY podcast".to_string();

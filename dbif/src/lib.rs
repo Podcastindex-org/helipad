@@ -29,16 +29,16 @@ impl fmt::Display for HydraError {
 impl Error for HydraError {}
 
 //Connect to the database at the given file location
-fn connect_to_database(init: bool, filepath: &String) -> Result<Connection, Box<dyn Error>> {
-    if let Ok(conn) = Connection::open(filepath.as_str()) {
+fn connect_to_database(init: bool, filepath: &str) -> Result<Connection, Box<dyn Error>> {
+    if let Ok(conn) = Connection::open(filepath) {
         if init {
-            match set_database_file_permissions(filepath.as_str()) {
+            match set_database_file_permissions(filepath) {
                 Ok(_) => {},
                 Err(e) => {
                     eprintln!("{:#?}", e);
                 }
             }
-            println!("Using database file: [{}]", filepath.as_str());
+            println!("Using database file: [{}]", filepath);
         }
         Ok(conn)
     } else {
@@ -92,7 +92,7 @@ fn bind_query_param(stmt: &mut Statement, name: &str, value: &str) -> Result<(),
 }
 
 //Create or update a new database file if needed
-pub fn create_database(filepath: &String) -> Result<bool, Box<dyn Error>> {
+pub fn create_database(filepath: &str) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(true, filepath)?;
 
     create_boosts_table(&conn)?;

@@ -64,7 +64,7 @@ pub fn create_node_info_table(conn: &Connection) -> Result<bool, Box<dyn Error>>
     Ok(true)
 }
 
-pub fn get_node_info_from_db(filepath: &String) -> Result<NodeInfoRecord, Box<dyn Error>> {
+pub fn get_node_info_from_db(filepath: &str) -> Result<NodeInfoRecord, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     //Prepare and execute the query
@@ -101,7 +101,7 @@ pub fn get_node_info_from_db(filepath: &String) -> Result<NodeInfoRecord, Box<dy
 }
 
 //Add an invoice to the database
-pub fn add_node_info_to_db(filepath: &String, info: NodeInfoRecord) -> Result<bool, Box<dyn Error>> {
+pub fn add_node_info_to_db(filepath: &str, info: NodeInfoRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     match conn.execute("
@@ -131,7 +131,7 @@ pub fn add_node_info_to_db(filepath: &String, info: NodeInfoRecord) -> Result<bo
 }
 
 //Set/Get the wallet balance from the database in sats
-pub fn add_wallet_balance_to_db(filepath: &String, balance: i64) -> Result<bool, Box<dyn Error>> {
+pub fn add_wallet_balance_to_db(filepath: &str, balance: i64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     match conn.execute("INSERT INTO node_info (idx, wallet_balance) \
@@ -148,7 +148,7 @@ pub fn add_wallet_balance_to_db(filepath: &String, balance: i64) -> Result<bool,
         }
     }
 }
-pub fn get_wallet_balance_from_db(filepath: &String) -> Result<i64, Box<dyn Error>> {
+pub fn get_wallet_balance_from_db(filepath: &str) -> Result<i64, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     //Prepare and execute the query

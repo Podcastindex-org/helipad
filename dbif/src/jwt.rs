@@ -26,7 +26,7 @@ pub fn create_jwt_secret_table(conn: &Connection) -> Result<bool, Box<dyn Error>
 }
 
 //Get the JWT secret from the database
-pub fn get_or_create_jwt_secret(filepath: &String) -> Result<String, Box<dyn Error>> {
+pub fn get_or_create_jwt_secret(filepath: &str) -> Result<String, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let mut stmt = conn.prepare("SELECT secret FROM jwt_secret WHERE idx = 1")?;
@@ -53,7 +53,7 @@ pub fn get_or_create_jwt_secret(filepath: &String) -> Result<String, Box<dyn Err
 }
 
 //Set the JWT secret in the database
-pub fn set_jwt_secret(filepath: &String, secret: &str) -> Result<(), Box<dyn Error>> {
+pub fn set_jwt_secret(filepath: &str, secret: &str) -> Result<(), Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let timestamp = chrono::Utc::now().timestamp();
 

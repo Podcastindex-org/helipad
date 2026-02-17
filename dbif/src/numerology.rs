@@ -46,7 +46,7 @@ pub fn create_numerology_table(conn: &Connection) -> Result<bool, Box<dyn Error>
     Ok(true)
 }
 
-pub fn get_numerology_from_db(filepath: &String) -> Result<Vec<NumerologyRecord>, Box<dyn Error>> {
+pub fn get_numerology_from_db(filepath: &str) -> Result<Vec<NumerologyRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
     let mut results: Vec<NumerologyRecord> = Vec::new();
 
@@ -84,7 +84,7 @@ pub fn get_numerology_from_db(filepath: &String) -> Result<Vec<NumerologyRecord>
     Ok(results)
 }
 
-pub fn load_numerology_from_db(filepath: &String, index: u64) -> Result<NumerologyRecord, Box<dyn Error>> {
+pub fn load_numerology_from_db(filepath: &str, index: u64) -> Result<NumerologyRecord, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let mut stmt = conn.prepare(
@@ -118,7 +118,7 @@ pub fn load_numerology_from_db(filepath: &String, index: u64) -> Result<Numerolo
     Ok(result)
 }
 
-pub fn save_numerology_to_db(filepath: &String, numero: &NumerologyRecord) -> Result<u64, Box<dyn Error>> {
+pub fn save_numerology_to_db(filepath: &str, numero: &NumerologyRecord) -> Result<u64, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let index = if numero.index > 0 {
@@ -172,7 +172,7 @@ pub fn save_numerology_to_db(filepath: &String, numero: &NumerologyRecord) -> Re
     Ok(idx)
 }
 
-pub fn set_numerology_position_in_db(filepath: &String, index: u64, position: u64) -> Result<bool, Box<dyn Error>> {
+pub fn set_numerology_position_in_db(filepath: &str, index: u64, position: u64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     #[allow(clippy::comparison_chain)]
@@ -216,7 +216,7 @@ pub fn set_numerology_position_in_db(filepath: &String, index: u64, position: u6
     Ok(true)
 }
 
-pub fn renumber_numerology_positions_in_db(filepath: &String) -> Result<bool, Box<dyn Error>> {
+pub fn renumber_numerology_positions_in_db(filepath: &str) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     // renumber all positions
@@ -228,7 +228,7 @@ pub fn renumber_numerology_positions_in_db(filepath: &String) -> Result<bool, Bo
     Ok(true)
 }
 
-pub fn delete_numerology_from_db(filepath: &String, index: u64) -> Result<bool, Box<dyn Error>> {
+pub fn delete_numerology_from_db(filepath: &str, index: u64) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     conn.execute(r#"DELETE FROM numerology WHERE idx = ?1"#, params![index])?;
@@ -238,7 +238,7 @@ pub fn delete_numerology_from_db(filepath: &String, index: u64) -> Result<bool, 
     Ok(true)
 }
 
-pub fn reset_numerology_in_db(filepath: &String) -> Result<bool, Box<dyn Error>> {
+pub fn reset_numerology_in_db(filepath: &str) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     conn.execute(r#"DELETE FROM numerology"#, [])?;

@@ -59,7 +59,7 @@ pub fn create_settings_table(conn: &Connection) -> Result<bool, Box<dyn Error>> 
     Ok(true)
 }
 
-pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dyn Error>> {
+pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let mut stmt = conn.prepare(
@@ -114,7 +114,7 @@ pub fn load_settings_from_db(filepath: &String) -> Result<SettingsRecord, Box<dy
     }
 }
 
-pub fn save_settings_to_db(filepath: &String, settings: &SettingsRecord) -> Result<bool, Box<dyn Error>> {
+pub fn save_settings_to_db(filepath: &str, settings: &SettingsRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     match conn.execute(

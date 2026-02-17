@@ -51,7 +51,7 @@ pub fn create_sent_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error
 }
 
 //Get all of the sent boosts from the database
-pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
+pub fn get_payments_from_db(filepath: &str, index: u64, max: u64, direction: bool, escape_html: bool, filters: BoostFilters) -> Result<Vec<BoostRecord>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let mut conditions: Vec<&str> = Vec::new();
@@ -201,7 +201,7 @@ pub fn get_payments_from_db(filepath: &String, index: u64, max: u64, direction: 
     Ok(boosts)
 }
 
-pub fn get_last_payment_index_from_db(filepath: &String) -> Result<u64, Box<dyn Error>> {
+pub fn get_last_payment_index_from_db(filepath: &str) -> Result<u64, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let mut stmt = conn.prepare("SELECT MAX(idx) FROM sent_boosts")?;
@@ -215,7 +215,7 @@ pub fn get_last_payment_index_from_db(filepath: &String) -> Result<u64, Box<dyn 
 }
 
 //Add a payment (sent boost) to the database
-pub fn add_payment_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
+pub fn add_payment_to_db(filepath: &str, boost: &BoostRecord) -> Result<bool, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let payment_info = match &boost.payment_info {
@@ -283,7 +283,7 @@ pub fn add_payment_to_db(filepath: &String, boost: &BoostRecord) -> Result<bool,
 }
 
 //Get podcasts that were send boosts from this node
-pub fn get_sent_podcasts_from_db(filepath: &String) -> Result<Vec<String>, Box<dyn Error>> {
+pub fn get_sent_podcasts_from_db(filepath: &str) -> Result<Vec<String>, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
     let query = "SELECT DISTINCT podcast FROM sent_boosts WHERE podcast <> '' ORDER BY podcast".to_string();
