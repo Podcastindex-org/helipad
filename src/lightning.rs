@@ -51,6 +51,12 @@ pub async fn connect_to_lnd(node_address: &str, cert_path: &str, macaroon_path: 
     lightning.ok()
 }
 
+pub async fn connect_lnd_or_exit(node_address: &str, cert_path: &str, macaroon_path: &str) -> lnd::Lnd {
+    match connect_to_lnd(node_address, cert_path, macaroon_path).await {
+        Some(lndconn) => lndconn,
+        None => std::process::exit(1),
+    }
+}
 
 async fn create_boost_request(addr: LnAddress, sats: u64, tlv: Value) -> Result<SendPaymentRequest, Box<dyn Error>> {
     // figure out the destination pubkey/lnaddress
