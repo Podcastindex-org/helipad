@@ -76,6 +76,10 @@ $(document).ready(function () {
             },
             success: function (data) {
                 renderBoosts(data, max, scrollToTop, shouldPew);
+
+                if (data.length > 0) {
+                    currentInvoiceIndex = Math.max(currentInvoiceIndex, ...data.map(a => a.index));
+                }
             }
         });
     }
