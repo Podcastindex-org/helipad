@@ -1,0 +1,163 @@
+<thead>
+  <tr>
+    <th></th>
+    <th>Type</th>
+    <th>Filters</th>
+    <th>Effects</th>
+    <th class="text-right">
+    </th>
+  </tr>
+</thead>
+
+<tbody id="trigger-items">
+  {{#each trigger}}
+  <tr class="trigger" data-index="{{ index }}" hx-patch="/settings/triggers/{{ index }}" hx-trigger="move" hx-target="#triggers" style="{{#unless enabled}}color: #555{{/unless}}">
+    <td class="align-middle">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="sort-handle" style="color: dimgray; width: 1rem; cursor: move; user-select: none;">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5" />
+      </svg>
+    </td>
+    <td class="align-middle">
+      {{#if on_boost}}<span class="badge badge-success">Boosts</span>{{/if}}
+      {{#if on_auto}}<span class="badge badge-primary">Auto</span>{{/if}}
+      {{#if on_stream}}<span class="badge badge-warning">Stream</span>{{/if}}
+      {{#if on_sent}}<span class="badge badge-info">Sent</span>{{/if}}
+      {{#if on_invoice}}<span class="badge badge-danger">Invoice</span>{{/if}}
+    </td>
+    <td class="align-middle">
+      {{#if amount}}
+        <div><strong>Amount:</strong> {{ amount_equality }} {{ amount }}</div>
+      {{/if}}
+      {{#if sender}}
+        <div><strong>Sender:</strong> {{ sender_equality }} "{{ sender }}"</div>
+      {{/if}}
+      {{#if app}}
+        <div><strong>App:</strong> {{ app_equality }} "{{ app }}"</div>
+      {{/if}}
+      {{#if podcast}}
+        <div><strong>Podcast:</strong> {{ podcast_equality }} "{{ podcast }}"</div>
+      {{/if}}
+      {{#unless amount}}
+        {{#unless sender}}
+          {{#unless app}}
+            {{#unless podcast}}
+              <div><strong>Match all</strong></div>
+            {{/unless}}
+          {{/unless}}
+        {{/unless}}
+      {{/unless}}
+    </td>
+    <td class="align-middle">
+      {{#if sound_file}}
+        <span style="white-space: nowrap;">
+          <a href="#" onclick="(new Audio('sound/{{ sound_file }}?h=' + (new Date().getTime()))).play(); return false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-volume-up align-text-top" viewBox="0 0 16 16">
+              <path d="M11.536 14.01A8.47 8.47 0 0 0 14.026 8a8.47 8.47 0 0 0-2.49-6.01l-.708.707A7.48 7.48 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303z"/>
+              <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.48 5.48 0 0 1 11.025 8a5.48 5.48 0 0 1-1.61 3.89z"/>
+              <path d="M10.025 8a4.5 4.5 0 0 1-1.318 3.182L8 10.475A3.5 3.5 0 0 0 9.025 8c0-.966-.392-1.841-1.025-2.475l.707-.707A4.5 4.5 0 0 1 10.025 8M7 4a.5.5 0 0 0-.812-.39L3.825 5.5H1.5A.5.5 0 0 0 1 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 7 12zM4.312 6.39 6 5.04v5.92L4.312 9.61A.5.5 0 0 0 4 9.5H2v-3h2a.5.5 0 0 0 .312-.11"/>
+            </svg>
+          </a>
+          Sound
+        </span>
+      {{/if}}
+
+      {{#if webhook_url}}
+        <span class="ml-2 webhook-status" style="white-space: nowrap;"{{#if webhook_timestamp}} data-webhook-ts="{{ webhook_timestamp }}"{{/if}}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-cloud-arrow-up align-text-top" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M7.646 5.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 6.707V10.5a.5.5 0 0 1-1 0V6.707L6.354 7.854a.5.5 0 1 1-.708-.708z"/>
+            <path d="M4.406 3.342A5.53 5.53 0 0 1 8 2c2.69 0 4.923 2 5.166 4.579C14.758 6.804 16 8.137 16 9.773 16 11.569 14.502 13 12.687 13H3.781C1.708 13 0 11.366 0 9.318c0-1.763 1.266-3.223 2.942-3.593.143-.863.698-1.723 1.464-2.383m.653.757c-.757.653-1.153 1.44-1.153 2.056v.448l-.445.049C2.064 6.805 1 7.952 1 9.318 1 10.785 2.23 12 3.781 12h8.906C13.98 12 15 10.988 15 9.773c0-1.216-1.02-2.228-2.313-2.228h-.5v-.5C12.188 4.825 10.328 3 8 3a4.53 4.53 0 0 0-2.941 1.1z"/>
+          </svg>
+          Webhook{{#if webhook_successful}} <span style="color: green;">✔</span>{{else}}{{#if webhook_timestamp}} <span style="color: red;">❌</span>{{/if}}{{/if}}
+        </span>
+      {{/if}}
+
+      {{#if osc_address}}
+        <span class="ml-2" style="white-space: nowrap;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-broadcast align-text-top" viewBox="0 0 16 16">
+            <path d="M3.05 3.05a7 7 0 0 0 0 9.9.5.5 0 0 1-.707.707 8 8 0 0 1 0-11.314.5.5 0 0 1 .707.707m2.122 2.122a4 4 0 0 0 0 5.656.5.5 0 1 1-.708.708 5 5 0 0 1 0-7.072.5.5 0 0 1 .708.708m5.656-.708a.5.5 0 0 1 .708 0 5 5 0 0 1 0 7.072.5.5 0 1 1-.708-.708 4 4 0 0 0 0-5.656.5.5 0 0 1 0-.708m2.122-2.12a.5.5 0 0 1 .707 0 8 8 0 0 1 0 11.313.5.5 0 0 1-.707-.707 7 7 0 0 0 0-9.9.5.5 0 0 1 0-.707zM10 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0"/>
+          </svg>
+          OSC
+        </span>
+      {{/if}}
+
+      {{#if midi_note}}
+        <span class="ml-2" style="white-space: nowrap;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-music-note-beamed align-text-top" viewBox="0 0 16 16">
+            <path d="M6 13c0 1.105-1.12 2-2.5 2S1 14.105 1 13s1.12-2 2.5-2 2.5.896 2.5 2m9-2c0 1.105-1.12 2-2.5 2s-2.5-.895-2.5-2 1.12-2 2.5-2 2.5.895 2.5 2"/>
+            <path fill-rule="evenodd" d="M14 11V2h1v9zM6 3v10H5V3z"/>
+            <path d="M5 2.905a1 1 0 0 1 .9-.995l8-.8a1 1 0 0 1 1.1.995V3L5 4z"/>
+          </svg>
+          MIDI
+        </span>
+      {{/if}}
+
+      {{#unless sound_file}}
+        {{#unless webhook_url}}
+          {{#unless osc_address}}
+            {{#unless midi_note}}
+              <small class="text-muted">None</small>
+            {{/unless}}
+          {{/unless}}
+        {{/unless}}
+      {{/unless}}
+    </td>
+    <td class="align-middle text-right">
+      <button
+          class="btn btn-sm btn-primary"
+          hx-get="/settings/triggers/{{ index }}"
+          hx-target="#modals-here"
+          hx-trigger="click"
+          data-bs-toggle="modal"
+          data-bs-target="#modals-here"
+          hx-on::after-request="$('#modals-here').modal()"
+      >
+          Edit
+      </button>
+      <button
+          class="btn btn-sm btn-info"
+          hx-post="/settings/triggers/{{ index }}/test"
+          hx-target="#triggers"
+          hx-on::response-error="showToast(`Trigger test failed: ${event.detail.xhr.responseText}`, 'error')"
+      >
+          Test
+      </button>
+      <button
+          class="btn btn-sm btn-danger"
+          hx-delete="/settings/triggers/{{ index }}"
+          hx-target="closest tr"
+          hx-confirm="Are you sure you want to delete this trigger?"
+      >
+          Delete
+      </button>
+    </td>
+  </tr>
+  {{/each}}
+
+  <tr id="added-trigger" style="display: none">
+  </tr>
+</tbody>
+
+<script type="text/javascript">
+(() => {
+  const items = document.getElementById("trigger-items")
+
+  new Sortable(items, {
+    handle: '.sort-handle',
+    animation: 150,
+    onSort: function (ev) {
+      ev.item.setAttribute("hx-vals", JSON.stringify({
+        position: ev.newIndex + 1
+      }))
+
+      ev.item.dispatchEvent(new CustomEvent("move", ev))
+    },
+  });
+
+  document.querySelectorAll('.webhook-status[data-webhook-ts]').forEach(el => {
+    const ts = parseInt(el.getAttribute('data-webhook-ts'), 10);
+    if (!isNaN(ts)) {
+      el.title = `Last request: ${new Date(ts * 1000).toLocaleString()}`;
+    }
+  });
+})();
+</script>

@@ -1,0 +1,319 @@
+<form
+  {{#if trigger.index}}
+  hx-post="/settings/triggers/{{ trigger.index }}"
+  {{else}}
+  hx-post="/settings/triggers/add"
+  {{/if}}
+  hx-target="#triggers"
+  hx-swap="innerHTML"
+  hx-encoding="multipart/form-data"
+  hx-on::send-error="alert('Unable to contact Helipad')"
+  hx-on::response-error="alert(`${event.detail.error}\n${event.detail.xhr.responseText}`)"
+  hx-on::after-request="(event.detail.xhr.status == 200) && $(this).closest('.modal').modal('hide')"
+>
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{#if trigger.index}}Edit{{else}}Add{{/if}} Trigger</h5>
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Trigger on (always visible) -->
+        <div class="form-group">
+          <h6>Trigger on:</h6>
+          <div class="form-check">
+            <input id="on-boost" name="on_boost" type="checkbox" class="form-check-input" value="true" {{#if trigger.on_boost}}checked{{/if}}{{#unless trigger}}checked{{/unless}}>
+            <label class="form-check-label" for="on-boost">New boosts</label>
+          </div>
+          <div class="form-check">
+            <input id="on-auto" name="on_auto" type="checkbox" class="form-check-input" value="true" {{#if trigger.on_auto}}checked{{/if}}{{#unless trigger}}checked{{/unless}}>
+            <label class="form-check-label" for="on-auto">New auto boosts</label>
+          </div>
+          <div class="form-check">
+            <input id="on-stream" name="on_stream" type="checkbox" class="form-check-input" value="true" {{#if trigger.on_stream}}checked{{/if}}>
+            <label class="form-check-label" for="on-stream">New streams</label>
+          </div>
+          <div class="form-check">
+            <input id="on-sent" name="on_sent" type="checkbox" class="form-check-input" value="true" {{#if trigger.on_sent}}checked{{/if}}>
+            <label class="form-check-label" for="on-sent">New sent boosts</label>
+          </div>
+          <div class="form-check">
+            <input id="on-invoice" name="on_invoice" type="checkbox" class="form-check-input" value="true" {{#if trigger.on_invoice}}checked{{/if}}>
+            <label class="form-check-label" for="on-invoice">Lightning invoices</label>
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- Filters (progressive disclosure) -->
+        <div class="form-group d-flex justify-content-between align-items-center mb-2">
+          <h6>Filters</h6>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary" data-show="amount-filter" {{#if trigger.amount}}style="display:none"{{/if}}>+ Amount</button>
+            <button type="button" class="btn btn-outline-secondary" data-show="sender-filter" {{#if trigger.sender}}style="display:none"{{/if}}>+ Sender</button>
+            <button type="button" class="btn btn-outline-secondary" data-show="app-filter" {{#if trigger.app}}style="display:none"{{/if}}>+ App</button>
+            <button type="button" class="btn btn-outline-secondary" data-show="podcast-filter" {{#if trigger.podcast}}style="display:none"{{/if}}>+ Podcast</button>
+          </div>
+        </div>
+
+        <!-- Filter sections (hidden by default) -->
+        <div id="amount-filter" class="filter-section" {{#unless trigger.amount}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>Amount</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="amount-filter">Remove</button>
+            </div>
+            <div class="form-row">
+              <div class="col-auto">
+                <select name="amount_equality" class="form-control form-control-sm">
+                  <option value="=" {{#if equality.eq}}selected{{/if}}>Equal to</option>
+                  <option value="<" {{#if equality.lt}}selected{{/if}}>Less than</option>
+                  <option value=">=" {{#if equality.gte}}selected{{/if}}>Greater than or equal to</option>
+                  <option value="=~" {{#if equality.in}}selected{{/if}}>Contains</option>
+                  <option value="^=" {{#if equality.starts_with}}selected{{/if}}>Starts with</option>
+                  <option value="$=" {{#if equality.ends_with}}selected{{/if}}>Ends with</option>
+                </select>
+              </div>
+              <div class="col">
+                <input name="amount" type="number" class="form-control form-control-sm" value="{{ trigger.amount }}">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="sender-filter" class="filter-section" {{#unless trigger.sender}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>Sender</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="sender-filter">Remove</button>
+            </div>
+            <div class="form-row">
+              <div class="col-auto">
+                <select name="sender_equality" class="form-control form-control-sm">
+                  <option value="=" {{#if sender_equality.eq}}selected{{/if}}>Equal to</option>
+                  <option value="!=" {{#if sender_equality.not_eq}}selected{{/if}}>Not equal to</option>
+                  <option value="=~" {{#if sender_equality.in}}selected{{/if}}>Contains</option>
+                  <option value="^=" {{#if sender_equality.starts_with}}selected{{/if}}>Starts with</option>
+                  <option value="$=" {{#if sender_equality.ends_with}}selected{{/if}}>Ends with</option>
+                </select>
+              </div>
+              <div class="col">
+                <input name="sender" type="text" class="form-control form-control-sm" value="{{ trigger.sender }}" placeholder="Sender name">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="app-filter" class="filter-section" {{#unless trigger.app}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>App</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="app-filter">Remove</button>
+            </div>
+            <div class="form-row">
+              <div class="col-auto">
+                <select name="app_equality" class="form-control form-control-sm">
+                  <option value="=" {{#if app_equality.eq}}selected{{/if}}>Equal to</option>
+                  <option value="!=" {{#if app_equality.not_eq}}selected{{/if}}>Not equal to</option>
+                  <option value="=~" {{#if app_equality.in}}selected{{/if}}>Contains</option>
+                  <option value="^=" {{#if app_equality.starts_with}}selected{{/if}}>Starts with</option>
+                  <option value="$=" {{#if app_equality.ends_with}}selected{{/if}}>Ends with</option>
+                </select>
+              </div>
+              <div class="col">
+                <input name="app" type="text" class="form-control form-control-sm" value="{{ trigger.app }}" placeholder="App name">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="podcast-filter" class="filter-section" {{#unless trigger.podcast}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>Podcast</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="podcast-filter">Remove</button>
+            </div>
+            <div class="form-row">
+              <div class="col-auto">
+                <select name="podcast_equality" class="form-control form-control-sm">
+                  <option value="=" {{#if podcast_equality.eq}}selected{{/if}}>Equal to</option>
+                  <option value="!=" {{#if podcast_equality.not_eq}}selected{{/if}}>Not equal to</option>
+                  <option value="=~" {{#if podcast_equality.in}}selected{{/if}}>Contains</option>
+                  <option value="^=" {{#if podcast_equality.starts_with}}selected{{/if}}>Starts with</option>
+                  <option value="$=" {{#if podcast_equality.ends_with}}selected{{/if}}>Ends with</option>
+                </select>
+              </div>
+              <div class="col">
+                <input name="podcast" type="text" class="form-control form-control-sm" value="{{ trigger.podcast }}" placeholder="Podcast name">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- Effects (progressive disclosure) -->
+        <div class="form-group d-flex justify-content-between align-items-center mb-2">
+          <h6>Effects</h6>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary" data-show="sound-effect" {{#if trigger.sound_file}}style="display:none"{{/if}}>+ Sound</button>
+            <button type="button" class="btn btn-outline-secondary" data-show="webhook-effect" {{#if trigger.webhook_url}}style="display:none"{{/if}}>+ Webhook</button>
+            <button type="button" class="btn btn-outline-secondary" data-show="osc-effect" {{#if trigger.osc_address}}style="display:none"{{/if}}>+ OSC</button>
+            <button type="button" class="btn btn-outline-secondary" data-show="midi-effect" {{#if trigger.midi_note}}style="display:none"{{/if}}>+ MIDI</button>
+          </div>
+        </div>
+
+        <!-- Effect sections (hidden by default) -->
+        <div id="sound-effect" class="filter-section" {{#unless trigger.sound_file}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>Sound</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="sound-effect">Remove</button>
+            </div>
+            {{#if trigger.sound_file}}
+              <div id="existing-sound" class="existing-item alert alert-info p-2 d-flex justify-content-between align-items-center">
+                <div>
+                  <a href="#" onclick="(new Audio('sound/{{ trigger.sound_file }}?h=' + (new Date().getTime()))).play(); return false" class="align-text-top">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-volume-up" viewBox="0 0 16 16">
+                      <path d="M11.536 14.01A8.47 8.47 0 0 0 14.026 8a8.47 8.47 0 0 0-2.49-6.01l-.708.707A7.48 7.48 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303z"/>
+                      <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.48 5.48 0 0 1 11.025 8a5.48 5.48 0 0 1-1.61 3.89z"/>
+                      <path d="M10.025 8a4.5 4.5 0 0 1-1.318 3.182L8 10.475A3.5 3.5 0 0 0 9.025 8c0-.966-.392-1.841-1.025-2.475l.707-.707A4.5 4.5 0 0 1 10.025 8M7 4a.5.5 0 0 0-.812-.39L3.825 5.5H1.5A.5.5 0 0 0 1 6v4a.5.5 0 0 0 .5.5h2.325l2.363 1.89A.5.5 0 0 0 7 12zM4.312 6.39 6 5.04v5.92L4.312 9.61A.5.5 0 0 0 4 9.5H2v-3h2a.5.5 0 0 0 .312-.11"/>
+                    </svg>
+                  </a>
+                  {{trigger.sound_name}}
+                </div>
+                <button type="button" class="btn btn-sm btn-danger" onclick="$('#new-sound').show();$(this).closest('#existing-sound').remove()">Change</button>
+                <input type="hidden" name="sound_file_existing" value="true">
+              </div>
+            {{/if}}
+            <div id="new-sound" class="new-item" {{#if trigger.sound_file}}style="display:none"{{/if}}>
+              <input class="form-control form-control-sm" type="file" name="sound_file" accept=".mp3">
+            </div>
+          </div>
+        </div>
+
+        <div id="webhook-effect" class="filter-section" {{#unless trigger.webhook_url}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>Webhook</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="webhook-effect">Remove</button>
+            </div>
+            <input name="webhook_url" type="text" class="form-control form-control-sm mb-2" value="{{ trigger.webhook_url }}" placeholder="https://example.com/webhook">
+            <input name="webhook_token" type="text" class="form-control form-control-sm" value="{{ trigger.webhook_token }}" placeholder="Auth token (optional)">
+            <small class="form-text text-muted">Token sent as Authorization: Bearer header</small>
+          </div>
+        </div>
+
+        <div id="osc-effect" class="filter-section" {{#unless trigger.osc_address}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>OSC (Open Sound Control)</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="osc-effect">Remove</button>
+            </div>
+            <div class="form-row">
+              <div class="col">
+                <input name="osc_address" type="text" class="form-control form-control-sm mb-2" value="{{ trigger.osc_address }}" placeholder="Address">
+              </div>
+              <div class="col-auto">
+                <input name="osc_port" type="number" class="form-control form-control-sm mb-2" value="{{ trigger.osc_port }}" placeholder="Port">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="col">
+                <input name="osc_path" type="text" class="form-control form-control-sm" value="{{ trigger.osc_path }}" placeholder="OSC Path">
+              </div>
+              <div class="col-auto">
+                <input name="osc_args" type="text" class="form-control form-control-sm" value="{{ trigger.osc_args }}" placeholder="OSC Arg">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="midi-effect" class="filter-section" {{#unless trigger.midi_note}}style="display:none"{{/unless}}>
+          <div class="form-group">
+            <div class="d-flex justify-content-between align-items-center">
+              <label>MIDI (Web MIDI API)</label>
+              <button type="button" class="btn btn-sm btn-link text-danger" data-hide="midi-effect">Remove</button>
+            </div>
+            <small class="form-text text-muted mb-2">Sends MIDI messages through your browser using Web MIDI API</small>
+            <div class="form-row">
+              <div class="col">
+                <label for="midi-note" class="small">Note (0-127)</label>
+                <input id="midi-note" name="midi_note" type="number" min="0" max="127" class="form-control form-control-sm" value="{{#if trigger.midi_note}}{{ trigger.midi_note }}{{/if}}">
+              </div>
+              <div class="col">
+                <label for="midi-velocity" class="small">Velocity (0-127)</label>
+                <input id="midi-velocity" name="midi_velocity" type="number" min="0" max="127" class="form-control form-control-sm" value="{{#if trigger.midi_velocity}}{{ trigger.midi_velocity }}{{else}}100{{/if}}">
+              </div>
+            </div>
+            <div class="form-row mt-2">
+              <div class="col">
+                <label for="midi-channel" class="small">Channel (1-16)</label>
+                <input id="midi-channel" name="midi_channel" type="number" min="1" max="16" class="form-control form-control-sm" value="{{#if trigger.midi_channel}}{{ trigger.midi_channel }}{{else}}1{{/if}}">
+              </div>
+              <div class="col">
+                <label for="midi-duration" class="small">Duration (ms)</label>
+                <input id="midi-duration" name="midi_duration" type="number" min="1" class="form-control form-control-sm" value="{{#if trigger.midi_duration}}{{ trigger.midi_duration }}{{else}}500{{/if}}">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="form-check flex-fill">
+          <input
+            id="edit-trigger-enabled"
+            name="enabled"
+            type="checkbox"
+            class="form-check-input"
+            value="true"
+            {{#unless trigger}} checked{{/unless}}
+            {{#if trigger.enabled}} checked{{/if}}
+          >
+          <label class="form-check-label" for="edit-trigger-enabled">Enabled</label>
+        </div>
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="submit" class="btn btn-success">Save</button>
+      </div>
+    </div>
+  </div>
+</form>
+
+<script>
+// Simple show/hide logic using data attributes
+document.querySelectorAll('button[data-show]').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const targetId = this.dataset.show
+    const section = document.getElementById(targetId)
+
+    section.style.display = 'block'
+    this.style.display = 'none'
+  })
+})
+
+document.querySelectorAll('button[data-hide]').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const targetId = this.dataset.hide
+    const section = document.getElementById(targetId)
+    const showBtn = document.querySelector(`[data-show="${targetId}"]`)
+
+    // Clear inputs
+    section.querySelectorAll('input:not([type="hidden"]), select').forEach(input => {
+      input.value = ''
+    })
+
+    section.querySelectorAll('.existing-item').forEach(item => {
+      item.parentNode.removeChild(item)
+    })
+
+    section.querySelectorAll('.new-item').forEach(item => {
+      item.style.display = ''
+    })
+
+    section.style.display = 'none'
+    if (showBtn) showBtn.style.display = ''
+  })
+})
+</script>

@@ -220,3 +220,40 @@ const resolveKeysendAddress = async (address) => {
 
     return keysendInfo;
 }
+
+// Toast notification function
+function showToast(message, type = 'info') {
+    // Check if there's a toast container in the page
+    let toastContainer = document.getElementById('toast-container')
+
+    if (!toastContainer) {
+        // Create toast container if it doesn't exist
+        toastContainer = document.createElement('div')
+        toastContainer.id = 'toast-container'
+        toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 1050;'
+        document.body.appendChild(toastContainer)
+    }
+
+    // Create toast element
+    const toast = document.createElement('div')
+    const bgClass = type === 'error' ? 'bg-danger' : type === 'success' ? 'bg-success' : 'bg-info'
+    toast.className = `${bgClass} text-white px-4 py-3 rounded shadow mb-2`
+    toast.style.cssText = 'min-width: 250px; animation: slideIn 0.3s ease;'
+    toast.textContent = message
+
+    // Add close button
+    const closeBtn = document.createElement('button')
+    closeBtn.className = 'close text-white ml-3'
+    closeBtn.innerHTML = '<span>&times;</span>'
+    closeBtn.style.cssText = 'float: right; margin-top: -2px;'
+    closeBtn.onclick = () => toast.remove()
+    toast.appendChild(closeBtn)
+
+    toastContainer.appendChild(toast)
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease'
+        setTimeout(() => toast.remove(), 300)
+    }, 5000)
+}

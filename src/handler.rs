@@ -14,20 +14,19 @@ use axum_extra::{
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 
 use chrono::{DateTime, TimeDelta, Utc};
-use crate::{AppState, WebhookPayload, lightning, podcastindex, boost};
-use dbif::{BoostRecord, BoostFilters, NumerologyRecord, WebhookRecord, ActionType};
-use handlebars::{Handlebars, JsonRender};
+use crate::{AppState, lightning, podcastindex, boost, triggers, WebSocketEvent};
+use dbif::{BoostRecord, BoostFilters, NumerologyRecord, TriggerRecord, ActionType};
+use handlebars::Handlebars;
 use jsonwebtoken::{Algorithm, Header, DecodingKey, EncodingKey, Validation};
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
-use reqwest::redirect::Policy;
+use reqwest::header::USER_AGENT;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{fs, str};
 use std::string::String;
-use url::Url;
 use tempfile::NamedTempFile;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use uuid::Uuid;
 
 // JWT session times
 const JWT_SESSION_HOURS: i64 = 1;             // 1 hour for normal login
@@ -361,7 +360,11 @@ pub async fn api_v1_balance(State(state): State<AppState>) -> Response {
 pub struct BoostParams {
     index: u64,
     count: u64,
-    old: Option<bool>,
+    #[serde(default)]
+    old: bool,
+    #[serde(default)]
+    triggers: bool,
+    #[serde(default)]
     podcast: Option<String>,
 }
 
@@ -370,7 +373,8 @@ impl Default for BoostParams {
         Self {
             index: 0,
             count: 0,
-            old: Some(false),
+            old: false,
+            triggers: false,
             podcast: None,
         }
     }
@@ -385,7 +389,7 @@ pub async fn api_v1_boosts(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let old = params.old.is_some();
+    let old = params.old;
 
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied boost count from call: [{}]", boostcount);
@@ -394,14 +398,27 @@ pub async fn api_v1_boosts(
     filters.podcast = params.podcast;
 
     //Get the boosts from db for returning
-    match dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
-        Ok(boosts) => {
-            Json(boosts).into_response()
-        }
+    let boosts = match dbif::get_boosts_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
+        Ok(boosts) => boosts,
         Err(e) => {
             eprintln!("** Error getting boosts: {}.\n", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts.").into_response()
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts.").into_response()
         }
+    };
+
+    if params.triggers {
+        let boosts_with_triggers = match triggers::get_boosts_with_triggers(&state.helipad_config.database_file_path, boosts).await {
+            Ok(boosts) => boosts,
+            Err(e) => {
+                eprintln!("** Error getting boosts with triggers: {}.\n", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting boosts with triggers.").into_response()
+            }
+        };
+
+        Json(boosts_with_triggers).into_response()
+    }
+    else {
+        Json(boosts).into_response()
     }
 }
 
@@ -416,7 +433,7 @@ pub async fn api_v1_streams(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let old = params.old.is_some();
+    let old = params.old;
 
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied stream count from call: [{}]", boostcount);
@@ -425,14 +442,27 @@ pub async fn api_v1_streams(
     filters.podcast = params.podcast;
 
     //Get the boosts from db for returning
-    match dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
-        Ok(streams) => {
-            Json(streams).into_response()
-        }
+    let streams = match dbif::get_streams_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
+        Ok(streams) => streams,
         Err(e) => {
             eprintln!("** Error getting streams: {}.\n", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting streams.").into_response()
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting streams.").into_response()
         }
+    };
+
+    if params.triggers {
+        let streams_with_triggers = match triggers::get_boosts_with_triggers(&state.helipad_config.database_file_path, streams).await {
+            Ok(boosts) => boosts,
+            Err(e) => {
+                eprintln!("** Error getting streams with triggers: {}.\n", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting streams with triggers.").into_response()
+            }
+        };
+
+        Json(streams_with_triggers).into_response()
+    }
+    else {
+        Json(streams).into_response()
     }
 }
 
@@ -478,7 +508,7 @@ pub async fn api_v1_sent(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let old = params.old.is_some();
+    let old = params.old;
 
     println!("** Supplied index from call: [{}]", index);
     println!("** Supplied sent boost count from call: [{}]", boostcount);
@@ -487,14 +517,27 @@ pub async fn api_v1_sent(
     filters.podcast = params.podcast;
 
     //Get sent boosts from db for returning
-    match dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
-        Ok(sent_boosts) => {
-            Json(sent_boosts).into_response()
-        }
+    let sent_boosts = match dbif::get_payments_from_db(&state.helipad_config.database_file_path, index, boostcount, old, true, filters) {
+        Ok(sent_boosts) => sent_boosts,
         Err(e) => {
             eprintln!("** Error getting sent boosts: {}.\n", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting sent boosts.").into_response()
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting sent boosts.").into_response()
         }
+    };
+
+    if params.triggers {
+        let sent_boosts_with_triggers = match triggers::get_boosts_with_triggers(&state.helipad_config.database_file_path, sent_boosts).await {
+            Ok(boosts) => boosts,
+            Err(e) => {
+                eprintln!("** Error getting sent boosts with triggers: {}.\n", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting sent boosts with triggers.").into_response()
+            }
+        };
+
+        Json(sent_boosts_with_triggers).into_response()
+    }
+    else {
+        Json(sent_boosts).into_response()
     }
 }
 
@@ -758,303 +801,6 @@ pub async fn api_v1_fetch_metadata(
     }
 }
 
-async fn webhook_list_response(db_filepath: &String) -> Response {
-    let webhooks = match dbif::get_webhooks_from_db(db_filepath, None) {
-        Ok(wh) => wh,
-        Err(e) => {
-            eprintln!("** Error getting webhooks: {}.\n", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting webhooks.".to_string()).into_response();
-        }
-    };
-
-    println!("** get_webhooks_from_db()");
-
-    let mut reg = Handlebars::new();
-    let doc = fs::read_to_string("webroot/template/webhook-list.hbs").expect("Something went wrong reading the file.");
-
-    reg.register_helper("timestamp", Box::new(|h: &handlebars::Helper, _: &handlebars::Handlebars, _: &handlebars::Context, _: &mut handlebars::RenderContext, out: &mut dyn handlebars::Output| -> handlebars::HelperResult {
-        let param = h.param(0).unwrap();
-        let timestamp = param.value().render().parse::<i64>().unwrap();
-
-        if let Some(ts) = DateTime::from_timestamp(timestamp, 0) {
-            let _ = out.write(&ts.to_rfc3339());
-        }
-
-        Ok(())
-    }));
-
-    let doc_rendered = reg.render_template(&doc, &json!({"webhooks": webhooks})).expect("Something went wrong rendering the file");
-
-    Html(doc_rendered).into_response()
-}
-
-pub async fn webhook_settings_list(State(state): State<AppState>) -> Response {
-    webhook_list_response(&state.helipad_config.database_file_path).await
-}
-
-pub async fn webhook_settings_load(
-    Path(idx): Path<String>,
-    State(state): State<AppState>
-) -> Response {
-
-    let index = match idx.as_str() {
-        "add" => 0,
-        idx => idx.parse().unwrap(),
-    };
-
-    let webhook = match index {
-        0 => None,
-        _ => match dbif::load_webhook_from_db(&state.helipad_config.database_file_path, index) {
-            Ok(wh) => Some(wh),
-            Err(e) => {
-                eprintln!("** Error loading webhook: {}.\n", e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error loading webhook.".to_string()).into_response();
-            }
-        }
-    };
-
-    let equality = match webhook.clone() {
-        Some(wh) => wh.equality,
-        None => "".to_string(),
-    };
-
-    let params = json!({
-        "webhook": webhook,
-        "equality": json!({
-            "any": equality.is_empty(),
-            "eq": equality == "=",
-            "in": equality == "=~",
-            "lt": equality == "<",
-            "gte": equality == ">=",
-        }),
-    });
-
-    println!("** load_webhook_from_db({})", index);
-
-    HtmlTemplate("webroot/template/webhook-edit.hbs", params).into_response()
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WebhookSaveForm {
-    url: String,
-    token: String,
-    on_boost: Option<bool>,
-    on_stream: Option<bool>,
-    on_auto: Option<bool>,
-    on_sent: Option<bool>,
-    on_invoice: Option<bool>,
-    equality: Option<String>,
-    amount: Option<String>,
-    enabled: Option<bool>,
-}
-
-pub async fn webhook_settings_save(
-    State(state): State<AppState>,
-    Path(idx): Path<String>,
-    Form(form): Form<WebhookSaveForm>,
-) -> Response {
-    let db_filepath = state.helipad_config.database_file_path;
-
-    let index = match idx.as_str() {
-        "add" => 0,
-        idx => idx.parse().unwrap(),
-    };
-
-    if let Err(e) = Url::parse(form.url.as_str()) {
-        return (StatusCode::BAD_REQUEST, format!("** bad value for url: {}", e)).into_response();
-    }
-
-    let mut equality = form.equality.unwrap_or_default();
-    let mut amount: u64 = form.amount.unwrap_or_default().parse().unwrap_or_default();
-
-    if equality.is_empty() || amount == 0 {
-        equality = String::new();
-        amount = 0;
-    }
-
-    let webhook = WebhookRecord {
-        index,
-        url: form.url,
-        token: form.token,
-        on_boost: form.on_boost.unwrap_or(false),
-        on_stream: form.on_stream.unwrap_or(false),
-        on_auto: form.on_auto.unwrap_or(false),
-        on_sent: form.on_sent.unwrap_or(false),
-        on_invoice: form.on_invoice.unwrap_or(false),
-        equality,
-        amount,
-        enabled: form.enabled.unwrap_or(false),
-        request_successful: None,
-        request_timestamp: None,
-    };
-
-    let idx = match dbif::save_webhook_to_db(&db_filepath, &webhook) {
-        Ok(idx) => idx,
-        Err(e) => {
-            eprintln!("** Error saving webhook: {}.\n", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error saving webhook.").into_response();
-        }
-    };
-
-    println!("** save_webhook_from_db({})", idx);
-
-    webhook_list_response(&db_filepath).await
-}
-
-pub async fn webhook_settings_delete(
-    State(state): State<AppState>,
-    Path(idx): Path<String>
-) -> impl IntoResponse {
-
-    let index = idx.parse().unwrap();
-
-    if let Err(e) = dbif::delete_webhook_from_db(&state.helipad_config.database_file_path, index) {
-        eprintln!("** Error deleting webhook: {}.\n", e);
-        return (StatusCode::INTERNAL_SERVER_ERROR, "** Error deleting webhook.");
-    }
-
-    println!("** delete_webhook_from_db({})", index);
-
-    (StatusCode::OK, "")
-}
-
-pub async fn webhook_settings_test(
-    State(state): State<AppState>,
-    Path(idx): Path<String>
-) -> Response {
-    let index: u64 = match idx.parse() {
-        Ok(i) => i,
-        Err(e) => {
-            eprintln!("** Invalid webhook index: {}.\n", e);
-            return (StatusCode::BAD_REQUEST, "Invalid webhook index").into_response();
-        }
-    };
-
-    let webhook = match dbif::load_webhook_from_db(&state.helipad_config.database_file_path, index) {
-        Ok(wh) => wh,
-        Err(e) => {
-            eprintln!("** Error loading webhook: {}.\n", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Error loading webhook").into_response();
-        }
-    };
-
-    // Create a sample boost record for testing
-    let test_boost = dbif::BoostRecord {
-        index: 99999,
-        time: Utc::now().timestamp(),
-        value_msat: 100000,
-        value_msat_total: 100000,
-        action: 2, // boost action
-        sender: "Test Sender".to_string(),
-        app: "Helipad".to_string(),
-        message: "This is a test webhook message".to_string(),
-        podcast: "Test Podcast".to_string(),
-        episode: "Test Episode".to_string(),
-        tlv: json!({
-            "action": "boost",
-            "app_name": "Helipad",
-            "app_version": state.version,
-            "podcast": "Test Podcast",
-            "episode": "Test Episode",
-            "sender_name": "Test Sender",
-            "message": "This is a test webhook message",
-            "value_msat": 100000,
-            "value_msat_total": 100000
-        }).to_string(),
-        remote_podcast: None,
-        remote_episode: None,
-        reply_sent: false,
-        custom_key: None,
-        custom_value: None,
-        payment_info: None,
-    };
-
-    // Create webhook payload with type
-    let test_payload = WebhookPayload {
-        direction: "incoming".to_string(),
-        boost: test_boost,
-    };
-
-    // Prepare headers
-    let mut headers = HeaderMap::new();
-
-    if let Ok(hdr) = HeaderValue::from_str("application/json") {
-        headers.insert(CONTENT_TYPE, hdr);
-    } else {
-        return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create content type header").into_response();
-    }
-
-    let user_agent = format!("Helipad/{}", state.version);
-    if let Ok(hdr) = HeaderValue::from_str(user_agent.as_str()) {
-        headers.insert(USER_AGENT, hdr);
-    } else {
-        return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create user agent header").into_response();
-    }
-
-    if !webhook.token.is_empty() {
-        let token = format!("Bearer {}", webhook.token);
-        if let Ok(hdr) = HeaderValue::from_str(&token) {
-            headers.insert(AUTHORIZATION, hdr);
-        } else {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to create authorization header").into_response();
-        }
-    }
-
-    // Build HTTP client
-    let client = match reqwest::Client::builder()
-        .redirect(Policy::limited(5))
-        .build() {
-        Ok(cli) => cli,
-        Err(e) => {
-            eprintln!("** Unable to build reqwest client: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to build HTTP client").into_response();
-        }
-    };
-
-    // Serialize test payload to JSON
-    let json = match serde_json::to_string_pretty(&test_payload) {
-        Ok(js) => js,
-        Err(e) => {
-            eprintln!("** Unable to encode test payload as JSON: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Unable to encode test data").into_response();
-        }
-    };
-
-    // Send the webhook
-    let result = client.post(&webhook.url).body(json).headers(headers).send().await;
-    let timestamp = Utc::now().timestamp();
-    let mut successful = false;
-    let mut response_message = String::new();
-
-    if let Ok(res) = result {
-        let status = res.status();
-        let response_body = res.text().await;
-
-        if status == 200 {
-            successful = true;
-            response_message = format!("Test webhook sent successfully. Response: {}", response_body.unwrap_or_default());
-        } else {
-            response_message = format!("Test webhook failed with status {}: {}", status, response_body.unwrap_or_default());
-        }
-    } else if let Err(e) = result {
-        response_message = format!("Unable to send test webhook: {}", e);
-    }
-
-    // Update webhook last request status
-    if let Err(e) = dbif::set_webhook_last_request(&state.helipad_config.database_file_path, webhook.index, successful, timestamp) {
-        eprintln!("** Error setting webhook last request status: {}", e);
-    }
-
-    println!("** test_webhook({}) - {}", index, response_message);
-
-    // Return the updated webhook list
-    if successful {
-        webhook_list_response(&state.helipad_config.database_file_path).await
-    } else {
-        (StatusCode::INTERNAL_SERVER_ERROR, response_message).into_response()
-    }
-}
-
 pub async fn general_settings_load(State(state): State<AppState>) -> impl IntoResponse {
     let settings = dbif::load_settings_from_db(&state.helipad_config.database_file_path).unwrap();
     HtmlTemplate("webroot/template/general-settings.hbs", json!({"settings": settings}))
@@ -1181,11 +927,6 @@ pub struct NumerologyMultipart {
     amount: u64,
     equality: String,
     emoji: Option<String>,
-
-    #[form_data(limit = "5MiB")]
-    sound_file: Option<FieldData<NamedTempFile>>,
-    sound_file_existing: Option<bool>,
-
     description: Option<String>,
 }
 
@@ -1201,43 +942,14 @@ pub async fn numerology_settings_save(
         idx => idx.parse().unwrap(),
     };
 
-    let mut numero = NumerologyRecord {
+    let numero = NumerologyRecord {
         index,
         position: parts.position,
         amount: parts.amount,
         equality: parts.equality,
         emoji: parts.emoji,
-        sound_file: None,
         description: parts.description,
     };
-
-    if index > 0 {
-        let existing = match dbif::load_numerology_from_db(&db_filepath, index) {
-            Ok(exist) => exist,
-            Err(e) => {
-                eprintln!("** Error loading numerology: {}.\n", e);
-                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error loading numerology.".to_string()).into_response();
-            }
-        };
-
-        numero.sound_file = existing.sound_file;
-    }
-
-    if let Some(field) = parts.sound_file {
-        let filename = format!("{}.mp3", parts.amount);
-        let from_path = field.contents.path();
-        let to_path = format!("{}/{}", state.helipad_config.sound_path, filename);
-        let bytes = std::fs::copy(from_path, &to_path).unwrap_or(0);
-
-        if bytes > 0 {
-            println!("** Wrote sound file to: {}", to_path);
-            numero.sound_file = Some(filename)
-        } else {
-            numero.sound_file = None;
-        }
-    } else if parts.sound_file_existing.is_none() {
-        numero.sound_file = None;
-    }
 
     let idx = match dbif::save_numerology_to_db(&db_filepath, &numero) {
         Ok(idx) => idx,
@@ -1320,6 +1032,360 @@ pub async fn numerology_settings_patch(
 
     Ok(numerology_list(&db_filepath))
 }
+
+
+pub fn triggers_list(db_filepath: &String) -> impl IntoResponse {
+    let results = dbif::get_triggers_from_db(db_filepath).unwrap();
+    HtmlTemplate("webroot/template/trigger-list.hbs", json!({"trigger": results}))
+}
+
+pub async fn trigger_settings_list(State(state): State<AppState>) -> impl IntoResponse {
+    triggers_list(&state.helipad_config.database_file_path)
+}
+
+pub async fn trigger_settings_load(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+) -> impl IntoResponse {
+
+    let index = match idx.as_str() {
+        "add" => 0,
+        idx => idx.parse().unwrap(),
+    };
+
+    let result = if index > 0 {
+        dbif::load_trigger_from_db(&state.helipad_config.database_file_path, index).ok()
+    } else {
+        None
+    };
+
+    let amount_equality = match &result {
+        Some(trigger) => trigger.amount_equality.clone().unwrap_or_default(),
+        None => "".to_string(),
+    };
+
+    let sender_equality = match &result {
+        Some(trigger) => trigger.sender_equality.clone().unwrap_or_default(),
+        None => "".to_string(),
+    };
+
+    let app_equality = match &result {
+        Some(trigger) => trigger.app_equality.clone().unwrap_or_default(),
+        None => "".to_string(),
+    };
+
+    let podcast_equality = match &result {
+        Some(trigger) => trigger.podcast_equality.clone().unwrap_or_default(),
+        None => "".to_string(),
+    };
+
+    let params = json!({
+        "trigger": result,
+        "equality": json!({
+            "eq": amount_equality == "=",
+            "in": amount_equality == "=~",
+            "lt": amount_equality == "<",
+            "gte": amount_equality == ">=",
+            "starts_with": amount_equality == "^=",
+            "ends_with": amount_equality == "$=",
+        }),
+        "sender_equality": json!({
+            "eq": sender_equality == "=",
+            "not_eq": sender_equality == "!=",
+            "in": sender_equality == "=~",
+            "starts_with": sender_equality == "^=",
+            "ends_with": sender_equality == "$=",
+        }),
+        "app_equality": json!({
+            "eq": app_equality == "=",
+            "not_eq": app_equality == "!=",
+            "in": app_equality == "=~",
+            "starts_with": app_equality == "^=",
+            "ends_with": app_equality == "$=",
+        }),
+        "podcast_equality": json!({
+            "eq": podcast_equality == "=",
+            "not_eq": podcast_equality == "!=",
+            "in": podcast_equality == "=~",
+            "starts_with": podcast_equality == "^=",
+            "ends_with": podcast_equality == "$=",
+        }),
+    });
+
+    HtmlTemplate("webroot/template/trigger-edit.hbs", params)
+}
+
+#[derive(Debug, TryFromMultipart)]
+pub struct TriggerMultipart {
+    enabled: Option<bool>,
+
+    on_boost: Option<bool>,
+    on_stream: Option<bool>,
+    on_auto: Option<bool>,
+    on_sent: Option<bool>,
+    on_invoice: Option<bool>,
+
+    amount: Option<String>,
+    amount_equality: Option<String>,
+    sender: Option<String>,
+    sender_equality: Option<String>,
+    app: Option<String>,
+    app_equality: Option<String>,
+    podcast: Option<String>,
+    podcast_equality: Option<String>,
+
+    webhook_url: Option<String>,
+    webhook_token: Option<String>,
+
+    osc_address: Option<String>,
+    osc_port: Option<String>,
+    osc_path: Option<String>,
+    osc_args: Option<String>,
+
+    midi_note: Option<String>,
+    midi_velocity: Option<String>,
+    midi_channel: Option<String>,
+    midi_duration: Option<String>,
+
+    #[form_data(limit = "5MiB")]
+    sound_file: Option<FieldData<NamedTempFile>>,
+    sound_file_existing: Option<bool>,
+}
+
+pub async fn trigger_settings_save(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+    TypedMultipart(parts): TypedMultipart<TriggerMultipart>,
+) -> Response {
+    println!("** trigger_settings_save({:?})", parts);
+    let db_filepath = state.helipad_config.database_file_path;
+
+    let index = match idx.as_str() {
+        "add" => 0,
+        idx => idx.parse().unwrap(),
+    };
+
+    let mut trigger = TriggerRecord {
+        index: index,
+        position: index,
+        enabled: parts.enabled.unwrap_or(false),
+        on_boost: parts.on_boost.unwrap_or(false),
+        on_stream: parts.on_stream.unwrap_or(false),
+        on_auto: parts.on_auto.unwrap_or(false),
+        on_sent: parts.on_sent.unwrap_or(false),
+        on_invoice: parts.on_invoice.unwrap_or(false),
+        amount: parts.amount.as_ref().and_then(|s| if s.is_empty() { None } else { s.parse::<u64>().ok() }),
+        amount_equality: parts.amount_equality.filter(|equality| !equality.is_empty()),
+        sender: parts.sender.filter(|sender| !sender.is_empty()),
+        sender_equality: parts.sender_equality.filter(|equality| !equality.is_empty()),
+        app: parts.app.filter(|app| !app.is_empty()),
+        app_equality: parts.app_equality.filter(|equality| !equality.is_empty()),
+        podcast: parts.podcast.filter(|podcast| !podcast.is_empty()),
+        podcast_equality: parts.podcast_equality.filter(|equality| !equality.is_empty()),
+        webhook_url: parts.webhook_url.filter(|url| !url.is_empty()),
+        webhook_token: parts.webhook_token.clone().filter(|token| !token.is_empty()),
+        webhook_successful: None,
+        webhook_timestamp: None,
+        osc_address: parts.osc_address.filter(|address| !address.is_empty()),
+        osc_port: parts.osc_port.as_ref().and_then(|s| s.parse::<u16>().ok()),
+        osc_path: parts.osc_path.filter(|path| !path.is_empty()),
+        osc_args: parts.osc_args.filter(|args| !args.is_empty()),
+        osc_successful: None,
+        osc_timestamp: None,
+        midi_note: parts.midi_note.as_ref().and_then(|s| if s.is_empty() { None } else { s.parse::<u8>().ok() }),
+        midi_velocity: parts.midi_velocity.as_ref().and_then(|s| if s.is_empty() { None } else { s.parse::<u8>().ok() }),
+        midi_channel: parts.midi_channel.as_ref().and_then(|s| if s.is_empty() { None } else { s.parse::<u8>().ok() }),
+        midi_duration: parts.midi_duration.as_ref().and_then(|s| if s.is_empty() { None } else { s.parse::<u16>().ok() }),
+        sound_file: None,
+        sound_name: None,
+    };
+
+    if let Some(0) = trigger.amount {
+        trigger.amount = None;
+    }
+
+    if trigger.amount.is_none() {
+        trigger.amount_equality = None;
+    }
+
+    if trigger.sender.is_none() {
+        trigger.sender_equality = None;
+    }
+
+    if trigger.app.is_none() {
+        trigger.app_equality = None;
+    }
+
+    if trigger.podcast.is_none() {
+        trigger.podcast_equality = None;
+    }
+
+    if index > 0 {
+        let existing = match dbif::load_trigger_from_db(&db_filepath, index) {
+            Ok(exist) => exist,
+            Err(e) => {
+                eprintln!("** Error loading trigger: {}.\n", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "** Error loading trigger.".to_string()).into_response();
+            }
+        };
+
+        trigger.position = existing.position;
+
+        trigger.sound_file = existing.sound_file;
+        trigger.sound_name = existing.sound_name;
+
+        trigger.webhook_successful = existing.webhook_successful;
+        trigger.webhook_timestamp = existing.webhook_timestamp;
+
+        trigger.osc_successful = existing.osc_successful;
+        trigger.osc_timestamp = existing.osc_timestamp;
+    };
+
+    let existing_filename = trigger.sound_file.clone();
+
+    let new_filename = match existing_filename.clone() {
+        Some(filename) => filename,
+        None => format!("{}.mp3", Uuid::new_v4()),
+    };
+
+    let new_path = format!("{}/{}", state.helipad_config.sound_path, new_filename);
+
+    if let Some(field) = parts.sound_file {
+        // Upload new file
+        let bytes = std::fs::copy(field.contents.path(), &new_path).unwrap_or(0);
+
+        trigger.sound_file = if bytes > 0 {
+            println!("** Wrote sound file to: {}", new_path);
+            Some(new_filename)
+        } else {
+            None
+        };
+
+        trigger.sound_name = field.metadata.file_name.or(trigger.sound_file.clone());
+
+    } else if parts.sound_file_existing.is_none() {
+        // Remove existing file
+        if let Some(filename) = existing_filename {
+            let full_path = format!("{}/{}", state.helipad_config.sound_path, filename);
+
+            match std::fs::remove_file(&full_path) {
+                Ok(_) => println!("** Removed sound file: {}", full_path),
+                Err(e) => eprintln!("** Error removing sound file: {}.", e),
+            };
+        }
+
+        trigger.sound_file = None;
+        trigger.sound_name = None;
+    }
+
+    let idx = match dbif::save_trigger_to_db(&db_filepath, &trigger) {
+        Ok(idx) => idx,
+        Err(e) => {
+            eprintln!("** Error saving trigger: {}.\n", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error saving trigger.").into_response();
+        }
+    };
+
+    println!("** trigger_settings_save({})", idx);
+
+    triggers_list(&db_filepath).into_response()
+}
+
+pub async fn trigger_settings_delete(
+    State(state): State<AppState>,
+    Path(idx): Path<String>
+) -> impl IntoResponse {
+
+    let index = idx.parse().unwrap();
+
+    if let Err(e) = dbif::delete_trigger_from_db(&state.helipad_config.database_file_path, index) {
+        eprintln!("** Error deleting trigger: {}.\n", e);
+        return (StatusCode::INTERNAL_SERVER_ERROR, "** Error deleting trigger.");
+    }
+
+    println!("** trigger_settings_delete({})", index);
+
+    (StatusCode::OK, "")
+}
+
+pub async fn trigger_settings_test(
+    State(state): State<AppState>,
+    Path(idx): Path<String>
+) -> Response {
+    let index: u64 = match idx.parse() {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("** Invalid trigger index: {}.\n", e);
+            return (StatusCode::BAD_REQUEST, "Invalid trigger index").into_response();
+        }
+    };
+
+    let trigger = match dbif::load_trigger_from_db(&state.helipad_config.database_file_path, index) {
+        Ok(trg) => trg,
+        Err(e) => {
+            eprintln!("** Error loading trigger: {}.\n", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Error loading trigger").into_response();
+        }
+    };
+
+    println!("** Test trigger {}: Executing actions...", index);
+
+    let boost_with_effects = match triggers::test_trigger(&state.helipad_config.database_file_path, &trigger).await {
+        Ok(boost_with_effects) => boost_with_effects,
+        Err(e) => {
+            eprintln!("** Error testing trigger: {}.\n", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Error testing trigger").into_response();
+        }
+    };
+
+    match state.ws_tx.send(WebSocketEvent(
+        "boost".to_string(),
+        serde_json::to_value(&boost_with_effects).unwrap()
+    )) {
+        Ok(_) => println!("WebSocket event sent."),
+        Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
+    }
+
+    triggers_list(&state.helipad_config.database_file_path).into_response()
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TriggerPatchForm {
+    position: u64,
+}
+
+pub async fn trigger_settings_patch(
+    State(state): State<AppState>,
+    Path(idx): Path<String>,
+    Form(params): Form<TriggerPatchForm>,
+) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
+    let db_filepath = state.helipad_config.database_file_path;
+
+    let index = idx.parse().unwrap();
+
+    let mut trigger = match dbif::load_trigger_from_db(&db_filepath, index) {
+        Ok(num) => num,
+        Err(e) => {
+            eprintln!("** Error loading trigger item: {}.\n", e);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "** Error loading trigger item."));
+        }
+    };
+
+        trigger.position = params.position;
+
+    match dbif::save_trigger_to_db(&db_filepath, &trigger) {
+        Ok(num) => num,
+        Err(e) => {
+            eprintln!("** Error saving trigger item: {}.\n", e);
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, "** Error saving trigger item."));
+        }
+    };
+
+    println!("** trigger_settings_patch({})", index);
+
+    Ok(triggers_list(&db_filepath))
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReportGenerateForm {
@@ -1615,7 +1681,7 @@ pub async fn csv_export_boosts(
     let boostcount = params.count;
 
     //Was the "old" flag used?
-    let old = params.old.is_some();
+    let old = params.old.unwrap_or(false);
 
     //Was a stop index given?
     let endex = params.end.unwrap_or(0);
