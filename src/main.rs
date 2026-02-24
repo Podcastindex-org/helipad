@@ -14,17 +14,12 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 
-use chrono::Utc;
 use drop_root::set_user_group;
-
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, USER_AGENT, HeaderMap, HeaderValue};
-use reqwest::redirect::Policy;
 
 use serde::Serialize;
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::convert::TryInto;
 
 use futures::StreamExt;
 
@@ -46,6 +41,7 @@ mod lnaddress;
 mod metadata;
 mod boost;
 mod deserializers;
+mod triggers;
 
 const HELIPAD_CONFIG_FILE: &str = "./helipad.conf";
 const HELIPAD_DATABASE_DIR: &str = "database.db";
@@ -84,12 +80,6 @@ pub struct HelipadConfig {
     pub secret: String,
 }
 
-#[derive(Serialize)]
-pub struct WebhookPayload {
-    pub direction: String,
-    #[serde(flatten)]
-    pub boost: dbif::BoostRecord,
-}
 
 //Configure_me
 include_config!();
@@ -328,11 +318,12 @@ async fn main() {
             .route("/settings/numerology/:idx", post(handler::numerology_settings_save))
             .route("/settings/numerology/:idx", delete(handler::numerology_settings_delete))
 
-            .route("/settings/webhooks", get(handler::webhook_settings_list))
-            .route("/settings/webhooks/:idx", get(handler::webhook_settings_load))
-            .route("/settings/webhooks/:idx", post(handler::webhook_settings_save))
-            .route("/settings/webhooks/:idx", delete(handler::webhook_settings_delete))
-            .route("/settings/webhooks/:idx/test", post(handler::webhook_settings_test))
+            .route("/settings/triggers", get(handler::trigger_settings_list))
+            .route("/settings/triggers/:idx", patch(handler::trigger_settings_patch))
+            .route("/settings/triggers/:idx", get(handler::trigger_settings_load))
+            .route("/settings/triggers/:idx", post(handler::trigger_settings_save))
+            .route("/settings/triggers/:idx", delete(handler::trigger_settings_delete))
+            .route("/settings/triggers/:idx/test", post(handler::trigger_settings_test))
 
             .route("/settings/report/podcasts", get(handler::report_podcasts_list))
             .route("/settings/report/generate", post(handler::report_generate))
@@ -439,7 +430,10 @@ async fn handle_websocket(mut socket: WebSocket, state: AppState) {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct WebSocketEvent(String, serde_json::Value);
+pub struct WebSocketEvent(
+    pub String,
+    pub serde_json::Value,
+);
 
 async fn lnd_subscribe_invoices(
     helipad_config: HelipadConfig,
@@ -550,16 +544,25 @@ async fn process_invoice(
             Err(e) => eprintln!("Error adding invoice: {:#?}", e)
         }
 
+        //Find triggers tied to this boost
+        let boost_with_effects = match triggers::process_triggers(&db_filepath, &boost).await {
+            Ok(boost_with_effects) => boost_with_effects,
+            Err(e) => {
+                eprintln!("Error processing triggers: {:#?}", e);
+                return;
+            }
+        };
+
+        //Send the boost with triggers to the WebSocket
+        //Only the client actions are sent to the WebSocket
         match ws_tx.send(WebSocketEvent(
             boost.list_type(),
-            serde_json::to_value(&boost).unwrap()
+            serde_json::to_value(&boost_with_effects).unwrap()
         )) {
             Ok(_) => println!("WebSocket event sent."),
             Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
         }
 
-        //Send out webhooks (if any)
-        send_webhooks(&db_filepath, &boost).await;
     }
 }
 
@@ -663,16 +666,23 @@ async fn lnd_poller(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sender<
                             Err(e) => eprintln!("Error adding payment: {:#?}", e)
                         }
 
+                        //Process triggers (if any)
+                        let boost_with_effects = match triggers::process_triggers(&db_filepath, &boost).await {
+                            Ok(boost_with_effects) => boost_with_effects,
+                            Err(e) => {
+                                eprintln!("Error processing triggers: {:#?}", e);
+                                return;
+                            }
+                        };
+
                         match ws_tx.send(WebSocketEvent(
                             "payment".to_string(),
-                            serde_json::to_value(&boost).unwrap()
+                            serde_json::to_value(&boost_with_effects).unwrap()
                         )) {
                             Ok(_) => println!("WebSocket event sent."),
                             Err(e) => eprintln!("Error sending WebSocket event: {:#?}", e)
                         }
 
-                        //Send out webhooks (if any)
-                        send_webhooks(&db_filepath, &boost).await;
                     }
 
                     current_payment = payment.payment_index;
@@ -690,144 +700,6 @@ async fn lnd_poller(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sender<
         //Sleep only if nothing was updated
         if !updated {
             tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
-        }
-    }
-}
-
-async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
-    let webhooks = match dbif::get_webhooks_from_db(db_filepath, Some(true)) {
-        Ok(wh) => wh,
-        Err(e) => {
-            eprintln!("Error loading webhooks from db: {:#?}", e);
-            return;
-        }
-    };
-
-    for webhook in webhooks {
-        if boost.payment_info.is_some() && !webhook.on_sent {
-            continue; // sent
-        }
-
-        if boost.action == 1 && !webhook.on_stream {
-            continue; // stream
-        }
-
-        if boost.action == 2 && !webhook.on_boost {
-            continue; // boost
-        }
-
-        if boost.action == 4 && !webhook.on_auto {
-            continue; // auto
-        }
-
-        let sats: u64 = if boost.value_msat_total > 0 {
-            (boost.value_msat_total / 1000).try_into().unwrap() // i64 -> u64
-        } else {
-            0
-        };
-
-        if &webhook.equality == "<" && sats >= webhook.amount {
-            continue; // not less than
-        }
-        else if &webhook.equality == ">=" && sats < webhook.amount {
-            continue; // not greater/equal to
-        }
-        else if &webhook.equality == "=" && sats != webhook.amount {
-            continue; // not equal
-        }
-        else if &webhook.equality == "=~" {
-            let sat_val = sats.to_string();
-            let wh_val = webhook.amount.to_string();
-
-            if !sat_val.contains(&wh_val) {
-                continue; // does not contain
-            }
-        }
-
-        let mut headers = HeaderMap::new();
-
-        headers.insert(CONTENT_TYPE, match HeaderValue::from_str("application/json") {
-            Ok(hdr) => hdr,
-            Err(e) => {
-                eprintln!("Unable to create content type header: {}", e);
-                continue;
-            }
-        });
-
-        let user_agent = format!("Helipad/{}", env!("CARGO_PKG_VERSION"));
-        headers.insert(USER_AGENT, match HeaderValue::from_str(user_agent.as_str()) {
-            Ok(hdr) => hdr,
-            Err(e) => {
-                eprintln!("Unable to create user agent header: {}", e);
-                continue;
-            }
-        });
-
-        if !webhook.token.is_empty() {
-            let token = format!("Bearer {}", webhook.token);
-            headers.insert(AUTHORIZATION, match HeaderValue::from_str(&token) {
-                Ok(hdr) => hdr,
-                Err(e) => {
-                    eprintln!("Unable to create authorization header: {}", e);
-                    continue;
-                }
-            });
-        }
-
-        let client = match reqwest::Client::builder().redirect(Policy::limited(5)).build() {
-            Ok(cli) => cli,
-            Err(e) => {
-                eprintln!("Unable to build reqwest client: {}", e);
-                continue;
-            }
-        };
-
-        // Determine payment direction
-        let direction = if boost.payment_info.is_some() {
-            "outgoing".to_string()
-        } else {
-            "incoming".to_string()
-        };
-
-        // Create webhook payload with type
-        let payload = WebhookPayload {
-            direction: direction,
-            boost: boost.clone(),
-        };
-
-        let json = match serde_json::to_string_pretty(&payload) {
-            Ok(js) => js,
-            Err(e) => {
-                eprintln!("Unable to encode webhook payload as JSON: {}", e);
-                continue;
-            }
-        };
-
-        let result = client.post(&webhook.url).body(json).headers(headers).send().await;
-        let timestamp = Utc::now().timestamp();
-        let mut successful = false;
-
-        if let Ok(res) = result {
-            let status = res.status();
-            let response = res.text().await;
-
-            if status == 200 && response.is_ok() {
-                println!("Webhook sent to {}: {}", webhook.url, response.unwrap());
-                successful = true;
-            }
-            else if status != 200 {
-                eprintln!("Webhook returned {}: {}", status, response.unwrap_or_default());
-            }
-            else if let Err(e) = response {
-                eprintln!("Webhook Error: {}", e);
-            }
-        }
-        else if let Err(e) = result {
-            eprintln!("Unable to send webhook: {}", e);
-        }
-
-        if let Err(e) = dbif::set_webhook_last_request(db_filepath, webhook.index, successful, timestamp) {
-            eprintln!("Error setting webhook last request status: {}", e);
         }
     }
 }

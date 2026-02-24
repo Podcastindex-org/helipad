@@ -2,19 +2,17 @@ $(document).ready(function () {
     let messages = $('div.mesgs');
     let inbox = messages.find('div.msg_history');
     let appIconUrlBase = 'image/';
-    let pewSound = new PewSound();
     let appList = {};
     let numerologyList = [];
-    var connection = null;
-    var messageIds = [];
-    var currentInvoiceIndex = null;
-    var currentBalance = null;
-    var currentBalanceAmount = 0;
+    let messageIds = [];
+    let currentInvoiceIndex = null;
     let nodeInfo = null;
     let settings = null;
     let filters = {};
     let nostrPool = null;
     let nostrRelays = ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band"];
+    let balanceTracker = null;
+    let triggers = null;
 
     let config = {
         'listUrl': '/api/v1/boosts',
@@ -60,6 +58,10 @@ $(document).ready(function () {
 
         if (filters.podcast) {
             params.podcast = filters.podcast;
+        }
+
+        if (shouldPew) {
+            params.triggers = true;
         }
 
         const url = config.listUrl + '?' + $.param(params);
@@ -312,9 +314,10 @@ $(document).ready(function () {
 
             let now = new Date();
 
-            if (shouldPew && config.effects && settings.play_pew && (now - timestamp) < 600000) { // if enabled/shouldPew and received within past 10 mins
-                //Pew pew pew!
-                playPew(boostSats);
+            if (shouldPew && config.effects && (now - timestamp) < 600000) { // if enabled/shouldPew and received within past 10 mins
+                if (element.effects && element.effects.length > 0) {
+                    triggers.handleTriggers(element.effects);
+                }
             }
         });
 
@@ -426,58 +429,6 @@ $(document).ready(function () {
         return numerology;
     }
 
-    // Plays and queues the pews
-    function PewSound() {
-        this.audio = new Audio();
-        this.playing = false;
-        this.queue = [];
-
-        // plays the requested pew sound
-        const playSound = (src) => {
-            this.playing = true;
-
-            this.audio.src = src;
-            try {
-                this.audio.play();
-            } catch (err) {}
-
-            this.audio.addEventListener('ended', () => this.playing = false);
-        }
-
-        // work through the queue of pews
-        setInterval(() => {
-            if (!this.playing && this.queue.length > 0) {
-                playSound(this.queue.shift());
-            }
-        }, 1000);
-
-        // play or queue the sound
-        this.play = (src) => {
-            if (!this.playing && this.queue.length === 0) { // nothing playing or queued
-                playSound(src); // play the sound
-            }
-            else {
-                this.queue.push(src); // queue the sound
-            }
-        }
-    }
-
-    //Play the pew sound that corresponds with the donation amount
-    function playPew(value) {
-        // find the first pew with a sound file
-        const pews = parseNumerology(value).filter(num => num.sound_file)
-        let src = 'pew.mp3'; // default
-
-        if (pews.length) {
-            src = `sound/${pews[0].sound_file}`;
-        }
-        else if (settings.custom_pew_file) {
-            src = `sound/${settings.custom_pew_file}`;
-        }
-
-        pewSound.play(src);
-    }
-
     //Animate some confetti on the page with a given duration interval in milliseconds
     function shootConfetti(time) {
         startConfetti();
@@ -552,33 +503,21 @@ $(document).ready(function () {
     }
 
     function initWebsocket() {
-        ws = new WebSocket("/api/v1/ws");
-        ws.onmessage = (msg) => {
-            const data = JSON.parse(msg.data);
+        balanceTracker = new BalanceTracker();
+        triggers = new TriggerQueue();
 
-            if (data[0] == "balance") {
-                Balance.setBalance(data[1]);
+        ws = new HelipadWebsocket((event, args) => {
+            if (event == "balance") {
+                balanceTracker.setBalance(args[0]);
             }
             else if (
-                (data[0] == "payment" && config.singularName == "sent boost") ||
-                (data[0] == "boost" && config.singularName == "boost") ||
-                (data[0] == "stream" && config.singularName == "stream")
+                (event == "payment" && config.singularName == "sent boost") ||
+                (event == "boost" && config.singularName == "boost") ||
+                (event == "stream" && config.singularName == "stream")
             ) {
-                renderBoosts([data[1]], 0, true, true);
+                renderBoosts([args[0]], 0, true, true);
             }
-        }
-        ws.onclose = () => {
-            console.log("WebSocket closed");
-            setTimeout(() => {
-                initWebsocket();
-            }, 5000);
-        }
-        ws.onerror = (err) => {
-            console.log("WebSocket error", err);
-        }
-        ws.onopen = () => {
-            console.log("WebSocket opened");
-        }
+        });
     }
 
     //Get the most recent invoice index the node knows about

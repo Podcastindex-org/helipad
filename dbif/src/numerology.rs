@@ -10,7 +10,6 @@ pub struct NumerologyRecord {
     pub amount: u64,
     pub equality: String,
     pub emoji: Option<String>,
-    pub sound_file: Option<String>,
     pub description: Option<String>,
 }
 
@@ -25,7 +24,6 @@ pub fn create_numerology_table(conn: &Connection) -> Result<bool, Box<dyn Error>
              equality text not null,
              amount integer not null,
              emoji text,
-             sound_file text,
              description text
          )",
         [],
@@ -57,7 +55,6 @@ pub fn get_numerology_from_db(filepath: &str) -> Result<Vec<NumerologyRecord>, B
             amount,
             equality,
             emoji,
-            sound_file,
             description
         FROM
             numerology
@@ -72,8 +69,7 @@ pub fn get_numerology_from_db(filepath: &str) -> Result<Vec<NumerologyRecord>, B
             amount: row.get(2)?,
             equality: row.get(3)?,
             emoji: row.get(4).ok(),
-            sound_file: row.get(5).ok(),
-            description: row.get(6).ok(),
+            description: row.get(5).ok(),
         })
     }).unwrap();
 
@@ -94,7 +90,6 @@ pub fn load_numerology_from_db(filepath: &str, index: u64) -> Result<NumerologyR
             amount,
             equality,
             emoji,
-            sound_file,
             description
         FROM
             numerology
@@ -110,8 +105,7 @@ pub fn load_numerology_from_db(filepath: &str, index: u64) -> Result<NumerologyR
             amount: row.get(2)?,
             equality: row.get(3)?,
             emoji: row.get(4).ok(),
-            sound_file: row.get(5).ok(),
-            description: row.get(6).ok(),
+            description: row.get(5).ok(),
         })
     })?;
 
@@ -136,17 +130,15 @@ pub fn save_numerology_to_db(filepath: &str, numero: &NumerologyRecord) -> Resul
             amount,
             equality,
             emoji,
-            sound_file,
             description
         )
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            (?1, ?2, ?3, ?4, ?5, ?6)
         ON CONFLICT(idx) DO UPDATE SET
             position = excluded.position,
             amount = excluded.amount,
             equality = excluded.equality,
             emoji = excluded.emoji,
-            sound_file = excluded.sound_file,
             description = excluded.description
         RETURNING idx
         "#,
@@ -158,7 +150,6 @@ pub fn save_numerology_to_db(filepath: &str, numero: &NumerologyRecord) -> Resul
         numero.amount,
         numero.equality,
         numero.emoji,
-        numero.sound_file,
         numero.description
     ];
 

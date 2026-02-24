@@ -9,7 +9,7 @@
     <script src="script/jquery.js"></script>
     <script src="script/bootstrap.js"></script>
     <script src="script/utils.js"></script>
-    <script src="script/balance.js"></script>
+    <script src="script/common.js"></script>
     <script src="script/confetti.js"></script>
     <script src="script/htmx.js"></script>
     <script src="script/sortable.js"></script>
@@ -52,7 +52,7 @@
                 <div class="nav nav-pills m-2" role="tablist" aria-orientation="vertical">
                     <a class="nav-link active text-light" id="general-tab" data-toggle="pill" data-target="#general-content" href="#" role="tab" aria-controls="general-content" aria-selected="true">General</a>
                     <a class="nav-link text-light" id="numerology-tab" data-toggle="pill" data-target="#numerology-content" href="#" role="tab" aria-controls="numerology-content" aria-selected="false">Numerology</a>
-                    <a class="nav-link text-light" id="webhooks-tab" data-toggle="pill" data-target="#webhooks-content" href="#" role="tab" aria-controls="webhooks-content" aria-selected="false">Webhooks</a>
+                    <a class="nav-link text-light" id="triggers-tab" data-toggle="pill" data-target="#triggers-content" href="#" role="tab" aria-controls="triggers-content" aria-selected="false">Triggers</a>
                     <a class="nav-link text-light" id="report-tab" data-toggle="pill" data-target="#report-content" href="#" role="tab" aria-controls="report-content" aria-selected="false">Report</a>
                 </div>
             </div>
@@ -78,7 +78,7 @@
                         </button>
 
                         <b>Numerology</b>
-                        <div>Show emojis/play sounds when boosts matching the following amounts are received:</div>
+                        <div>Show emojis when boosts matching the following amounts are received:</div>
 
                         <table id="numerology" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/numerology" hx-trigger="intersect">
                         </table>
@@ -95,23 +95,23 @@
                             Reset to default
                         </button>
                     </div>
-                    <div class="tab-pane fade" id="webhooks-content" role="tabpanel" aria-labelledby="webhooks-tab">
+                    <div class="tab-pane fade" id="triggers-content" role="tabpanel" aria-labelledby="triggers-tab">
                         <button
                             class="btn btn-md btn-primary pull-right"
-                            hx-get="/settings/webhooks/add"
+                            hx-get="/settings/triggers/add"
                             hx-target="#modals-here"
                             hx-trigger="click"
                             data-bs-toggle="modal"
                             data-bs-target="#modals-here"
                             hx-on::after-request="$('#modals-here').modal()"
                         >
-                            Add Webhook
+                            Add Trigger
                         </button>
 
-                        <b>Webhooks</b>
-                        <div>Send HTTP POSTs to the following URLs when boosts are received:</div>
+                        <b>Triggers</b>
+                        <div>Perform effects (webhooks, sounds, MIDI, OSC) when boosts are received:</div>
 
-                        <table id="webhooks" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/webhooks" hx-trigger="intersect">
+                        <table id="triggers" class="table table-dark table-hover text-white w-100 mt-4" hx-get="/settings/triggers" hx-trigger="intersect">
                         </table>
                     </div>
                     <div class="tab-pane fade" id="report-content" role="tabpanel" aria-labelledby="report-tab">
@@ -208,7 +208,24 @@
 </div>
 
 <script>
-window.addEventListener("load", () => {
+document.addEventListener("DOMContentLoaded", () => {
+    const balanceTracker = new BalanceTracker();
+    const triggers = new TriggerQueue();
+
+    const ws = new HelipadWebsocket((event, args) => {
+        console.log("WebSocket event:", event, args);
+        if (event == "balance") {
+            balanceTracker.setBalance(args[0]);
+        }
+        else if (event == "payment" || event == "boost" || event == "stream") {
+            if (args[0] && args[0].effects) {
+                triggers.handleTriggers(args[0].effects);
+            }
+        }
+    });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
     const now = new Date();
     const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
