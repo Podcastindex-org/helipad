@@ -81,6 +81,30 @@ pub async fn fetch_payment_metadata(comment: &str) -> Result<Option<RawBoost>, B
     Ok(None)
 }
 
+/// Like fetch_payment_metadata but accepts any HTTPS URL after rss::payment::
+/// Used by the manual "Fetch metadata" button where the user explicitly requests it.
+pub async fn fetch_payment_metadata_any(comment: &str) -> Result<Option<RawBoost>, Box<dyn Error>> {
+    let rss_payment_regex = Regex::new(r"rss::payment::\w+ (https:\/\/[^\s]+)")?;
+
+    if let Some(captures) = rss_payment_regex.captures(comment) {
+        if let Some(url) = captures.get(1) {
+            println!("Found RSS Payment URL (manual): {}", url.as_str());
+            return fetch_rss_payment(url.as_str()).await;
+        }
+    }
+
+    let podcast_guru_regex = Regex::new(r"V4V: (https:\/\/boost\.podcastguru\.io\/[^\s]+)")?;
+
+    if let Some(captures) = podcast_guru_regex.captures(comment) {
+        if let Some(url) = captures.get(1) {
+            println!("Found Podcast Guru URL (manual): {}", url.as_str());
+            return fetch_podcast_guru_payment(url.as_str()).await;
+        }
+    }
+
+    Ok(None)
+}
+
 pub async fn fetch_rss_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Error>> {
     let app_version = env!("CARGO_PKG_VERSION");
     let client = reqwest::Client::builder()

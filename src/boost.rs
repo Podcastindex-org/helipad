@@ -215,6 +215,24 @@ pub async fn fetch_boost_metadata(boost: &mut dbif::BoostRecord, comment: &str, 
     true
 }
 
+/// Manual fetch — accepts any HTTPS URL in rss::payment:: comments (no domain whitelist).
+pub async fn fetch_boost_metadata_any(boost: &mut dbif::BoostRecord, comment: &str, remote_cache: &mut podcastindex::GuidCache) -> bool {
+    let metadata = match metadata::fetch_payment_metadata_any(comment).await {
+        Ok(Some(metadata)) => metadata,
+        Ok(None) => {
+            eprintln!("** No payment metadata found for boost (manual): {}", boost.index);
+            return false;
+        },
+        Err(e) => {
+            eprintln!("** Error fetching payment metadata (manual): {}", e);
+            return false;
+        }
+    };
+
+    map_rawboost_to_boost(metadata, boost, remote_cache).await;
+    true
+}
+
 pub async fn map_rawboost_to_boost(rawboost: RawBoost, boost: &mut dbif::BoostRecord, remote_cache: &mut podcastindex::GuidCache) {
     // Determine an action type for later filtering ability
     boost.action = 0;

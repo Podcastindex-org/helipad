@@ -772,7 +772,7 @@ pub async fn api_v1_fetch_metadata(
     let mut remote_cache = podcastindex::GuidCache::new(1);
     let comment = boost.message.clone();
 
-    if !boost::fetch_boost_metadata(&mut boost, &comment, &mut remote_cache).await {
+    if !boost::fetch_boost_metadata_any(&mut boost, &comment, &mut remote_cache).await {
         return (StatusCode::BAD_REQUEST, Json(FetchMetadataResponse {
             success: false,
             boost: None,
