@@ -274,6 +274,7 @@ async fn main() {
                 show_hosted_wallet_ids: false,
                 show_lightning_invoices: true,
                 fetch_metadata: true,
+                metadata_whitelist: "".to_string(),
             }
         }
     };

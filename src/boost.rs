@@ -67,7 +67,7 @@ impl RawBoost {
     }
 }
 
-pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache, fetch_metadata: bool) -> Option<dbif::BoostRecord> {
+pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache, fetch_metadata: bool, metadata_whitelist: &str) -> Option<dbif::BoostRecord> {
     if invoice.state != InvoiceState::Settled as i32 {
         return None; // invoice hasn't been fulfilled yet
     }
@@ -106,7 +106,11 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
     }
 
     // Fetch any RSS payment or Podcast Guru payment metadata from the invoice memo
-    if fetch_metadata && should_fetch_metadata(&invoice.memo) && fetch_boost_metadata(&mut boost, &invoice.memo, remote_cache).await {
+    if fetch_metadata &&
+       !invoice.memo.is_empty() &&
+       should_fetch_metadata(&invoice.memo, metadata_whitelist) &&
+       fetch_boost_metadata(&mut boost, &invoice.memo, remote_cache).await
+    {
         return Some(boost);
     }
 
@@ -199,17 +203,26 @@ async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &Ha
     }
 }
 
-fn should_fetch_metadata(comment: &str) -> bool {
-    let patterns = [
-        r"rss::payment::\w+ https://(fountain\.fm|castamatic\.com)/",
-        r"V4V: https://boost\.podcastguru\.io/",
-    ];
+fn should_fetch_metadata(comment: &str, additional_domains: &str) -> bool {
+    let mut domains = vec!["fountain.fm", "castamatic.com"];
 
-    patterns.iter().any(|pattern| {
-        Regex::new(pattern)
+    let extra: Vec<&str> = additional_domains
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    domains.extend(extra);
+
+    let domain_match = domains.iter().any(|d| {
+        Regex::new(&format!(r"rss::payment::\w+ https://{}/", d))
             .map(|re| re.is_match(comment))
             .unwrap_or(false)
-    })
+    });
+
+    domain_match || Regex::new(r"V4V: https://boost\.podcastguru\.io/")
+        .map(|re| re.is_match(comment))
+        .unwrap_or(false)
 }
 
 pub async fn fetch_boost_metadata(boost: &mut dbif::BoostRecord, comment: &str, remote_cache: &mut podcastindex::GuidCache) -> bool {

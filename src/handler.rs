@@ -817,6 +817,7 @@ pub struct GeneralSettingsMultipart {
     show_hosted_wallet_ids: Option<bool>,
     show_lightning_invoices: Option<bool>,
     fetch_metadata: Option<bool>,
+    metadata_whitelist: Option<String>,
 
     // The `unlimited arguments` means that this field will be limited to the
     // total size of the request body. If you want to limit the size of this
@@ -851,6 +852,7 @@ pub async fn general_settings_save(
     settings.show_hosted_wallet_ids = parts.show_hosted_wallet_ids.unwrap_or(false);
     settings.show_lightning_invoices = parts.show_lightning_invoices.unwrap_or(false);
     settings.fetch_metadata = parts.fetch_metadata.unwrap_or(false);
+    settings.metadata_whitelist = parts.metadata_whitelist.unwrap_or("".to_string());
 
     if !settings.hide_boosts {
         settings.hide_boosts_below = None;

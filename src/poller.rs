@@ -87,7 +87,7 @@ async fn poll_invoices(
     for invoice in response.invoices {
         println!("Invoice: {:#?}", &invoice);
 
-        if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, false).await {
+        if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, false, "").await {
             println!("Boost: {:#?}", &boost);
             handle_boost(&boost, db_filepath, ws_tx, false).await;
         }
@@ -197,9 +197,13 @@ pub async fn lnd_subscribe_invoices(
 
         while let Some(Ok(invoice)) = invoices.next().await {
             println!("Invoice: {:#?}", invoice);
-            let fetch_metadata = settings.read().await.fetch_metadata;
 
-            if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), &mut remote_cache, fetch_metadata).await {
+            let settings_snapshot = settings.read().await;
+            let fetch_metadata = settings_snapshot.fetch_metadata;
+            let metadata_whitelist = settings_snapshot.metadata_whitelist.clone();
+            drop(settings_snapshot);
+
+            if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), &mut remote_cache, fetch_metadata, &metadata_whitelist).await {
                 println!("Boost: {:#?}", &boost);
                 handle_boost(&boost, &db_filepath, &ws_tx, true).await;
             }

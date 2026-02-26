@@ -15,6 +15,7 @@ pub struct SettingsRecord {
     pub show_hosted_wallet_ids: bool,
     pub show_lightning_invoices: bool,
     pub fetch_metadata: bool,
+    pub metadata_whitelist: String,
 }
 
 pub fn create_settings_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
@@ -56,6 +57,10 @@ pub fn create_settings_table(conn: &Connection) -> Result<bool, Box<dyn Error>> 
         println!("Fetch metadata setting added.");
     }
 
+    if conn.execute("ALTER TABLE settings ADD COLUMN metadata_whitelist text", []).is_ok() {
+        println!("Metadata whitelist setting added.");
+    }
+
     Ok(true)
 }
 
@@ -73,7 +78,8 @@ pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn E
              resolve_nostr_refs,
              show_hosted_wallet_ids,
              show_lightning_invoices,
-             fetch_metadata
+             fetch_metadata,
+             metadata_whitelist
         FROM
             settings
         WHERE
@@ -93,6 +99,7 @@ pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn E
             show_hosted_wallet_ids: row.get(7)?,
             show_lightning_invoices: row.get(8)?,
             fetch_metadata: row.get(9).unwrap_or(true),
+            metadata_whitelist: row.get(10).unwrap_or("".to_string()),
         })
     });
 
@@ -109,6 +116,7 @@ pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn E
             show_hosted_wallet_ids: false,
             show_lightning_invoices: true,
             fetch_metadata: true,
+            metadata_whitelist: "".to_string(),
         }),
         Err(e) => Err(Box::new(e)),
     }
@@ -129,10 +137,11 @@ pub fn save_settings_to_db(filepath: &str, settings: &SettingsRecord) -> Result<
             resolve_nostr_refs,
             show_hosted_wallet_ids,
             show_lightning_invoices,
-            fetch_metadata
+            fetch_metadata,
+            metadata_whitelist
         )
         VALUES
-            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
         ON CONFLICT(idx) DO UPDATE SET
             show_received_sats = excluded.show_received_sats,
             show_split_percentage = excluded.show_split_percentage,
@@ -143,7 +152,8 @@ pub fn save_settings_to_db(filepath: &str, settings: &SettingsRecord) -> Result<
             resolve_nostr_refs = excluded.resolve_nostr_refs,
             show_hosted_wallet_ids = excluded.show_hosted_wallet_ids,
             show_lightning_invoices = excluded.show_lightning_invoices,
-            fetch_metadata = excluded.fetch_metadata
+            fetch_metadata = excluded.fetch_metadata,
+            metadata_whitelist = excluded.metadata_whitelist
         "#,
         params![
             settings.show_received_sats,
@@ -156,6 +166,7 @@ pub fn save_settings_to_db(filepath: &str, settings: &SettingsRecord) -> Result<
             settings.show_hosted_wallet_ids,
             settings.show_lightning_invoices,
             settings.fetch_metadata,
+            settings.metadata_whitelist,
         ]
     ) {
         Ok(_) => {
