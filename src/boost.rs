@@ -1,3 +1,4 @@
+use regex::Regex;
 use serde::Deserialize;
 use std::error::Error;
 use std::collections::HashMap;
@@ -105,7 +106,7 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
     }
 
     // Fetch any RSS payment or Podcast Guru payment metadata from the invoice memo
-    if fetch_metadata && fetch_boost_metadata(&mut boost, &invoice.memo, remote_cache).await {
+    if fetch_metadata && should_fetch_metadata(&invoice.memo) && fetch_boost_metadata(&mut boost, &invoice.memo, remote_cache).await {
         return Some(boost);
     }
 
@@ -196,6 +197,19 @@ async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &Ha
             }
         }
     }
+}
+
+fn should_fetch_metadata(comment: &str) -> bool {
+    let patterns = [
+        r"rss::payment::\w+ https://(fountain\.fm|castamatic\.com)/",
+        r"V4V: https://boost\.podcastguru\.io/",
+    ];
+
+    patterns.iter().any(|pattern| {
+        Regex::new(pattern)
+            .map(|re| re.is_match(comment))
+            .unwrap_or(false)
+    })
 }
 
 pub async fn fetch_boost_metadata(boost: &mut dbif::BoostRecord, comment: &str, remote_cache: &mut podcastindex::GuidCache) -> bool {

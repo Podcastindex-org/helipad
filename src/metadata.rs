@@ -60,7 +60,7 @@ pub struct PodcastGuruPayment {
 }
 
 pub async fn fetch_payment_metadata(comment: &str) -> Result<Option<RawBoost>, Box<dyn Error>> {
-    let rss_payment_regex = Regex::new(r"rss::payment::\w+ (https:\/\/(fountain\.fm|castamatic\.com)\/[^\s]+)")?;
+    let rss_payment_regex = Regex::new(r"rss::payment::\w+ (https:\/\/[^\s]+)")?;
 
     if let Some(captures) = rss_payment_regex.captures(comment) {
         if let Some(url) = captures.get(1) {
