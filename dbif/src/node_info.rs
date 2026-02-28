@@ -81,9 +81,9 @@ pub fn get_node_info_from_db(filepath: &str) -> Result<NodeInfoRecord, Box<dyn E
 
     let mut rows = stmt.query_map([], |row| {
         Ok(NodeInfoRecord {
-            lnd_alias: row.get(0)?,
-            node_pubkey: row.get(1)?,
-            node_version: row.get(2)?,
+            lnd_alias: row.get(0).unwrap_or_default(),
+            node_pubkey: row.get(1).unwrap_or_default(),
+            node_version: row.get(2).unwrap_or_default(),
         })
     })?;
 
