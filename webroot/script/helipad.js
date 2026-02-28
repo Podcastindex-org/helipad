@@ -302,7 +302,7 @@ $(document).ready(function () {
             }
 
             // Show fetch button for invoices with payment metadata (RSS payment or Podcast Guru)
-            let rssMarker = "rss::payment::" + config.singularName.toLowerCase();
+            let rssMarker = "rss::payment::";
             let guruMarker = "V4V: https://boost.podcastguru.io/";
             if (element.action === 5 && element.message &&
                 (element.message.indexOf(rssMarker) !== -1 || element.message.indexOf(guruMarker) !== -1)) {
