@@ -206,7 +206,7 @@ async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &Ha
 }
 
 fn should_fetch_metadata(comment: &str, additional_domains: &str) -> bool {
-    let mut domains = vec!["fountain.fm", "castamatic.com"];
+    let mut domains = vec!["fountain.fm", "castamatic.com", "tardbox.com"];
 
     let extra: Vec<&str> = additional_domains
         .split(',')
