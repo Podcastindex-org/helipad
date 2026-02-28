@@ -1,7 +1,9 @@
 use crate::HelipadConfig;
 use crate::podcastindex;
 use crate::boost;
+use data_encoding::HEXLOWER;
 use dbif;
+use lnd::lnrpc::lnrpc::invoice::InvoiceState;
 use crate::lightning;
 use crate::triggers;
 use crate::WebSocketEvent;
@@ -85,11 +87,16 @@ async fn poll_invoices(
 
     let mut updated = false;
     for invoice in response.invoices {
-        println!("Invoice: {:#?}", &invoice);
+        let hash = HEXLOWER.encode(&invoice.r_hash);
+
+        println!("Invoice: {}, state: {}, hash: {}", invoice.add_index, invoice.state, hash);
 
         if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, false, "").await {
             println!("Boost: {:#?}", &boost);
             handle_boost(&boost, db_filepath, ws_tx, false).await;
+        }
+        else if invoice.state == InvoiceState::Settled as i32 {
+            println!("No boost found for invoice: {:#?}", &invoice);
         }
 
         *current_index = invoice.add_index;
@@ -113,11 +120,14 @@ async fn poll_payments(
 
     let mut updated = false;
     for payment in response.payments {
-        println!("Payment: {:#?}", &payment);
+        println!("Payment: {}, hash: {}", payment.payment_index, payment.payment_hash);
 
         if let Some(boost) = boost::parse_boost_from_payment(payment.clone(), remote_cache).await {
             println!("Sent Boost: {:#?}", boost);
             handle_boost(&boost, db_filepath, ws_tx, !catchup).await;
+        }
+        else {
+            println!("No boost found for payment: {:#?}", &payment);
         }
 
         *current_index = payment.payment_index;
@@ -196,7 +206,9 @@ pub async fn lnd_subscribe_invoices(
         };
 
         while let Some(Ok(invoice)) = invoices.next().await {
-            println!("Invoice: {:#?}", invoice);
+            let hash = HEXLOWER.encode(&invoice.r_hash);
+
+            println!("Invoice: {}, state: {}, hash: {}", invoice.add_index, invoice.state, hash);
 
             let settings_snapshot = settings.read().await;
             let fetch_metadata = settings_snapshot.fetch_metadata;
@@ -206,6 +218,9 @@ pub async fn lnd_subscribe_invoices(
             if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), &mut remote_cache, fetch_metadata, &metadata_whitelist).await {
                 println!("Boost: {:#?}", &boost);
                 handle_boost(&boost, &db_filepath, &ws_tx, true).await;
+            }
+            else if invoice.state == InvoiceState::Settled as i32 {
+                println!("No boost found for invoice: {:#?}", &invoice);
             }
 
             current_index = invoice.add_index;
