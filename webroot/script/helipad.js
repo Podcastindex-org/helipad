@@ -216,6 +216,16 @@ $(document).ready(function () {
             let dateTime = timestamp.toISOString();
             let localDateTime = timestamp.toLocaleString();
 
+            // Generate pretty date and add link to tlv if it exists
+            let boostTimestamp = prettyDate(dateTime);
+
+            if (Object.keys(boostTlv).length > 0) {
+                boostTimestamp = `
+                <a href="#" style="color: blue" data-toggle="modal" data-target="#boostInfo">
+                    ${boostTimestamp}
+                </a>`;
+            }
+
             $('div.nodata').remove();
 
             //Build the message element
@@ -228,9 +238,7 @@ $(document).ready(function () {
                 </span>
                 <div class="pull-right text-right">
                     <time class="time_date" datetime="${dateTime}" title="${localDateTime}">
-                    <a href="#" style="color: blue" data-toggle="modal" data-target="#boostInfo">
-                        ${prettyDate(dateTime)}
-                    </a>
+                        ${boostTimestamp}
                     </time>
                     <div class="reply-to-boost-div mb-2">
                     </div>
