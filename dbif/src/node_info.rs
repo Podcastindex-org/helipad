@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::error::Error;
 use serde::{Deserialize, Serialize};
 use crate::{connect_to_database, HydraError};
@@ -151,17 +151,11 @@ pub fn add_wallet_balance_to_db(filepath: &str, balance: i64) -> Result<bool, Bo
 pub fn get_wallet_balance_from_db(filepath: &str) -> Result<i64, Box<dyn Error>> {
     let conn = connect_to_database(false, filepath)?;
 
-    //Prepare and execute the query
-    let mut stmt = conn.prepare("SELECT wallet_balance \
-                                               FROM node_info \
-                                               WHERE idx = 1")?;
-    let rows = stmt.query_map([], |row| row.get(0))?;
+    let balance = conn.query_row(
+        "SELECT wallet_balance FROM node_info WHERE idx = 1",
+        [],
+        |row| row.get(0),
+    ).optional()?;
 
-    let mut info = Vec::new();
-
-    for info_result in rows {
-        info.push(info_result?);
-    }
-
-    Ok(info[0])
+    Ok(balance.unwrap_or(0))
 }
