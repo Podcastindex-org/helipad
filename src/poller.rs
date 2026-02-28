@@ -126,9 +126,6 @@ async fn poll_payments(
             println!("Sent Boost: {:#?}", boost);
             handle_boost(&boost, db_filepath, ws_tx, !catchup).await;
         }
-        else {
-            println!("No boost found for payment: {:#?}", &payment);
-        }
 
         *current_index = payment.payment_index;
         updated = true;
