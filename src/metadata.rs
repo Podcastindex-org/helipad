@@ -81,7 +81,7 @@ pub async fn fetch_payment_metadata(comment: &str) -> Result<Option<RawBoost>, B
     Ok(None)
 }
 
-pub async fn fetch_rss_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Error>> {
+async fn fetch_rss_payment_url(url: &str) -> Result<reqwest::Response, Box<dyn Error>> {
     let app_version = env!("CARGO_PKG_VERSION");
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -98,7 +98,26 @@ pub async fn fetch_rss_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Er
         .get("x-rss-payment")
         .ok_or(Box::new(MetadataError("RSS Payment header not found".into())))?;
 
-    let x_rss_payment_value = x_rss_payment.to_str()?;
+    Ok(response)
+}
+
+pub async fn fetch_rss_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Error>> {
+    let response = fetch_rss_payment_url(url).await?;
+
+    let header_value = match response.headers().get("x-rss-payment") {
+        Some(v) => v.to_owned(),
+        None => {
+            println!("RSS Payment header not found, retrying in 10 seconds");
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            fetch_rss_payment_url(url).await?
+                .headers()
+                .get("x-rss-payment")
+                .ok_or_else(|| MetadataError("RSS Payment header not found".into()))?
+                .to_owned()
+        }
+    };
+
+    let x_rss_payment_value = header_value.to_str()?;
     let decoded = url_decode(x_rss_payment_value).expect("UTF-8");
     println!("X-RSS-Payment: {}", decoded);
 
