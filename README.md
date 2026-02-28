@@ -93,6 +93,7 @@ Webhooks send an HTTP POST to a user defined URL whenever a new boost, stream, o
   "remote_podcast": "Some artist",
   "remote_episode": "Some song",
   "reply_sent": false,
+  "memo": "",
   "payment_info": null
 }
 ```
@@ -114,7 +115,7 @@ The fields are as follows:
 * `remote_podcast`: Name of the remote podcast (during a Value Time Split)
 * `remote_episode`: Name of the remote episode (during a Value Time Split)
 * `reply_sent`: Flag that indicates if this item has been sent a reply boost
-* `memo`: Memo field from Lightning invoice
+* `memo`: Memo field from the Lightning invoice
 * `payment_info`: Additional payment info for sent boosts:
   ```json
     "payment_info": {
