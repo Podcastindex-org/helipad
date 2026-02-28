@@ -114,6 +114,7 @@ The fields are as follows:
 * `remote_podcast`: Name of the remote podcast (during a Value Time Split)
 * `remote_episode`: Name of the remote episode (during a Value Time Split)
 * `reply_sent`: Flag that indicates if this item has been sent a reply boost
+* `memo`: Memo field from Lightning invoice
 * `payment_info`: Additional payment info for sent boosts:
   ```json
     "payment_info": {
