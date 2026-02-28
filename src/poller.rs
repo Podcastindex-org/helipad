@@ -79,30 +79,39 @@ async fn poll_invoices(
     current_index: &mut u64,
     remote_cache: &mut podcastindex::GuidCache,
     ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>,
-) -> bool {
-    let response = match lnd::Lnd::list_invoices(lightning, false, *current_index, 500, false, 0, 0).await {
-        Ok(r) => r,
-        Err(e) => { eprintln!("lnd::Lnd::list_invoices failed: {}", e); return false; }
-    };
+) {
+    loop {
+        let response = match lnd::Lnd::list_invoices(lightning, false, *current_index, 1000, false, 0, 0).await {
+            Ok(r) => r,
+            Err(e) => { eprintln!("lnd::Lnd::list_invoices failed: {}", e); return; }
+        };
 
-    let mut updated = false;
-    for invoice in response.invoices {
-        let hash = HEXLOWER.encode(&invoice.r_hash);
+        let mut updated = false;
+        for invoice in response.invoices {
+            let hash = HEXLOWER.encode(&invoice.r_hash);
 
-        println!("Invoice: {}, state: {}, hash: {}", invoice.add_index, invoice.state, hash);
+            println!("Invoice: {}, state: {}, hash: {}", invoice.add_index, invoice.state, hash);
 
-        if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, false, "").await {
-            println!("Boost: {:#?}", &boost);
-            handle_boost(&boost, db_filepath, ws_tx, false).await;
+            if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, false, "").await {
+                println!("Boost: {:#?}", &boost);
+
+                match dbif::add_invoice_to_db(db_filepath, &boost) {
+                    Ok(_) => println!("New invoice added."),
+                    Err(e) => eprintln!("Error adding invoice: {:#?}", e),
+                }
+            }
+            else if invoice.state == InvoiceState::Settled as i32 {
+                println!("No boost found for invoice: {:#?}", &invoice);
+            }
+
+            *current_index = invoice.add_index;
+            updated = true;
         }
-        else if invoice.state == InvoiceState::Settled as i32 {
-            println!("No boost found for invoice: {:#?}", &invoice);
-        }
 
-        *current_index = invoice.add_index;
-        updated = true;
+        if !updated {
+            break;
+        }
     }
-    updated
 }
 
 async fn poll_payments(
