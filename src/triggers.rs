@@ -139,6 +139,7 @@ pub async fn test_trigger(db_filepath: &str, trigger: &dbif::TriggerRecord) -> R
         reply_sent: false,
         custom_key: None,
         custom_value: None,
+        memo: None,
         payment_info: None,
     };
 

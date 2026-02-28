@@ -160,6 +160,7 @@ pub fn get_payments_from_db(filepath: &str, index: u64, max: u64, direction: boo
             reply_sent: false,
             custom_key: None,
             custom_value: None,
+            memo: None,
             payment_info: Some(PaymentRecord {
                 payment_hash: row.get(13)?,
                 pubkey: row.get(14)?,

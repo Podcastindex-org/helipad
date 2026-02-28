@@ -26,6 +26,7 @@ pub struct BoostRecord {
     pub reply_sent: bool,
     pub custom_key: Option<u64>,
     pub custom_value: Option<String>,
+    pub memo: Option<String>,
     pub payment_info: Option<PaymentRecord>,
 }
 
@@ -155,7 +156,8 @@ pub fn create_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
              remote_podcast text,
              remote_episode text,
              custom_key integer,
-             custom_value text
+             custom_value text,
+             memo text
          )",
         [],
     ) {
@@ -185,6 +187,10 @@ pub fn create_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
         println!("Boosts custom key/value added.");
     }
 
+    if conn.execute("ALTER TABLE boosts ADD COLUMN memo text", []).is_ok() {
+        println!("Boosts memo column added.");
+    }
+
     Ok(true)
 }
 
@@ -195,9 +201,9 @@ pub fn add_invoice_to_db(filepath: &str, boost: &BoostRecord) -> Result<bool, Bo
 
     match conn.execute(
         "INSERT INTO boosts
-            (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value)
+            (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo)
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
         ",
         params![
             boost.index,
@@ -215,7 +221,8 @@ pub fn add_invoice_to_db(filepath: &str, boost: &BoostRecord) -> Result<bool, Bo
             boost.remote_episode,
             boost.reply_sent,
             boost.custom_key,
-            boost.custom_value
+            boost.custom_value,
+            boost.memo
         ]
     ) {
         Ok(_) => {
@@ -253,8 +260,9 @@ pub fn update_invoice_in_db(filepath: &str, boost: &BoostRecord) -> Result<bool,
             remote_podcast = ?10,
             remote_episode = ?11,
             custom_key = ?12,
-            custom_value = ?13
-        WHERE idx = ?14
+            custom_value = ?13,
+            memo = ?14
+        WHERE idx = ?15
         ",
         params![
             boost.value_msat,
@@ -270,6 +278,7 @@ pub fn update_invoice_in_db(filepath: &str, boost: &BoostRecord) -> Result<bool,
             boost.remote_episode,
             boost.custom_key,
             boost.custom_value,
+            boost.memo,
             boost.index
         ]
     ) {
@@ -364,7 +373,7 @@ pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64,
     //Query for boosts and automated boosts
     let sqltxt = format!(
         "SELECT
-            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value
+            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo
         FROM
             boosts
         WHERE
@@ -405,6 +414,7 @@ pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64,
             reply_sent: row.get(13).unwrap_or(false),
             custom_key: row.get(14).ok(),
             custom_value: row.get(15).ok(),
+            memo: row.get(16).ok(),
             payment_info: None,
         };
 
@@ -462,7 +472,7 @@ pub fn get_last_boost_index_from_db(filepath: &str) -> Result<u64, Box<dyn Error
     //Prepare and execute the query
     let mut stmt = conn.prepare(
         "SELECT
-            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value
+            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo
         FROM
             boosts
         ORDER BY
@@ -490,6 +500,7 @@ pub fn get_last_boost_index_from_db(filepath: &str) -> Result<u64, Box<dyn Error
             reply_sent: row.get(13).unwrap_or(false),
             custom_key: row.get(14).ok(),
             custom_value: row.get(15).ok(),
+            memo: row.get(16).ok(),
             payment_info: None,
         })
     }).unwrap();
