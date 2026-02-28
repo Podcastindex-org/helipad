@@ -106,7 +106,7 @@ pub async fn fetch_rss_payment(url: &str) -> Result<Option<RawBoost>, Box<dyn Er
     println!("RSS Payment: {:#?}", rss_payment);
 
     Ok(Some(RawBoost {
-        action: rss_payment.action,
+        action: rss_payment.action.map(|action| action.to_lowercase()),
         app_name: rss_payment.app_name,
         podcast: rss_payment.feed_title,
         episode: rss_payment.item_title,

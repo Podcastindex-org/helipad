@@ -119,7 +119,8 @@ impl ActionType {
     }
 
     pub fn from_str(s: &str) -> Self {
-        match s {
+        let lower = s.to_lowercase();
+        match lower.as_str() {
             "unknown" => ActionType::Unknown,
             "stream" => ActionType::Stream,
             "boost" => ActionType::Boost,
