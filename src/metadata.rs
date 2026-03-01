@@ -93,11 +93,6 @@ async fn fetch_rss_payment_url(url: &str) -> Result<reqwest::Response, Box<dyn E
         .send()
         .await?;
 
-    let x_rss_payment = response
-        .headers()
-        .get("x-rss-payment")
-        .ok_or(Box::new(MetadataError("RSS Payment header not found".into())))?;
-
     Ok(response)
 }
 
