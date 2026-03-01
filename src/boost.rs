@@ -118,14 +118,7 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
     // Else use what we have for a "Lightning Invoice" boost
     if !invoice.memo.is_empty() {
         boost.action = dbif::ActionType::Invoice;
-
-        if invoice.memo.starts_with("rss::payment::stream") {
-            boost.list_type = dbif::ListType::Stream;
-        }
-        else {
-            boost.list_type = dbif::ListType::Boost;
-        }
-
+        boost.list_type = dbif::ListType::from_comment(&invoice.memo);
         boost.app = "Lightning Invoice".to_string();
         boost.sender = "Lightning Invoice".to_string();
         boost.message = invoice.memo;
@@ -262,9 +255,7 @@ pub async fn map_rawboost_to_boost(rawboost: RawBoost, boost: &mut dbif::BoostRe
     }
 
     // Determine the list to put this boost into
-    if boost.list_type == dbif::ListType::Unknown {
-        boost.list_type = dbif::ListType::from_action(boost.action);
-    }
+    boost.list_type = dbif::ListType::from_action_and_comment(boost.action, &boost.message);
 
     //Was a sender name given in the tlv?
     boost.sender = rawboost.sender_name.unwrap_or_default();

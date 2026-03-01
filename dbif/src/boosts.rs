@@ -167,6 +167,22 @@ impl ListType {
         let action = ActionType::from_u8(action);
         ListType::from_action(action)
     }
+
+    pub fn from_comment(comment: &str) -> Self {
+        if comment.starts_with("rss::payment::stream") {
+            ListType::Stream
+        }
+        else {
+            ListType::Boost
+        }
+    }
+
+    pub fn from_action_and_comment(action: ActionType, comment: &str) -> Self {
+        match action {
+            ActionType::Invoice => ListType::from_comment(comment),
+            _ => ListType::from_action(action),
+        }
+    }
 }
 
 impl fmt::Display for ListType {
