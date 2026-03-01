@@ -117,7 +117,8 @@ pub async fn test_trigger(db_filepath: &str, trigger: &dbif::TriggerRecord) -> R
         time: Utc::now().timestamp(),
         value_msat: test_msats,
         value_msat_total: test_msats,
-        action: 2, // boost action
+        action: dbif::ActionType::Boost,
+        list_type: dbif::ListType::Boost,
         sender: "Test Sender".to_string(),
         app: "Helipad".to_string(),
         message: "This is a test trigger message".to_string(),

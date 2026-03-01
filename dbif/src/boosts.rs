@@ -1,5 +1,6 @@
 use rusqlite::{Connection, params};
 use std::error::Error;
+use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -14,7 +15,8 @@ pub struct BoostRecord {
     pub time: i64,
     pub value_msat: i64,
     pub value_msat_total: i64,
-    pub action: u8,
+    pub action: ActionType,
+    pub list_type: ListType,
     pub sender: String,
     pub app: String,
     pub message: String,
@@ -48,15 +50,12 @@ impl BoostRecord {
 
     // Returns the name of the action
     pub fn action_name(&self) -> String {
-        ActionType::from_u8(self.action).as_str().to_string()
+        self.action.to_string()
     }
 
     // Returns the name of the action for the list
     pub fn list_type(&self) -> String {
-        match self.action_name().as_str() {
-            "boost" | "auto" | "invoice" => "boost",
-            _ => "stream", // everything else goes into the stream list
-        }.to_string()
+        self.list_type.to_string()
     }
 }
 
@@ -84,7 +83,7 @@ impl BoostFilters {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[repr(u8)]
 pub enum ActionType {
     Unknown = 0, // no action type set
@@ -96,17 +95,6 @@ pub enum ActionType {
 }
 
 impl ActionType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ActionType::Unknown => "unknown",
-            ActionType::Stream => "stream",
-            ActionType::Boost => "boost",
-            ActionType::Invalid => "invalid",
-            ActionType::Auto => "auto",
-            ActionType::Invoice => "invoice",
-        }
-    }
-
     pub fn from_u8(value: u8) -> Self {
         match value {
             0 => ActionType::Unknown,
@@ -133,9 +121,63 @@ impl ActionType {
     }
 }
 
+impl fmt::Display for ActionType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ActionType::Unknown => write!(f, "unknown"),
+            ActionType::Stream => write!(f, "stream"),
+            ActionType::Boost => write!(f, "boost"),
+            ActionType::Invalid => write!(f, "invalid"),
+            ActionType::Auto => write!(f, "auto"),
+            ActionType::Invoice => write!(f, "invoice"),
+        }
+    }
+}
 
-pub fn map_action_to_code(action: &str) -> u8 {
-    ActionType::from_str(action) as u8
+impl Serialize for ActionType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // serialize as number rather than name for backwards compatibility with webhooks
+        serializer.serialize_u8(*self as u8)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[repr(u8)]
+pub enum ListType {
+    Unknown = 0, // no list type set
+    Boost = 1, // manual boost or boost-a-gram
+    Stream = 2, // streaming payments
+    Sent = 3, // sent payments
+}
+
+impl ListType {
+    pub fn from_action(action: ActionType) -> Self {
+        match action {
+            ActionType::Boost | ActionType::Auto | ActionType::Invoice => ListType::Boost,
+            ActionType::Stream => ListType::Stream,
+            _ => ListType::Unknown,
+        }
+    }
+
+    pub fn from_action_u8(action: u8) -> Self {
+        let action = ActionType::from_u8(action);
+        ListType::from_action(action)
+    }
+}
+
+impl fmt::Display for ListType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ListType::Unknown => write!(f, "unknown"),
+            ListType::Boost => write!(f, "boost"),
+            ListType::Stream => write!(f, "stream"),
+            ListType::Sent => write!(f, "sent"),
+        }
+    }
 }
 
 pub fn create_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
@@ -147,6 +189,7 @@ pub fn create_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
              value_msat integer,
              value_msat_total integer,
              action integer,
+             list_type integer,
              sender text,
              app text,
              message text,
@@ -191,6 +234,13 @@ pub fn create_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
         println!("Boosts memo column added.");
     }
 
+    if conn.execute("ALTER TABLE boosts ADD COLUMN list_type integer", []).is_ok() {
+        println!("Boosts list type column added.");
+
+        conn.execute("UPDATE boosts SET list_type = 1 WHERE action NOT IN (2, 4, 5)", []).unwrap();
+        conn.execute("UPDATE boosts SET list_type = 2 WHERE action IN (2, 4, 5)", []).unwrap();
+    }
+
     Ok(true)
 }
 
@@ -201,16 +251,17 @@ pub fn add_invoice_to_db(filepath: &str, boost: &BoostRecord) -> Result<bool, Bo
 
     match conn.execute(
         "INSERT INTO boosts
-            (idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo)
+            (idx, time, value_msat, value_msat_total, action, list_type, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo)
         VALUES
-            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+            (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
         ",
         params![
             boost.index,
             boost.time,
             boost.value_msat,
             boost.value_msat_total,
-            boost.action,
+            boost.action as u8,
+            boost.list_type as u8,
             boost.sender,
             boost.app,
             boost.message,
@@ -251,23 +302,25 @@ pub fn update_invoice_in_db(filepath: &str, boost: &BoostRecord) -> Result<bool,
             value_msat = ?1,
             value_msat_total = ?2,
             action = ?3,
-            sender = ?4,
-            app = ?5,
-            message = ?6,
-            podcast = ?7,
-            episode = ?8,
-            tlv = ?9,
-            remote_podcast = ?10,
-            remote_episode = ?11,
-            custom_key = ?12,
-            custom_value = ?13,
-            memo = ?14
-        WHERE idx = ?15
+            list_type = ?4,
+            sender = ?5,
+            app = ?6,
+            message = ?7,
+            podcast = ?8,
+            episode = ?9,
+            tlv = ?10,
+            remote_podcast = ?11,
+            remote_episode = ?12,
+            custom_key = ?13,
+            custom_value = ?14,
+            memo = ?15
+        WHERE idx = ?16
         ",
         params![
             boost.value_msat,
             boost.value_msat_total,
-            boost.action,
+            boost.action as u8,
+            boost.list_type as u8,
             boost.sender,
             boost.app,
             boost.message,
@@ -311,10 +364,10 @@ pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64,
     bindings.insert(":idx", &strindex);
 
     if invtype == "boost" {
-        conditions.push("action IN (2, 4, 5)");
+        conditions.push("list_type = 1");
     }
     else if invtype == "stream" {
-        conditions.push("action NOT IN (2, 4, 5)");
+        conditions.push("list_type = 2");
     }
 
     let mut action_filters= HashMap::new();
@@ -373,7 +426,7 @@ pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64,
     //Query for boosts and automated boosts
     let sqltxt = format!(
         "SELECT
-            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo
+            idx, time, value_msat, value_msat_total, action, list_type, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo
         FROM
             boosts
         WHERE
@@ -402,19 +455,20 @@ pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64,
             time: row.get(1)?,
             value_msat: row.get(2)?,
             value_msat_total: row.get(3)?,
-            action: row.get(4)?,
-            sender: row.get(5)?,
-            app: row.get(6)?,
-            message: row.get(7)?,
-            podcast: row.get(8)?,
-            episode: row.get(9)?,
-            tlv: row.get(10)?,
-            remote_podcast: row.get(11).ok(),
-            remote_episode: row.get(12).ok(),
-            reply_sent: row.get(13).unwrap_or(false),
-            custom_key: row.get(14).ok(),
-            custom_value: row.get(15).ok(),
-            memo: row.get(16).ok(),
+            action: ActionType::from_u8(row.get(4)?),
+            list_type: ListType::from_action_u8(row.get(5)?),
+            sender: row.get(6)?,
+            app: row.get(7)?,
+            message: row.get(8)?,
+            podcast: row.get(9)?,
+            episode: row.get(10)?,
+            tlv: row.get(11)?,
+            remote_podcast: row.get(12).ok(),
+            remote_episode: row.get(13).ok(),
+            reply_sent: row.get(14).unwrap_or(false),
+            custom_key: row.get(15).ok(),
+            custom_value: row.get(16).ok(),
+            memo: row.get(17).ok(),
             payment_info: None,
         };
 
@@ -472,7 +526,7 @@ pub fn get_last_boost_index_from_db(filepath: &str) -> Result<u64, Box<dyn Error
     //Prepare and execute the query
     let mut stmt = conn.prepare(
         "SELECT
-            idx, time, value_msat, value_msat_total, action, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo
+            idx, time, value_msat, value_msat_total, action, list_type, sender, app, message, podcast, episode, tlv, remote_podcast, remote_episode, reply_sent, custom_key, custom_value, memo
         FROM
             boosts
         ORDER BY
@@ -488,19 +542,20 @@ pub fn get_last_boost_index_from_db(filepath: &str) -> Result<u64, Box<dyn Error
             time: row.get(1)?,
             value_msat: row.get(2)?,
             value_msat_total: row.get(3)?,
-            action: row.get(4)?,
-            sender: row.get(5)?,
-            app: row.get(6)?,
-            message: row.get(7)?,
-            podcast: row.get(8)?,
-            episode: row.get(9)?,
-            tlv: row.get(10)?,
-            remote_podcast: row.get(11).ok(),
-            remote_episode: row.get(12).ok(),
-            reply_sent: row.get(13).unwrap_or(false),
-            custom_key: row.get(14).ok(),
-            custom_value: row.get(15).ok(),
-            memo: row.get(16).ok(),
+            action: ActionType::from_u8(row.get(4)?),
+            list_type: ListType::from_action_u8(row.get(5)?),
+            sender: row.get(6)?,
+            app: row.get(7)?,
+            message: row.get(8)?,
+            podcast: row.get(9)?,
+            episode: row.get(10)?,
+            tlv: row.get(11)?,
+            remote_podcast: row.get(12).ok(),
+            remote_episode: row.get(13).ok(),
+            reply_sent: row.get(14).unwrap_or(false),
+            custom_key: row.get(15).ok(),
+            custom_value: row.get(16).ok(),
+            memo: row.get(17).ok(),
             payment_info: None,
         })
     }).unwrap();

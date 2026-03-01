@@ -10,6 +10,8 @@ use crate::{
     BoostFilters,
     mark_boost_as_replied,
     bind_query_param,
+    ActionType,
+    ListType,
 };
 
 pub fn create_sent_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
@@ -148,7 +150,8 @@ pub fn get_payments_from_db(filepath: &str, index: u64, max: u64, direction: boo
             time: row.get(1)?,
             value_msat: row.get(2)?,
             value_msat_total: row.get(3)?,
-            action: row.get(4)?,
+            action: ActionType::from_u8(row.get(4)?),
+            list_type: ListType::Sent,
             sender: row.get(5)?,
             app: row.get(6)?,
             message: row.get(7)?,
@@ -258,7 +261,7 @@ pub fn add_payment_to_db(filepath: &str, boost: &BoostRecord) -> Result<bool, Bo
             boost.time,
             boost.value_msat,
             boost.value_msat_total,
-            boost.action,
+            boost.action as u8,
             boost.sender,
             boost.app,
             boost.message,

@@ -4,7 +4,6 @@ use std::error::Error;
 use std::collections::HashMap;
 use crate::podcastindex;
 use crate::metadata;
-use dbif::map_action_to_code;
 use lnd::lnrpc::lnrpc::{Payment, Invoice, invoice::InvoiceState};
 use crate::deserializers::{d_action, d_blank, d_zero, de_optional_string_or_number};
 
@@ -79,7 +78,8 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
         value_msat: invoice.amt_paid_sat * 1000,
         value_msat_total: invoice.amt_paid_sat * 1000,
         memo: Some(invoice.memo.clone()),
-        action: 0,
+        action: dbif::ActionType::Unknown,
+        list_type: dbif::ListType::Unknown,
         sender: "".to_string(),
         app: "".to_string(),
         message: "".to_string(),
@@ -117,7 +117,15 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
 
     // Else use what we have for a "Lightning Invoice" boost
     if !invoice.memo.is_empty() {
-        boost.action = 5;
+        boost.action = dbif::ActionType::Invoice;
+
+        if invoice.memo.starts_with("rss::payment::stream") {
+            boost.list_type = dbif::ListType::Stream;
+        }
+        else {
+            boost.list_type = dbif::ListType::Boost;
+        }
+
         boost.app = "Lightning Invoice".to_string();
         boost.sender = "Lightning Invoice".to_string();
         boost.message = invoice.memo;
@@ -150,7 +158,8 @@ pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podca
             value_msat: payment.value_msat,
             value_msat_total: payment.value_msat,
             memo: None,
-            action: 0,
+            action: dbif::ActionType::Unknown,
+            list_type: dbif::ListType::Sent,
             sender: "".to_string(),
             app: "".to_string(),
             message: "".to_string(),
@@ -246,9 +255,15 @@ pub async fn fetch_boost_metadata(boost: &mut dbif::BoostRecord, comment: &str, 
 
 pub async fn map_rawboost_to_boost(rawboost: RawBoost, boost: &mut dbif::BoostRecord, remote_cache: &mut podcastindex::GuidCache) {
     // Determine an action type for later filtering ability
-    boost.action = 0;
+    boost.action = dbif::ActionType::Unknown;
+
     if let Some(action) = rawboost.action {
-        boost.action = map_action_to_code(&action);
+        boost.action = dbif::ActionType::from_str(&action);
+    }
+
+    // Determine the list to put this boost into
+    if boost.list_type == dbif::ListType::Unknown {
+        boost.list_type = dbif::ListType::from_action(boost.action);
     }
 
     //Was a sender name given in the tlv?
