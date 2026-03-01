@@ -94,11 +94,7 @@ async fn poll_invoices(
 
             if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, false, "").await {
                 println!("Boost: {:#?}", &boost);
-
-                match dbif::add_invoice_to_db(db_filepath, &boost) {
-                    Ok(_) => println!("New invoice added."),
-                    Err(e) => eprintln!("Error adding invoice: {:#?}", e),
-                }
+                handle_boost(&boost, &db_filepath, &ws_tx, true).await;
             }
             else if invoice.state == InvoiceState::Settled as i32 {
                 println!("No boost found for invoice: {:#?}", &invoice);
