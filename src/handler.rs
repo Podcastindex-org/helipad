@@ -783,7 +783,7 @@ pub async fn api_v1_fetch_metadata(
     // Update the boost in the database
     match dbif::update_invoice_in_db(&state.helipad_config.database_file_path, &boost) {
         Ok(_) => {
-            println!("** Successfully fetched and updatedpayment metadata for boost {}", index);
+            println!("** Successfully fetched and updated payment metadata for boost {}", index);
             (StatusCode::OK, Json(FetchMetadataResponse {
                 success: true,
                 boost: Some(boost),
