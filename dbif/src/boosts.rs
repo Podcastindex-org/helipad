@@ -262,8 +262,8 @@ pub fn create_boosts_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
     if conn.execute("ALTER TABLE boosts ADD COLUMN list_type integer", []).is_ok() {
         println!("Boosts list type column added.");
 
-        conn.execute("UPDATE boosts SET list_type = 1 WHERE action NOT IN (2, 4, 5)", []).unwrap();
-        conn.execute("UPDATE boosts SET list_type = 2 WHERE action IN (2, 4, 5)", []).unwrap();
+        conn.execute("UPDATE boosts SET list_type = 1 WHERE action IN (2, 4, 5)", []).unwrap();
+        conn.execute("UPDATE boosts SET list_type = 2 WHERE action NOT IN (2, 4, 5)", []).unwrap();
     }
 
     Ok(true)
