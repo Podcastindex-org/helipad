@@ -155,6 +155,15 @@ pub enum ListType {
 }
 
 impl ListType {
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => ListType::Unknown,
+            1 => ListType::Boost,
+            2 => ListType::Stream,
+            3 => ListType::Sent,
+            _ => ListType::Unknown,
+        }
+    }
     pub fn from_action(action: ActionType) -> Self {
         match action {
             ActionType::Boost | ActionType::Auto | ActionType::Invoice => ListType::Boost,
@@ -472,7 +481,7 @@ pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64,
             value_msat: row.get(2)?,
             value_msat_total: row.get(3)?,
             action: ActionType::from_u8(row.get(4)?),
-            list_type: ListType::from_action_u8(row.get(5)?),
+            list_type: ListType::from_u8(row.get(5)?),
             sender: row.get(6)?,
             app: row.get(7)?,
             message: row.get(8)?,
@@ -559,7 +568,7 @@ pub fn get_last_boost_index_from_db(filepath: &str) -> Result<u64, Box<dyn Error
             value_msat: row.get(2)?,
             value_msat_total: row.get(3)?,
             action: ActionType::from_u8(row.get(4)?),
-            list_type: ListType::from_action_u8(row.get(5)?),
+            list_type: ListType::from_u8(row.get(5)?),
             sender: row.get(6)?,
             app: row.get(7)?,
             message: row.get(8)?,
