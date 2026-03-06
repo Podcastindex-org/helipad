@@ -1,6 +1,6 @@
 use rusqlite::{Connection, params};
 use std::error::Error;
-use rand::{distr::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, RngExt};
 use crate::{connect_to_database, HydraError};
 
 pub fn create_jwt_secret_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {

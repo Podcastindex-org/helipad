@@ -13,26 +13,26 @@ tokio = { version = "1.12.0", features = ["full"] }
 serde = {version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 url = "2.2.1"
-drop-root = "0.1.1"
+drop-root = "1.2.2"
 dbif = { path = 'dbif'}
 lnd-rs = { path = "lnd-rs" }
 configure_me = "0.4.0"
-handlebars = "4.2.1"
+handlebars = "6.4.0"
 chrono = "0.4.35"
-reqwest = { version = "0.11.20", features = ["json"] }
-lru = "0.11.1"
-rand = "0.8.5"
+reqwest = { version = "0.13.2", features = ["json", "query"] }
+lru = "0.16.3"
+rand = { version = "0.10.0", features = ["thread_rng"] }
 sha2 = "0.10.7"
 data-encoding = "2.4.0"
 email_address = "0.2.4"
 cookie = "0.18.0"
-jsonwebtoken = "9.2.0"
-axum = { version = "0.7.5", features = ["multipart", "ws"] }
-axum-macros = "0.4.1"
-axum-extra = { version = "0.9.3", features = ["cookie"] }
-axum_typed_multipart = "0.11.0"
+jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
+axum = { version = "0.8.8", features = ["multipart", "ws"] }
+axum-macros = "0.5.0"
+axum-extra = { version = "0.12.5", features = ["cookie"] }
+axum_typed_multipart = "0.16.5"
 tempfile = "3.10.1"
-tower-http = { version = "0.5.2", features = ["fs", "cors", "set-header"] }
+tower-http = { version = "0.6.8", features = ["fs", "cors", "set-header"] }
 tower = "0.5.2"
 urlencoding = "2.1.3"
 regex = "1.12.2"

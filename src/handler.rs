@@ -424,10 +424,9 @@ pub async fn api_v1_boosts(
 
 //API - serve streams as JSON either in ascending or descending order
 pub async fn api_v1_streams(
-    params: Option<Query<BoostParams>>,
+    Query(params): Query<BoostParams>,
     State(state): State<AppState>
 ) -> Response {
-    let Query(params) = params.unwrap_or_default();
 
     let index = params.index;
     let boostcount = params.count;
@@ -499,10 +498,9 @@ pub async fn api_v1_sent_index(State(state): State<AppState>) -> Response {
 
 //API - serve sent as JSON either in ascending or descending order
 pub async fn api_v1_sent(
-    params: Option<Query<BoostParams>>,
+    Query(params): Query<BoostParams>,
     State(state): State<AppState>
 ) -> Response {
-    let Query(params) = params.unwrap_or_default();
 
     let index = params.index;
     let boostcount = params.count;

@@ -8,7 +8,7 @@ use sha2::{Sha256, Digest};
 use std::collections::HashMap;
 use std::fs;
 use std::error::Error;
-use rand::RngCore;
+use rand::RngExt;
 
 #[derive(Debug)]
 pub struct BoostError(String);
@@ -81,7 +81,8 @@ fn create_keysend_request(addr: KeysendAddress, sats: u64, tlv: Value) -> Result
 
     // generate 32 random bytes for pre_image
     let mut pre_image = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut pre_image);
+    let mut rng = rand::rng();
+    rng.fill(&mut pre_image);
 
     // and convert to sha256 hash
     let payment_hash = Sha256::digest(&pre_image);

@@ -296,64 +296,65 @@ async fn main() {
     // Api routes
 
     //Router
-    let app = Router::new()
-        // authed routes (if password set)
-        .nest("/", Router::new()
-            .route("/", get(handler::home))
-            .route("/streams", get(handler::streams))
-            .route("/sent", get(handler::sent))
-            .route("/settings", get(handler::settings))
-            .route("/numerology.json", get(handler::numerology_json))
+    // authed routes (if password set)
+    let authed_routes = Router::new()
+        .route("/", get(handler::home))
+        .route("/streams", get(handler::streams))
+        .route("/sent", get(handler::sent))
+        .route("/settings", get(handler::settings))
+        .route("/numerology.json", get(handler::numerology_json))
 
-            .route("/settings/general", get(handler::general_settings_load))
-            .route("/settings/general", post(handler::general_settings_save))
+        .route("/settings/general", get(handler::general_settings_load))
+        .route("/settings/general", post(handler::general_settings_save))
 
-            .route("/settings/numerology", get(handler::numerology_settings_list))
-            .route("/settings/numerology/reset", get(handler::numerology_settings_reset))
-            .route("/settings/numerology/reset", post(handler::numerology_settings_do_reset))
-            .route("/settings/numerology/:idx", patch(handler::numerology_settings_patch))
-            .route("/settings/numerology/:idx", get(handler::numerology_settings_load))
-            .route("/settings/numerology/:idx", post(handler::numerology_settings_save))
-            .route("/settings/numerology/:idx", delete(handler::numerology_settings_delete))
+        .route("/settings/numerology", get(handler::numerology_settings_list))
+        .route("/settings/numerology/reset", get(handler::numerology_settings_reset))
+        .route("/settings/numerology/reset", post(handler::numerology_settings_do_reset))
+        .route("/settings/numerology/{idx}", patch(handler::numerology_settings_patch))
+        .route("/settings/numerology/{idx}", get(handler::numerology_settings_load))
+        .route("/settings/numerology/{idx}", post(handler::numerology_settings_save))
+        .route("/settings/numerology/{idx}", delete(handler::numerology_settings_delete))
 
-            .route("/settings/triggers", get(handler::trigger_settings_list))
-            .route("/settings/triggers/:idx", patch(handler::trigger_settings_patch))
-            .route("/settings/triggers/:idx", get(handler::trigger_settings_load))
-            .route("/settings/triggers/:idx", post(handler::trigger_settings_save))
-            .route("/settings/triggers/:idx", delete(handler::trigger_settings_delete))
-            .route("/settings/triggers/:idx/test", post(handler::trigger_settings_test))
+        .route("/settings/triggers", get(handler::trigger_settings_list))
+        .route("/settings/triggers/{idx}", patch(handler::trigger_settings_patch))
+        .route("/settings/triggers/{idx}", get(handler::trigger_settings_load))
+        .route("/settings/triggers/{idx}", post(handler::trigger_settings_save))
+        .route("/settings/triggers/{idx}", delete(handler::trigger_settings_delete))
+        .route("/settings/triggers/{idx}/test", post(handler::trigger_settings_test))
 
-            .route("/settings/report/podcasts", get(handler::report_podcasts_list))
-            .route("/settings/report/generate", post(handler::report_generate))
+        .route("/settings/report/podcasts", get(handler::report_podcasts_list))
+        .route("/settings/report/generate", post(handler::report_generate))
 
-            .route("/csv", get(handler::csv_export_boosts))
+        .route("/csv", get(handler::csv_export_boosts))
 
-            // public api (cors all origins)
-            .nest("/api/v1", Router::new()
-                .route("/node_info", get(handler::api_v1_node_info))
-                .route("/settings", get(handler::api_v1_settings))
-                .route("/boosts", get(handler::api_v1_boosts))
-                .route("/balance", get(handler::api_v1_balance))
-                .route("/streams", get(handler::api_v1_streams))
-                .route("/sent", get(handler::api_v1_sent))
-                .route("/index", get(handler::api_v1_index))
-                .route("/sent_index", get(handler::api_v1_sent_index))
-                .route("/podcasts", get(handler::api_v1_podcasts))
-                .route("/sent_podcasts", get(handler::api_v1_sent_podcasts))
-                .route("/ws", any(websocket_handler))
+        // public api (cors all origins)
+        .nest("/api/v1", Router::new()
+            .route("/node_info", get(handler::api_v1_node_info))
+            .route("/settings", get(handler::api_v1_settings))
+            .route("/boosts", get(handler::api_v1_boosts))
+            .route("/balance", get(handler::api_v1_balance))
+            .route("/streams", get(handler::api_v1_streams))
+            .route("/sent", get(handler::api_v1_sent))
+            .route("/index", get(handler::api_v1_index))
+            .route("/sent_index", get(handler::api_v1_sent_index))
+            .route("/podcasts", get(handler::api_v1_podcasts))
+            .route("/sent_podcasts", get(handler::api_v1_sent_podcasts))
+            .route("/ws", any(websocket_handler))
 
-                // allow all origins to GET from public api
-                .route_layer(CorsLayer::new().allow_methods([Method::GET]).allow_origin(Any))
-            )
-
-            // protected api
-            .route("/api/v1/reply", post(handler::api_v1_reply))
-            .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
-            .route("/api/v1/fetch_metadata/:idx", post(handler::api_v1_fetch_metadata))
-
-            // require auth for above routes
-            .route_layer(middleware::from_fn_with_state(state.clone(), handler::auth_middleware))
+            // allow all origins to GET from public api
+            .route_layer(CorsLayer::new().allow_methods([Method::GET]).allow_origin(Any))
         )
+
+        // protected api
+        .route("/api/v1/reply", post(handler::api_v1_reply))
+        .route("/api/v1/mark_replied", post(handler::api_v1_mark_replied))
+        .route("/api/v1/fetch_metadata/{idx}", post(handler::api_v1_fetch_metadata))
+
+        // require auth for above routes
+        .route_layer(middleware::from_fn_with_state(state.clone(), handler::auth_middleware));
+
+    let app = Router::new()
+        .merge(authed_routes)
 
         // login page
         .route("/login", get(handler::login).post(handler::handle_login))
