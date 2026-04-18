@@ -118,5 +118,9 @@
     "v4vmusic-com": {
         "icon": "v4vmusic",
         "url": "https://v4vmusic.com"
+    },
+    "StableKraft": {
+        "icon": "stablekraft",
+        "url": "https://stablekraft.app"
     }
 }
