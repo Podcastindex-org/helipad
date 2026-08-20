@@ -846,7 +846,7 @@ pub async fn general_settings_save(
     settings.hide_boosts = parts.hide_boosts.unwrap_or(false);
     settings.hide_boosts_below = hide_boosts_below;
     settings.play_pew = parts.play_pew.unwrap_or(false);
-    settings.resolve_nostr_refs = parts.resolve_nostr_refs.unwrap_or(false);
+    settings.resolve_nostr_refs = parts.resolve_nostr_refs.unwrap_or(true);
     settings.show_hosted_wallet_ids = parts.show_hosted_wallet_ids.unwrap_or(false);
     settings.show_lightning_invoices = parts.show_lightning_invoices.unwrap_or(false);
     settings.fetch_metadata = parts.fetch_metadata.unwrap_or(false);

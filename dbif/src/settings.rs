@@ -41,7 +41,7 @@ pub fn create_settings_table(conn: &Connection) -> Result<bool, Box<dyn Error>> 
         }
     }
 
-    if conn.execute("ALTER TABLE settings ADD COLUMN resolve_nostr_refs integer DEFAULT 0", []).is_ok() {
+    if conn.execute("ALTER TABLE settings ADD COLUMN resolve_nostr_refs integer DEFAULT 1", []).is_ok() {
         println!("Nostr refs setting added.");
     }
 
@@ -112,7 +112,7 @@ pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn E
             hide_boosts_below: None,
             play_pew: true,
             custom_pew_file: None,
-            resolve_nostr_refs: false,
+            resolve_nostr_refs: true,
             show_hosted_wallet_ids: false,
             show_lightning_invoices: true,
             fetch_metadata: true,
