@@ -15,6 +15,15 @@ pub const TLV_HIVE_ACCOUNT: u64 = 818818;
 pub const TLV_FOUNTAIN_KEY: u64 = 906608;
 pub const TLV_KEYSEND: u64 = 5482373484;
 
+const METADATA_PAYMENT_DOMAINS: &[&str] = &[
+    "fountain.fm",
+    "castamatic.com",
+    "tardbox.com",
+    "podfans.fm",
+    "truefans.fm",
+    "v4vmusic.com",
+];
+
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 #[allow(non_snake_case)]
@@ -208,7 +217,7 @@ async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &Ha
 }
 
 fn should_fetch_metadata(comment: &str, additional_domains: &str) -> bool {
-    let mut domains = vec!["fountain.fm", "castamatic.com", "tardbox.com"];
+    let mut domains = METADATA_PAYMENT_DOMAINS.to_vec();
 
     let extra: Vec<&str> = additional_domains
         .split(',')
