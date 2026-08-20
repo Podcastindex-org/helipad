@@ -17,26 +17,26 @@ pub fn de_optional_string_or_number<'de, D: Deserializer<'de>>(deserializer: D) 
     Ok(
         match Value::deserialize(deserializer)? {
             Value::String(s) => {
+                let s = s.trim();
                 if s.is_empty() {
                     return Ok(None);
                 }
-                if let Ok(number) = s.parse() {
+                if let Ok(number) = s.parse::<u64>() {
                     Some(number)
+                } else if let Ok(number) = s.parse::<f64>() {
+                    Some(number.round() as u64)
                 } else {
                     return Ok(None);
                 }
             }
             Value::Number(num) => {
-                if num.is_u64() {
-                    if let Some(number) = num.as_u64() {
-                        Some(number)
-                    } else {
-                        return Ok(None);
-                    }
+                if let Some(number) = num.as_u64() {
+                    Some(number)
+                } else if let Some(number) = num.as_f64() {
+                    Some(number.round() as u64)
                 } else {
                     return Ok(None);
                 }
-
             }
             _ => Some(0)
         }
