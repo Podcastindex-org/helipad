@@ -130,5 +130,13 @@
     "StableKraft": {
         "icon": "stablekraft",
         "url": "https://stablekraft.app"
+    },
+    "boostmebitch": {
+        "icon": "boostmebitch",
+        "url": "https://www.boostmebitch.com"
+    },
+    "boostmebuddy": {
+        "icon": "boostmebuddy",
+        "url": "https://www.boostmebuddy.com"
     }
 }
