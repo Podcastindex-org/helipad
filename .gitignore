@@ -15,3 +15,4 @@ Cargo.lock
 tls.cert
 database.db
 /buildandrun.sh
+certs/

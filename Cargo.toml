@@ -41,6 +41,8 @@ uuid = { version = "1.21.0", features = ["v4"] }
 rosc = "0.11.4"
 anyhow = "1.0.101"
 async-trait = "0.1.81"
+tonic = { version = "0.12.3", features = ["tls"] }
+prost = "0.13"
 
 [build-dependencies]
 configure_me_codegen = "0.4.8"
