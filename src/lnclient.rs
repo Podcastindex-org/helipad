@@ -79,6 +79,6 @@ pub async fn connect(config: &HelipadConfig) -> Result<Box<dyn LNClient>, Box<dy
         Ok(Box::new(CLNClient::connect(helipad_config.cln_url, helipad_config.cln_cert_path, helipad_config.cln_key_path, helipad_config.cln_cacert_path).await?))
     }
     else {
-        Ok(Box::new(LNDClient::connect(helipad_config.lnd_url, helipad_config.lnd_cert_path, helipad_config.lnd_macaroon_path).await?))
+        Ok(Box::new(LNDClient::connect(helipad_config.node_address, helipad_config.cert_path, helipad_config.macaroon_path).await?))
     }
 }

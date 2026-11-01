@@ -291,7 +291,14 @@ pub async fn parse_boost_from_invoice(invoice: &Invoice, remote_cache: &mut podc
         time: invoice.time,
         value_msat: boost.value_msat,
         value_msat_total: boost.value_msat_total,
-        action: boost.action,
+        action: dbif::ActionType::from_u8(boost.action),
+        list_type: {
+            let a = dbif::ActionType::from_u8(boost.action);
+            dbif::ListType::from_action_and_comment(a, &boost.message)
+        },
+        memo: None,
+        custom_key: None,
+        custom_value: None,
         sender: boost.sender,
         app: boost.app,
         message: boost.message,
@@ -353,7 +360,14 @@ pub async fn parse_boost_from_payment(payment: &Payment, remote_cache: &mut podc
         time: payment.time,
         value_msat: boost.value_msat,
         value_msat_total: boost.value_msat_total,
-        action: boost.action,
+        action: dbif::ActionType::from_u8(boost.action),
+        list_type: {
+            let a = dbif::ActionType::from_u8(boost.action);
+            dbif::ListType::from_action_and_comment(a, &boost.message)
+        },
+        memo: None,
+        custom_key: None,
+        custom_value: None,
         sender: boost.sender,
         app: boost.app,
         message: boost.message,
@@ -381,17 +395,6 @@ pub async fn parse_boost_from_payment(payment: &Payment, remote_cache: &mut podc
 }
 
 // --- Legacy-LND connector (bleibt für LND-Polling-Pfad erhalten) -----------
-#[derive(Debug)]
-pub struct BoostError(String);
-
-impl std::fmt::Display for BoostError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Error: {}", self.0)
-    }
-}
-
-impl std::error::Error for BoostError {}
-
 pub async fn connect_to_lnd(node_address: &str, cert_path: &str, macaroon_path: &str) -> Option<lnd::Lnd> {
     let cert: Vec<u8> = match fs::read(cert_path) {
         Ok(cert_content) => cert_content,

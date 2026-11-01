@@ -49,6 +49,7 @@ const HELIPAD_STANDARD_PORT: &str = "2112";
 const LND_STANDARD_GRPC_URL: &str = "https://127.0.0.1:10009";
 const LND_STANDARD_MACAROON_LOCATION: &str = "/lnd/data/chain/bitcoin/mainnet/admin.macaroon";
 const LND_STANDARD_TLSCERT_LOCATION: &str = "/lnd/tls.cert";
+
 const CLN_GRPC_URL: &str = "192.168.50.138:50386";
 const CLN_CERT_PATH: &str = "/cln/regtest/client.pem";
 const CLN_KEY_PATH: &str = "/cln/regtest/client-key.pem";
@@ -306,7 +307,7 @@ async fn main() {
     //Start the LND polling thread.  This thread will poll LND every few seconds to
     //get the latest invoices and store them in the database.
 
-    //CLN vs. LND-Modus entscheiden (NODE_TYPE=cln -> generischer Poller)
+    //CLN vs. LND-Modus entscheiden (NODE_TYPE=cln -> generischer Poller aus PR#92)
     if helipad_config.node_type.to_uppercase() == "CLN" {
         println!(" - Using CLN node type - spawning generic invoice poller...");
         tokio::spawn(generic_poller(helipad_config.clone()));
@@ -535,7 +536,10 @@ async fn generic_poller(helipad_config: HelipadConfig) {
                 }
 
                 //Send out webhooks (if any)
-                send_webhooks(&db_filepath, &db_boost).await;
+                let _effects = triggers::process_triggers(&db_filepath, &db_boost).await.unwrap_or_else(|e| {
+                    eprintln!("Error processing triggers: {:#?}", e);
+                    triggers::BoostWithEffects { boost: db_boost.clone(), effects: Vec::new(), server_effects: Vec::new() }
+                });
             }
 
             current_index = invoice.index;
@@ -567,7 +571,10 @@ async fn generic_poller(helipad_config: HelipadConfig) {
                 }
 
                 //Send out webhooks (if any)
-                send_webhooks(&db_filepath, &boost).await;
+                let _effects = triggers::process_triggers(&db_filepath, &boost).await.unwrap_or_else(|e| {
+                    eprintln!("Error processing triggers: {:#?}", e);
+                    triggers::BoostWithEffects { boost: boost.clone(), effects: Vec::new(), server_effects: Vec::new() }
+                });
             }
 
             current_payment = payment.index;
@@ -580,103 +587,6 @@ async fn generic_poller(helipad_config: HelipadConfig) {
         //Sleep only if nothing was updated
         if !updated {
             tokio::time::sleep(tokio::time::Duration::from_millis(9000)).await;
-        }
-    }
-}
-
-async fn send_webhooks(db_filepath: &String, boost: &dbif::BoostRecord) {
-    let webhooks = match dbif::get_webhooks_from_db(&db_filepath, Some(true)) {
-        Ok(wh) => wh,
-        Err(e) => {
-            eprintln!("Error loading webhooks from db: {:#?}", e);
-            return;
-        }
-    };
-
-    for webhook in webhooks {
-        if boost.payment_info.is_some() && !webhook.on_sent {
-            continue; // sent
-        }
-
-        if boost.action == 1 && !webhook.on_stream {
-            continue; // stream
-        }
-
-        if (boost.action == 2 || boost.action == 4) && !webhook.on_boost {
-            continue; // boost or auto
-        }
-
-        let mut headers = HeaderMap::new();
-
-        headers.insert(CONTENT_TYPE, match HeaderValue::from_str("application/json") {
-            Ok(hdr) => hdr,
-            Err(e) => {
-                eprintln!("Unable to create content type header: {}", e);
-                continue;
-            }
-        });
-
-        let user_agent = format!("Helipad/{}", env!("CARGO_PKG_VERSION"));
-        headers.insert(USER_AGENT, match HeaderValue::from_str(user_agent.as_str()) {
-            Ok(hdr) => hdr,
-            Err(e) => {
-                eprintln!("Unable to create user agent header: {}", e);
-                continue;
-            }
-        });
-
-        if webhook.token != "" {
-            let token = format!("Bearer {}", webhook.token);
-            headers.insert(AUTHORIZATION, match HeaderValue::from_str(&token) {
-                Ok(hdr) => hdr,
-                Err(e) => {
-                    eprintln!("Unable to create authorization header: {}", e);
-                    continue;
-                }
-            });
-        }
-
-        let client = match reqwest::Client::builder().redirect(Policy::limited(5)).build() {
-            Ok(cli) => cli,
-            Err(e) => {
-                eprintln!("Unable to build reqwest client: {}", e);
-                continue;
-            }
-        };
-
-        let json = match serde_json::to_string_pretty(&boost) {
-            Ok(js) => js,
-            Err(e) => {
-                eprintln!("Unable to encode boost as JSON: {}", e);
-                continue;
-            }
-        };
-
-        let result = client.post(&webhook.url).body(json).headers(headers).send().await;
-        let timestamp = Utc::now().timestamp();
-        let mut successful = false;
-
-        if let Ok(res) = result {
-            let status = res.status();
-            let response = res.text().await;
-
-            if status == 200 && response.is_ok() {
-                println!("Webhook sent to {}: {}", webhook.url, response.unwrap());
-                successful = true;
-            }
-            else if status != 200 {
-                eprintln!("Webhook returned {}: {}", status, response.unwrap_or_default());
-            }
-            else if let Err(e) = response {
-                eprintln!("Webhook Error: {}", e);
-            }
-        }
-        else if let Err(e) = result {
-            eprintln!("Unable to send webhook: {}", e);
-        }
-
-        if let Err(e) = dbif::set_webhook_last_request(&db_filepath, webhook.index, successful, timestamp) {
-            eprintln!("Error setting webhook last request status: {}", e);
         }
     }
 }

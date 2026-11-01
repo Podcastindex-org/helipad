@@ -8,7 +8,7 @@ use data_encoding::HEXLOWER;
 
 use lnd::lnrpc::lnrpc::{SendRequest, Payment as LndPayment};
 
-use rand::RngCore;
+use rand::RngExt;
 
 use sha2::{Sha256, Digest};
 
@@ -107,7 +107,7 @@ impl LNClient for LNDClient {
     }
 
     async fn list_invoices(&mut self, start: u64, limit: u64) -> Result<Vec<Invoice>, Box<dyn Error>> {
-        let result = match lnd::Lnd::list_invoices(&mut self.client, false, start, limit, false).await {
+        let result = match lnd::Lnd::list_invoices(&mut self.client, false, start, limit, false, 0, 0).await {
             Ok(inv) => inv,
             Err(_) => {
                 return Err("unable to fetch invoices".into());
@@ -148,7 +148,7 @@ impl LNClient for LNDClient {
     }
 
     async fn list_payments(&mut self, start: u64, limit: u64) -> Result<Vec<Payment>, Box<dyn Error>> {
-        let result = match lnd::Lnd::list_payments(&mut self.client, false, start, limit, false).await {
+        let result = match lnd::Lnd::list_payments(&mut self.client, false, start, limit, false, false, 0, 0).await {
             Ok(inv) => inv,
             Err(_) => {
                 return Err("unable to fetch payments".into());
@@ -170,7 +170,7 @@ impl LNClient for LNDClient {
 
         // generate 32 random bytes for pre_image
         let mut pre_image = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut pre_image);
+        rand::rng().fill(&mut pre_image);
 
         // and convert to sha256 hash
         let mut hasher = Sha256::new();
@@ -199,7 +199,7 @@ impl LNClient for LNDClient {
         }
 
         // get detailed payment info from list_payments
-        let payment_list = lnd::Lnd::list_payments(&mut self.client, false, 0, 500, true).await?;
+        let payment_list = lnd::Lnd::list_payments(&mut self.client, false, 0, 500, true, false, 0, 0).await?;
 
         for payment in payment_list.payments {
             if sent_payment_hash == payment.payment_hash {
