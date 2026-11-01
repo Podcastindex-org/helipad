@@ -304,6 +304,71 @@ async fn main() {
         settings: shared_settings.clone(),
     };
 
+    //CLN-Discovery: node_type + Verbindung (PR#92)
+    println!("\nDiscovering node type...");
+    let env_node_type = std::env::var("NODE_TYPE");
+    if env_node_type.is_ok() {
+        helipad_config.node_type = env_node_type.unwrap();
+        println!(" - Using environment var(NODE_TYPE): [{}]", helipad_config.node_type);
+    } else if server_config.node_type.is_some() {
+        helipad_config.node_type = server_config.node_type.unwrap();
+        println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.node_type);
+    }
+
+    if helipad_config.node_type.to_uppercase() == "CLN" {
+        println!("\nDiscovering CLN GRPC address...");
+        let env_cln_url = std::env::var("CLN_URL");
+        if env_cln_url.is_ok() {
+            helipad_config.cln_url = "https://".to_owned() + env_cln_url.unwrap().as_str();
+            println!(" - Using environment var(CLN_URL): [{}]", helipad_config.cln_url);
+        } else if server_config.cln_url.is_some() {
+            helipad_config.cln_url = server_config.cln_url.unwrap();
+            println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_url);
+        } else {
+            helipad_config.cln_url = "https://".to_owned() + CLN_GRPC_URL;
+            println!(" - Using default: [{}]", helipad_config.cln_url);
+        }
+
+        println!("\nDiscovering CLN GRPC certificate path...");
+        let env_cln_cert = std::env::var("CLN_CERT_PATH");
+        if env_cln_cert.is_ok() {
+            helipad_config.cln_cert_path = env_cln_cert.unwrap();
+            println!(" - Using environment var(CLN_CERT_PATH): [{}]", helipad_config.cln_cert_path);
+        } else if server_config.cln_cert_path.is_some() {
+            helipad_config.cln_cert_path = server_config.cln_cert_path.unwrap();
+            println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_cert_path);
+        } else {
+            helipad_config.cln_cert_path = String::from(CLN_CERT_PATH);
+            println!(" - Using default: [{}]", helipad_config.cln_cert_path);
+        }
+
+        println!("\nDiscovering CLN GRPC key path...");
+        let env_cln_key = std::env::var("CLN_KEY_PATH");
+        if env_cln_key.is_ok() {
+            helipad_config.cln_key_path = env_cln_key.unwrap();
+            println!(" - Using environment var(CLN_KEY_PATH): [{}]", helipad_config.cln_key_path);
+        } else if server_config.cln_key_path.is_some() {
+            helipad_config.cln_key_path = server_config.cln_key_path.unwrap();
+            println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_key_path);
+        } else {
+            helipad_config.cln_key_path = String::from(CLN_KEY_PATH);
+            println!(" - Using default: [{}]", helipad_config.cln_key_path);
+        }
+
+        println!("\nDiscovering CLN GRPC root certificate path...");
+        let env_cln_cacert = std::env::var("CLN_CACERT_PATH");
+        if env_cln_cacert.is_ok() {
+            helipad_config.cln_cacert_path = env_cln_cacert.unwrap();
+            println!(" - Using environment var(CLN_CACERT_PATH): [{}]", helipad_config.cln_cacert_path);
+        } else if server_config.cln_cacert_path.is_some() {
+            helipad_config.cln_cacert_path = server_config.cln_cacert_path.unwrap();
+            println!(" - Using config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cln_cacert_path);
+        } else {
+            helipad_config.cln_cacert_path = String::from(CLN_CACERT_PATH);
+            println!(" - Using default: [{}]", helipad_config.cln_cacert_path);
+        }
+    }
+
     //Start the LND polling thread.  This thread will poll LND every few seconds to
     //get the latest invoices and store them in the database.
 

@@ -30,6 +30,9 @@ impl CLNClient {
         let ca_certificate = Certificate::from_pem(&cacert_text);
         let client_identity = Identity::from_pem(&cert_text, &key_text);
 
+        // rustls braucht einen expliziten CryptoProvider (aws_lc_rs kompiliert mit dem Binary)
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         let tls_config = ClientTlsConfig::new()
             .domain_name("localhost")
             .ca_certificate(ca_certificate)

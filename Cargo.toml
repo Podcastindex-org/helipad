@@ -42,6 +42,7 @@ rosc = "0.11.4"
 anyhow = "1.0.101"
 async-trait = "0.1.81"
 tonic = { version = "0.12.3", features = ["tls"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 prost = "0.13"
 
 [build-dependencies]
