@@ -197,6 +197,46 @@ img {
     width: 100%;
 }
 
+.boost-gif {
+    display: block;
+    max-width: 100%;
+    max-height: 320px;
+    margin-top: 8px;
+    border-radius: 4px;
+}
+
+.boost-gif-toggle {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0;
+    border: 0;
+    background: none;
+    line-height: inherit;
+    color: #888;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    vertical-align: middle;
+    transition: transform 0.15s ease;
+}
+
+.boost-gif-toggle:hover {
+    color: #333;
+}
+
+.boost-gif-toggle.open {
+    transform: rotate(90deg);
+}
+
+.boost-gif-container {
+    display: none;
+    padding: 0 12px;
+}
+
+.boost-gif-container.open {
+    display: block;
+}
+
 .outgoing_msg {
     overflow: hidden;
     margin: 8px 0 8px;

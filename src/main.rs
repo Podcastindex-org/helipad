@@ -363,6 +363,7 @@ async fn main() {
                 show_lightning_invoices: true,
                 fetch_metadata: true,
                 metadata_whitelist: "".to_string(),
+                auto_expand_boost_gifs: false,
             }
         }
     };
