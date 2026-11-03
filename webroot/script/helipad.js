@@ -141,13 +141,6 @@ $(document).ready(function () {
                 boostPerson = `from ${element.sender}`;
             }
 
-            //Format the boost message
-            if (boostMessage.trim() != "") {
-                boostMessage = '' +
-                    '      <hr>' +
-                    '      <p class="boost-message">' + boostMessage + '</p>';
-            }
-
             //Show sat amount and more info
             let boostDisplayAmount = numberFormat(boostSats) + " sats";
             let boostSentReceived = (config.pluralName == 'sent boosts' ? 'sent' : 'received');
@@ -251,7 +244,7 @@ $(document).ready(function () {
                     <span class="remote_item">${boostRemoteInfo}</span>
                 </small>
                 <div class="boost-message" style="clear: both">
-                    ${boostMessage}
+                    ${renderBoostMessage(boostMessage)}
                 </div>
                 </div>
             </div>
@@ -312,7 +305,7 @@ $(document).ready(function () {
             // Replace Nostr npub references with names
             if (boostMessage.indexOf('nostr:') !== -1) {
                 replaceNostrReferences(boostMessage).then((message) => {
-                    $('div.outgoing_msg[data-msgid=' + boostIndex + '] .boost-message').html(message);
+                    $('div.outgoing_msg[data-msgid=' + boostIndex + '] .boost-message').html(renderBoostMessage(message));
                 });
             }
 
@@ -462,6 +455,89 @@ $(document).ready(function () {
             var $el = $(el);
             $el.find('a').text(prettyDate(new Date($el.attr('datetime'))));
         });
+    }
+
+    //Format the boost message
+    function renderBoostMessage(message) {
+        if (message.trim() == "") {
+            return "";
+        }
+
+        const boostGifs = renderBoostGifs(message);
+
+        return '' +
+            '      <hr>' +
+            '      <p><span class="boost-text">' + boostGifs + '</span></p>' +
+            '';
+    }
+
+    // Link direct GIF URLs in a boost message, each with its own caret
+    // toggle and collapsible image container. The message is HTML-escaped, so
+    // URLs stop at &lt;/&gt; and keep escaped ampersands (valid inside attributes).
+    function renderBoostGifs(message) {
+        const expanded = !!settings.auto_expand_boost_gifs;
+        const open = expanded ? ' open' : '';
+        const label = expanded ? 'Hide image' : 'Show image';
+        const urlPattern = /https?:\/\/(?:(?!&lt;|&gt;)[^\s<>"'])+/gi;
+
+        let id = 0;
+
+        return (message || '').replace(urlPattern, (match) => {
+            const url = match.replace(/[),.;:!?]+$/, '');
+            if (!isGifUrl(url)) return match;
+
+            const gifId = id++;
+            const src = expanded ? ` src="${url}"` : ''; // collapsed GIFs load on first open
+
+            const image = `
+                <span class="boost-gif-container${open}" data-gif-id="${gifId}">
+                    <img class="boost-gif"${src} data-src="${url}" alt="GIF" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+                </span>`;
+
+            return `<a class="boost-gif-link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+                + `<button type="button" class="boost-gif-toggle${open}" data-gif-id="${gifId}" aria-expanded="${expanded}" title="${label}">&#9654;</button>`
+                + image
+                + match.slice(url.length);
+        });
+    }
+
+    // Check if a URL is a valid GIF URL
+    function isGifUrl(url) {
+        try {
+            const parsed = new URL(url.replace(/&amp;/g, '&'));
+
+            // Browsers block http images on https pages (mixed content)
+            if (parsed.protocol === 'http:' && window.location.protocol === 'https:') {
+                return false;
+            }
+
+            return parsed.pathname.toLowerCase().endsWith('.gif');
+        }
+        catch {
+            return false;
+        }
+    }
+
+    // Expand or collapse the GIF block for this caret. The image is
+    // fetched the first time the block opens.
+    function toggleBoostGif($toggle) {
+        const opening = $toggle.attr('aria-expanded') !== 'true';
+        const $container = $toggle
+            .closest('.boost-message')
+            .find(`.boost-gif-container[data-gif-id="${$toggle.attr('data-gif-id')}"]`);
+    
+        if (opening) {
+            const $img = $container.find('img.boost-gif');
+            if (!$img.attr('src')) $img.attr('src', $img.attr('data-src'));
+        }
+    
+        $container.toggleClass('open', opening);
+        $toggle
+            .toggleClass('open', opening)
+            .attr({
+                'aria-expanded': opening,
+                title: opening ? 'Hide image' : 'Show image'
+            });
     }
 
     //Set up nostr simplepool if resolve_nostr_refs enabled
@@ -1103,6 +1179,12 @@ $(document).ready(function () {
 
         getBoosts(boostIndex, 100, false, old, false);
 
+        return false;
+    });
+
+    //Boost GIF expand/collapse handler
+    $(document).on('click', '.boost-gif-toggle', function () {
+        toggleBoostGif($(this));
         return false;
     });
 

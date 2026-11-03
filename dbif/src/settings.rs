@@ -16,6 +16,7 @@ pub struct SettingsRecord {
     pub show_lightning_invoices: bool,
     pub fetch_metadata: bool,
     pub metadata_whitelist: String,
+    pub auto_expand_boost_gifs: bool,
 }
 
 pub fn create_settings_table(conn: &Connection) -> Result<bool, Box<dyn Error>> {
@@ -61,6 +62,10 @@ pub fn create_settings_table(conn: &Connection) -> Result<bool, Box<dyn Error>> 
         println!("Metadata whitelist setting added.");
     }
 
+    if conn.execute("ALTER TABLE settings ADD COLUMN auto_expand_boost_gifs integer DEFAULT 0", []).is_ok() {
+        println!("Auto-expand boost GIFs setting added.");
+    }
+
     Ok(true)
 }
 
@@ -79,7 +84,8 @@ pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn E
              show_hosted_wallet_ids,
              show_lightning_invoices,
              fetch_metadata,
-             metadata_whitelist
+             metadata_whitelist,
+             auto_expand_boost_gifs
         FROM
             settings
         WHERE
@@ -100,6 +106,7 @@ pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn E
             show_lightning_invoices: row.get(8)?,
             fetch_metadata: row.get(9).unwrap_or(true),
             metadata_whitelist: row.get(10).unwrap_or("".to_string()),
+            auto_expand_boost_gifs: row.get(11).unwrap_or(false),
         })
     });
 
@@ -117,6 +124,7 @@ pub fn load_settings_from_db(filepath: &str) -> Result<SettingsRecord, Box<dyn E
             show_lightning_invoices: true,
             fetch_metadata: true,
             metadata_whitelist: "".to_string(),
+            auto_expand_boost_gifs: false,
         }),
         Err(e) => Err(Box::new(e)),
     }
@@ -138,10 +146,11 @@ pub fn save_settings_to_db(filepath: &str, settings: &SettingsRecord) -> Result<
             show_hosted_wallet_ids,
             show_lightning_invoices,
             fetch_metadata,
-            metadata_whitelist
+            metadata_whitelist,
+            auto_expand_boost_gifs
         )
         VALUES
-            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
         ON CONFLICT(idx) DO UPDATE SET
             show_received_sats = excluded.show_received_sats,
             show_split_percentage = excluded.show_split_percentage,
@@ -153,7 +162,8 @@ pub fn save_settings_to_db(filepath: &str, settings: &SettingsRecord) -> Result<
             show_hosted_wallet_ids = excluded.show_hosted_wallet_ids,
             show_lightning_invoices = excluded.show_lightning_invoices,
             fetch_metadata = excluded.fetch_metadata,
-            metadata_whitelist = excluded.metadata_whitelist
+            metadata_whitelist = excluded.metadata_whitelist,
+            auto_expand_boost_gifs = excluded.auto_expand_boost_gifs
         "#,
         params![
             settings.show_received_sats,
@@ -167,6 +177,7 @@ pub fn save_settings_to_db(filepath: &str, settings: &SettingsRecord) -> Result<
             settings.show_lightning_invoices,
             settings.fetch_metadata,
             settings.metadata_whitelist,
+            settings.auto_expand_boost_gifs,
         ]
     ) {
         Ok(_) => {

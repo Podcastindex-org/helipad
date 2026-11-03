@@ -814,6 +814,7 @@ pub struct GeneralSettingsMultipart {
     resolve_nostr_refs: Option<bool>,
     show_hosted_wallet_ids: Option<bool>,
     show_lightning_invoices: Option<bool>,
+    auto_expand_boost_gifs: Option<bool>,
     fetch_metadata: Option<bool>,
     metadata_whitelist: Option<String>,
 
@@ -849,6 +850,7 @@ pub async fn general_settings_save(
     settings.resolve_nostr_refs = parts.resolve_nostr_refs.unwrap_or(true);
     settings.show_hosted_wallet_ids = parts.show_hosted_wallet_ids.unwrap_or(false);
     settings.show_lightning_invoices = parts.show_lightning_invoices.unwrap_or(false);
+    settings.auto_expand_boost_gifs = parts.auto_expand_boost_gifs.unwrap_or(false);
     settings.fetch_metadata = parts.fetch_metadata.unwrap_or(false);
     settings.metadata_whitelist = parts.metadata_whitelist.unwrap_or("".to_string());
 
