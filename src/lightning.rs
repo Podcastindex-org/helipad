@@ -1,14 +1,13 @@
-use crate::boost::{TLV_PODCASTING20, TLV_KEYSEND};
+use crate::boost::TLV_PODCASTING20;
 use crate::lnaddress::{LnAddress, KeysendAddress, LnurlpAddress};
-use data_encoding::HEXLOWER;
-use lnd::lnrpc::lnrpc::{Payment, payment::PaymentStatus};
-use lnd::lnrpc::routerrpc::{SendPaymentRequest};
 use serde_json::Value;
-use sha2::{Sha256, Digest};
 use std::collections::HashMap;
 use std::fs;
 use std::error::Error;
-use rand::RngExt;
+
+use helipad_lnclient::{LNClient, Payment};
+
+use crate::LightningConfig;
 
 #[derive(Debug)]
 pub struct BoostError(String);
@@ -21,71 +20,75 @@ impl std::fmt::Display for BoostError {
 
 impl std::error::Error for BoostError {}
 
-pub async fn connect_to_lnd(node_address: &str, cert_path: &str, macaroon_path: &str) -> Option<lnd::Lnd> {
-    let cert: Vec<u8> = match fs::read(cert_path) {
-        Ok(cert_content) => cert_content,
-        Err(_) => {
-            eprintln!("Cannot find a valid tls.cert file");
-            return None;
-        }
-    };
-
-    let macaroon: Vec<u8> = match fs::read(macaroon_path) {
-        Ok(macaroon_content) => macaroon_content,
-        Err(_) => {
-            eprintln!("Cannot find a valid admin.macaroon file");
-            return None;
-        }
-    };
-
-    //Make the connection to LND
-    let address = String::from(node_address);
-    let lightning = lnd::Lnd::connect_with_macaroon(address.clone(), &cert, &macaroon).await;
-
-    if lightning.is_err() {
-        println!("Could not connect to: [{}] using tls: [{}] and macaroon: [{}]", address, cert_path, macaroon_path);
-        eprintln!("{:#?}", lightning.err());
-        return None;
+pub async fn connect(config: &LightningConfig) -> Option<Box<dyn LNClient>> {
+    match config {
+        LightningConfig::Lnd(lnd_config) => connect_to_lnd(lnd_config.node_address.as_str(), lnd_config.cert_path.as_str(), lnd_config.macaroon_path.as_str()).await,
+        LightningConfig::Cln(cln_config) => connect_to_cln(cln_config.node_address.as_str(), cln_config.cert_path.as_str(), cln_config.key_path.as_str(), cln_config.cacert_path.as_str()).await,
+        LightningConfig::None => None,
     }
-
-    lightning.ok()
 }
 
-pub async fn connect_lnd_or_exit(node_address: &str, cert_path: &str, macaroon_path: &str) -> lnd::Lnd {
-    match connect_to_lnd(node_address, cert_path, macaroon_path).await {
-        Some(lndconn) => lndconn,
+pub async fn connect_or_exit(config: &LightningConfig) -> Box<dyn LNClient> {
+    match connect(config).await {
+        Some(lnclient) => lnclient,
         None => std::process::exit(1),
     }
 }
 
-async fn create_boost_request(addr: LnAddress, sats: u64, tlv: Value) -> Result<SendPaymentRequest, Box<dyn Error>> {
-    // figure out the destination pubkey/lnaddress
-    match addr {
-        LnAddress::Keysend(keysend) => {
-            create_keysend_request(keysend, sats, tlv)
+async fn connect_to_lnd(node_address: &str, cert_path: &str, macaroon_path: &str) -> Option<Box<dyn LNClient>> {
+    if let Err(_) = fs::metadata(cert_path) {
+        eprintln!("Cannot find a valid tls.cert file");
+        return None;
+    }
+
+    if let Err(_) = fs::metadata(macaroon_path) {
+        eprintln!("Cannot find a valid admin.macaroon file");
+        return None;
+    }
+
+    //Make the connection to LND
+    return match helipad_lnclient::connect_lnd(node_address.to_string(), cert_path.to_string(), macaroon_path.to_string()).await {
+        Ok(lnclient) => Some(Box::new(lnclient)),
+        Err(e) => {
+            eprintln!("Error connecting to LND: {:#?}", e);
+            None
         }
-        LnAddress::Lnurlp(lnurlp) => {
-            create_bolt11_request(lnurlp, sats, tlv).await
-        }
-        LnAddress::None => Err(Box::new(BoostError("Destination not found".into())) as Box<dyn Error>),
     }
 }
 
-fn create_keysend_request(addr: KeysendAddress, sats: u64, tlv: Value) -> Result<SendPaymentRequest, Box<dyn Error>> {
+async fn connect_to_cln(node_address: &str, cert_path: &str, key_path: &str, cacert_path: &str) -> Option<Box<dyn LNClient>> {
+    if let Err(_) = fs::metadata(cert_path) {
+        eprintln!("Cannot find a valid cert file");
+        return None;
+    }
+
+    if let Err(_) = fs::metadata(key_path) {
+        eprintln!("Cannot find a valid key file");
+        return None;
+    }
+
+    if let Err(_) = fs::metadata(cacert_path) {
+        eprintln!("Cannot find a valid cacert file");
+        return None;
+    }
+
+    //Make the connection to LND
+    return match helipad_lnclient::connect_cln(node_address.to_string(), cert_path.to_string(), key_path.to_string(), cacert_path.to_string()).await {
+        Ok(lnclient) => Some(Box::new(lnclient)),
+        Err(e) => {
+            eprintln!("Error connecting to CLN: {:#?}", e);
+            None
+        }
+    }
+}
+
+
+async fn send_keysend(lnclient: &mut dyn LNClient, addr: KeysendAddress, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error + Send + Sync>> {
     // thanks to BrianOfLondon and Mostro for keysend details:
     // https://peakd.com/@brianoflondon/lightning-keysend-is-strange-and-how-to-send-keysend-payment-in-lightning-with-the-lnd-rest-api-via-python
     // https://github.com/MostroP2P/mostro/blob/52a4f86c3942c26bd42dc55f1e53db5da9f7542b/src/lightning/mod.rs#L18
 
-    // convert pub key hash to raw bytes
-    let raw_pubkey = HEXLOWER.decode(addr.pubkey.as_bytes())?;
-
-    // generate 32 random bytes for pre_image
-    let mut pre_image = [0u8; 32];
-    let mut rng = rand::rng();
-    rng.fill(&mut pre_image);
-
-    // and convert to sha256 hash
-    let payment_hash = Sha256::digest(&pre_image);
+    let pubkey = addr.pubkey.clone();
 
     // TLV custom records
     // https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md
@@ -93,27 +96,20 @@ fn create_keysend_request(addr: KeysendAddress, sats: u64, tlv: Value) -> Result
     let tlv_json = serde_json::to_string_pretty(&tlv).unwrap();
 
     dest_custom_records.insert(TLV_PODCASTING20, tlv_json.as_bytes().to_vec());
-    dest_custom_records.insert(TLV_KEYSEND, pre_image.to_vec());
 
     if let (Some(custom_key), Some(custom_value)) = (addr.custom_key, addr.custom_value) {
         dest_custom_records.insert(custom_key, custom_value.as_bytes().to_vec());
     }
 
-    Ok(SendPaymentRequest {
-        dest: raw_pubkey,
-        amt: sats as i64,
-        payment_hash: payment_hash.to_vec(),
-        dest_custom_records,
-        timeout_seconds: 60,
-        ..Default::default()
-    })
+    // the keysend preimage is generated by the LNClient implementation
+    Ok(lnclient.send_keysend(pubkey, sats, dest_custom_records).await?)
 }
 
-async fn create_bolt11_request(addr: LnurlpAddress, sats: u64, tlv: Value) -> Result<SendPaymentRequest, Box<dyn Error>> {
+async fn send_bolt11(lnclient: &mut dyn LNClient, addr: LnurlpAddress, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error + Send + Sync>> {
     let sender_name = tlv["sender_name"].as_str().unwrap_or_default().to_string();
     let comment = tlv["message"].as_str().unwrap_or_default().to_string();
 
-    let payment_request = match addr.request_invoice(sats, comment, sender_name).await? {
+    let payment_request = match addr.request_invoice(sats, comment, sender_name).await.map_err(|e| BoostError(e.to_string()))? {
         Some(payment_request) => payment_request,
         None => return Err(Box::new(BoostError("Payment request not found".into()))),
     };
@@ -125,35 +121,21 @@ async fn create_bolt11_request(addr: LnurlpAddress, sats: u64, tlv: Value) -> Re
 
     dest_custom_records.insert(TLV_PODCASTING20, tlv_json.as_bytes().to_vec());
 
-    Ok(SendPaymentRequest {
-        payment_request,
-        dest_custom_records,
-        timeout_seconds: 60,
-        ..Default::default()
-    })
+    Ok(lnclient.send_bolt11(payment_request, dest_custom_records).await?)
 }
 
-pub async fn send_boost(lightning: lnd::Lnd, address: String, custom_key: Option<u64>, custom_value: Option<String>, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error>> {
-    let dest = LnAddress::resolve(address, custom_key, custom_value).await?;
-    let req = create_boost_request(dest, sats, tlv).await?;
-    send_payment(lightning, req).await
-}
+pub async fn send_boost(lnclient: &mut dyn LNClient, address: String, custom_key: Option<u64>, custom_value: Option<String>, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error + Send + Sync>> {
+    let addr = LnAddress::resolve(address, custom_key, custom_value).await
+        .map_err(|e| BoostError(e.to_string()))?;
 
-pub async fn send_payment(mut lightning: lnd::Lnd, payment_request: SendPaymentRequest) -> Result<Payment, Box<dyn Error>> {
-    println!("Sending payment to: {:#?}", payment_request);
-
-    // send payment using send_payment_v2 and get payment stream
-    let mut payment_stream = lightning.send_payment_v2(payment_request).await?;
-
-    // wait for payment to succeed or fail
-    while let Some(payment_update) = payment_stream.message().await? {
-        if payment_update.status == PaymentStatus::Succeeded as i32 {
-            return Ok(payment_update);
+    // figure out the destination pubkey/lnaddress
+    match addr {
+        LnAddress::Keysend(keysend) => {
+            send_keysend(lnclient, keysend, sats, tlv).await
         }
-        else if payment_update.status == PaymentStatus::Failed as i32 {
-            return Err(Box::new(BoostError("Payment failed".into())));
+        LnAddress::Lnurlp(lnurlp) => {
+            send_bolt11(lnclient, lnurlp, sats, tlv).await
         }
+        LnAddress::None => Err(Box::new(BoostError("Destination not found".into())) as Box<dyn Error + Send + Sync>),
     }
-
-    Err(Box::new(BoostError("Payment timed out".into())))
 }

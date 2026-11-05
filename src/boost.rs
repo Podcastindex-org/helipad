@@ -2,9 +2,9 @@ use regex::Regex;
 use serde::Deserialize;
 use std::error::Error;
 use std::collections::HashMap;
+use helipad_lnclient::{Invoice, Payment};
 use crate::podcastindex;
 use crate::metadata;
-use lnd::lnrpc::lnrpc::{Payment, Invoice, invoice::InvoiceState};
 use crate::deserializers::{d_action, d_blank, d_zero, de_optional_string_or_number};
 
 // TLV keys (see https://github.com/satoshisstream/satoshis.stream/blob/main/TLV_registry.md)
@@ -13,7 +13,6 @@ pub const TLV_WALLET_KEY: u64 = 696969;
 pub const TLV_WALLET_ID: u64 = 112111100;
 pub const TLV_HIVE_ACCOUNT: u64 = 818818;
 pub const TLV_FOUNTAIN_KEY: u64 = 906608;
-pub const TLV_KEYSEND: u64 = 5482373484;
 
 const METADATA_PAYMENT_DOMAINS: &[&str] = &[
     "fountain.fm",
@@ -76,17 +75,20 @@ impl RawBoost {
 }
 
 pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podcastindex::GuidCache, fetch_metadata: bool, metadata_whitelist: &str) -> Option<dbif::BoostRecord> {
-    if invoice.state != InvoiceState::Settled as i32 {
+    if !invoice.settled {
         return None; // invoice hasn't been fulfilled yet
     }
 
+    let invoice_index = invoice.index;
+    let memo = invoice.memo;
+
     //Initialize a boost record
     let mut boost = dbif::BoostRecord {
-        index: invoice.add_index,
-        time: invoice.settle_date,
-        value_msat: invoice.amt_paid_sat * 1000,
-        value_msat_total: invoice.amt_paid_sat * 1000,
-        memo: Some(invoice.memo.clone()),
+        index: invoice_index,
+        time: invoice.time,
+        value_msat: invoice.amount * 1000,
+        value_msat_total: invoice.amount * 1000,
+        memo: Some(memo.clone()),
         action: dbif::ActionType::Unknown,
         list_type: dbif::ListType::Unknown,
         sender: "".to_string(),
@@ -103,34 +105,36 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
         payment_info: None,
     };
 
-    for htlc in &invoice.htlcs {
-        if htlc.custom_records.contains_key(&TLV_PODCASTING20) {
-            // Parse boost and custodial wallet TLVs
-            parse_custom_records(&mut boost, &htlc.custom_records, remote_cache).await;
+    // TLV contains a boostagram
+    if invoice.custom_records.contains_key(&TLV_PODCASTING20) {
+        // Parse boost and custodial wallet TLVs
+        parse_custom_records(&mut boost, &invoice.custom_records, remote_cache).await;
+        return Some(boost);
+    }
+
+    // CLN stores the largest TLV in the memo
+    if memo.starts_with("keysend:") {
+        if parse_keysend_memo(&mut boost, &memo, remote_cache).await {
             return Some(boost);
         }
     }
 
-    if invoice.payment_request.is_empty() {
-        return None; // unrelated keysend/amp payment
-    }
-
     // Fetch any RSS payment or Podcast Guru payment metadata from the invoice memo
     if fetch_metadata &&
-       !invoice.memo.is_empty() &&
-       should_fetch_metadata(&invoice.memo, metadata_whitelist) &&
-       fetch_boost_metadata(&mut boost, &invoice.memo, remote_cache).await
+       !memo.is_empty() &&
+       should_fetch_metadata(&memo, metadata_whitelist) &&
+       fetch_boost_metadata(&mut boost, &memo, remote_cache).await
     {
         return Some(boost);
     }
 
     // Else use what we have for a "Lightning Invoice" boost
-    if !invoice.memo.is_empty() {
+    if !memo.is_empty() {
         boost.action = dbif::ActionType::Invoice;
-        boost.list_type = dbif::ListType::from_comment(&invoice.memo);
+        boost.list_type = dbif::ListType::from_comment(&memo);
         boost.app = "Lightning Invoice".to_string();
         boost.sender = "Lightning Invoice".to_string();
-        boost.message = invoice.memo;
+        boost.message = memo;
         return Some(boost);
     }
 
@@ -139,58 +143,44 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
 
 pub async fn parse_boost_from_payment(payment: Payment, remote_cache: &mut podcastindex::GuidCache) -> Option<dbif::BoostRecord> {
 
-    for htlc in payment.htlcs {
-
-        if htlc.route.is_none() {
-            continue; // no route found
-        }
-
-        let route = htlc.route.unwrap();
-        let hopidx = route.hops.len() - 1;
-        let hop = route.hops[hopidx].clone();
-
-        if !hop.custom_records.contains_key(&TLV_PODCASTING20) {
-            continue; // not a boost payment
-        }
-
-        //Initialize a boost record
-        let mut boost = dbif::BoostRecord {
-            index: payment.payment_index,
-            time: payment.creation_time_ns / 1000000000,
-            value_msat: payment.value_msat,
-            value_msat_total: payment.value_msat,
-            memo: None,
-            action: dbif::ActionType::Unknown,
-            list_type: dbif::ListType::Sent,
-            sender: "".to_string(),
-            app: "".to_string(),
-            message: "".to_string(),
-            podcast: "".to_string(),
-            episode: "".to_string(),
-            tlv: "".to_string(),
-            remote_podcast: None,
-            remote_episode: None,
-            custom_key: None,
-            custom_value: None,
-            reply_sent: false,
-            payment_info: Some(dbif::PaymentRecord {
-                payment_hash: payment.payment_hash.clone(),
-                pubkey: hop.pub_key.clone(),
-                custom_key: 0,
-                custom_value: "".into(),
-                fee_msat: payment.fee_msat,
-                reply_to_idx: None,
-            }),
-        };
-
-        // Parse boost and custodial wallet TLVs
-        parse_custom_records(&mut boost, &hop.custom_records, remote_cache).await;
-        return Some(boost);
+    if !payment.custom_records.contains_key(&TLV_PODCASTING20) {
+        return None; // not a boost payment
     }
 
-    None
-}
+    //Initialize a boost record
+    let mut boost = dbif::BoostRecord {
+        index: payment.index,
+        time: payment.time,
+        value_msat: payment.amount * 1000,
+        value_msat_total: payment.amount * 1000,
+        memo: None,
+        action: dbif::ActionType::Unknown,
+        list_type: dbif::ListType::Sent,
+        sender: "".to_string(),
+        app: "".to_string(),
+        message: "".to_string(),
+        podcast: "".to_string(),
+        episode: "".to_string(),
+        tlv: "".to_string(),
+        remote_podcast: None,
+        remote_episode: None,
+        custom_key: None,
+        custom_value: None,
+        reply_sent: false,
+        payment_info: Some(dbif::PaymentRecord {
+            payment_hash: payment.payment_hash.clone(),
+            pubkey: payment.destination.clone(),
+            custom_key: 0,
+            custom_value: "".into(),
+            fee_msat: payment.fee,
+            reply_to_idx: None,
+        }),
+    };
 
+    // Parse boost and custodial wallet TLVs
+    parse_custom_records(&mut boost, &payment.custom_records, remote_cache).await;
+    Some(boost)
+}
 
 async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &HashMap<u64, Vec<u8>>, remote_cache: &mut podcastindex::GuidCache) {
     // Parse boost and custodial wallet TLVs
@@ -204,6 +194,7 @@ async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &Ha
                     continue;
                 }
             };
+
             map_rawboost_to_boost(rawboost, boost, remote_cache).await;
         }
         else if *key == TLV_WALLET_KEY || *key == TLV_WALLET_ID || *key == TLV_HIVE_ACCOUNT || *key == TLV_FOUNTAIN_KEY {
@@ -214,6 +205,24 @@ async fn parse_custom_records(boost: &mut dbif::BoostRecord, custom_records: &Ha
             }
         }
     }
+}
+
+async fn parse_keysend_memo(boost: &mut dbif::BoostRecord, memo: &str, remote_cache: &mut podcastindex::GuidCache) -> bool {
+    let keysend_memo = memo.split("keysend:").nth(1).unwrap_or_default().trim();
+    if keysend_memo.is_empty() {
+        return false;
+    }
+
+    let rawboost = match RawBoost::from_json(keysend_memo) {
+        Ok(rawboost) => rawboost,
+        Err(e) => {
+            eprintln!("** Unrelated keysend memo: {}", e);
+            return false;
+        }
+    };
+
+    map_rawboost_to_boost(rawboost, boost, remote_cache).await;
+    true
 }
 
 fn should_fetch_metadata(comment: &str, additional_domains: &str) -> bool {

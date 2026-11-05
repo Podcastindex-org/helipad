@@ -1,16 +1,14 @@
 use crate::HelipadConfig;
 use crate::podcastindex;
 use crate::boost;
-use data_encoding::HEXLOWER;
-use dbif;
-use lnd::lnrpc::lnrpc::invoice::InvoiceState;
+use helipad_lnclient::LNClient;
 use crate::lightning;
 use crate::triggers;
 use crate::WebSocketEvent;
 use tokio::sync::broadcast;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use anyhow::{Result, Context};
+use anyhow::{anyhow, Result};
 use futures::StreamExt;
 
 use crate::REMOTE_GUID_CACHE_SIZE;
@@ -21,15 +19,15 @@ enum BalanceError {
     OtherError,
 }
 
-async fn poll_node_info(lightning: &mut lnd::Lnd, db_filepath: &str) -> Result<()> {
-    let node_info = lnd::Lnd::get_info(lightning).await
-        .with_context(|| "Error getting LND node info")?;
+async fn poll_node_info(lightning: &mut dyn LNClient, db_filepath: &str) -> Result<()> {
+    let node_info = lightning.get_info().await
+        .map_err(|e| anyhow!("Error getting node info: {:#?}", e))?;
 
-    println!("LND node info: {:#?}", node_info);
+    println!("Node info: {:#?}", node_info);
 
     if let Err(e) = dbif::add_node_info_to_db(db_filepath, dbif::NodeInfoRecord {
         lnd_alias: node_info.alias,
-        node_pubkey: node_info.identity_pubkey,
+        node_pubkey: node_info.pubkey,
         node_version: node_info.version,
     }) {
         eprintln!("Error adding node info to database: {:#?}", e);
@@ -39,23 +37,19 @@ async fn poll_node_info(lightning: &mut lnd::Lnd, db_filepath: &str) -> Result<(
 }
 
 async fn poll_balance(
-    lightning: &mut lnd::Lnd,
+    lightning: &mut dyn LNClient,
     db_filepath: &str,
     current_balance: &mut i64,
     ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>,
 ) -> Result<(), BalanceError> {
-    let balance = lnd::Lnd::channel_balance(lightning).await.map_err(|status| {
-        eprintln!("Error getting LND wallet balance: {:#?}", status);
-        if status.message() == "transport error" {
+    let new_balance = lightning.channel_balance().await.map_err(|e| {
+        eprintln!("Error getting node balance: {:#?}", e);
+        if e.to_string().contains("transport error") {
             BalanceError::TransportError
         } else {
             BalanceError::OtherError
         }
     })?;
-
-    let new_balance = balance.local_balance
-        .map(|bal| { println!("LND node local balance: {:#?}", bal.sat); bal.sat as i64 })
-        .unwrap_or(0);
 
     if dbif::add_wallet_balance_to_db(db_filepath, new_balance).is_err() {
         println!("Error adding wallet balance to the database.");
@@ -74,33 +68,34 @@ async fn poll_balance(
 }
 
 async fn poll_invoices(
-    lightning: &mut lnd::Lnd,
+    lightning: &mut dyn LNClient,
     db_filepath: &str,
     current_index: &mut u64,
     remote_cache: &mut podcastindex::GuidCache,
     ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>,
 ) {
     loop {
-        let response = match lnd::Lnd::list_invoices(lightning, false, *current_index, 1000, false, 0, 0).await {
+        let invoices = match lightning.list_invoices(*current_index, 1000).await {
             Ok(r) => r,
-            Err(e) => { eprintln!("lnd::Lnd::list_invoices failed: {}", e); return; }
+            Err(e) => { eprintln!("list_invoices failed: {}", e); return; }
         };
 
         let mut updated = false;
-        for invoice in response.invoices {
-            let hash = HEXLOWER.encode(&invoice.r_hash);
+        for invoice in invoices {
+            let invoice_index = invoice.index;
+            let settled = invoice.settled;
 
-            println!("Invoice: {}, state: {}, hash: {}", invoice.add_index, invoice.state, hash);
+            println!("Invoice: {}, hash: {}", invoice_index, invoice.payment_hash);
 
-            if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), remote_cache, false, "").await {
+            if let Some(boost) = boost::parse_boost_from_invoice(invoice, remote_cache, false, "").await {
                 println!("Boost: {:#?}", &boost);
                 handle_boost(&boost, &db_filepath, &ws_tx, true).await;
             }
-            else if invoice.state == InvoiceState::Settled as i32 {
-                println!("No boost found for invoice: {:#?}", &invoice);
+            else if settled {
+                println!("No boost found for invoice: {}", invoice_index);
             }
 
-            *current_index = invoice.add_index;
+            *current_index = invoice_index;
             updated = true;
         }
 
@@ -111,28 +106,28 @@ async fn poll_invoices(
 }
 
 async fn poll_payments(
-    lightning: &mut lnd::Lnd,
+    lightning: &mut dyn LNClient,
     db_filepath: &str,
     current_index: &mut u64,
     remote_cache: &mut podcastindex::GuidCache,
     ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>,
     catchup: bool,
 ) -> bool {
-    let response = match lnd::Lnd::list_payments(lightning, false, *current_index, 500, false, false, 0, 0).await {
+    let payments = match lightning.list_payments(*current_index, 500).await {
         Ok(r) => r,
-        Err(e) => { eprintln!("lnd::Lnd::list_payments failed: {:#?}", e); return false; }
+        Err(e) => { eprintln!("list_payments failed: {:#?}", e); return false; }
     };
 
     let mut updated = false;
-    for payment in response.payments {
-        println!("Payment: {}, hash: {}", payment.payment_index, payment.payment_hash);
+    for payment in payments {
+        let payment_index = payment.index;
 
         if let Some(boost) = boost::parse_boost_from_payment(payment.clone(), remote_cache).await {
             println!("Sent Boost: {:#?}", boost);
             handle_boost(&boost, db_filepath, ws_tx, !catchup).await;
         }
 
-        *current_index = payment.payment_index;
+        *current_index = payment_index;
         updated = true;
     }
     updated
@@ -184,33 +179,45 @@ pub async fn lnd_subscribe_invoices(
 ) {
     let db_filepath = helipad_config.database_file_path.clone();
 
-    println!("\nConnecting to LND node address...");
-    let mut lightning = lightning::connect_lnd_or_exit(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await;
+    println!("\nConnecting to lightning node address...");
+    let mut lightning = match lightning::connect(&helipad_config.lightning).await {
+        Some(lnclient) => lnclient,
+        None => {
+            eprintln!("Error connecting to lightning node.");
+            return;
+        }
+    };
+
     let mut remote_cache = podcastindex::GuidCache::new(REMOTE_GUID_CACHE_SIZE);
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
 
-    println!("Getting existing invoices from LND...");
-    poll_invoices(&mut lightning, &db_filepath, &mut current_index, &mut remote_cache, &ws_tx).await;
+    println!("Getting existing invoices from node...");
+    poll_invoices(&mut *lightning, &db_filepath, &mut current_index, &mut remote_cache, &ws_tx).await;
 
     println!("Current invoice index: {}", current_index);
 
     loop {
-        println!("Subscribing to LND invoices starting at index: {}", current_index);
-        let invoices = lightning.subscribe_invoices(current_index, 0).await;
+        println!("Subscribing to invoices starting at index: {}", current_index);
 
-        let mut invoices = match invoices {
-            Ok(s) => s,
+        let subscribe_result = lightning.subscribe_invoices(current_index).await;
+        let mut retry_ms: u64 = 5000;
+
+        let invoices = match subscribe_result {
+            Ok(s) => Some(s),
             Err(e) => {
                 eprintln!("Error subscribing to invoices: {:#?}", e);
-                tokio::time::sleep(tokio::time::Duration::from_millis(60000)).await;
-                continue;
+                retry_ms = 60000;
+                None
             }
         };
 
-        while let Some(Ok(invoice)) = invoices.next().await {
-            let hash = HEXLOWER.encode(&invoice.r_hash);
+        if let Some(mut invoices) = invoices {
+            while let Some(Ok(invoice)) = invoices.next().await {
+                let invoice_index = invoice.index;
+                let hash = invoice.payment_hash.clone();
+                let settled = invoice.settled;
 
-            println!("Invoice: {}, state: {}, hash: {}", invoice.add_index, invoice.state, hash);
+                println!("Invoice: {}, hash: {}", invoice_index, hash);
 
             let settings_snapshot = settings.read().await;
             let fetch_metadata = settings_snapshot.fetch_metadata;
@@ -225,22 +232,20 @@ pub async fn lnd_subscribe_invoices(
                 println!("No boost found for invoice: {:#?}", &invoice);
             }
 
-            current_index = invoice.add_index;
-            println!("Current index: {}", current_index);
+            eprintln!("Invoice subscription stream ended. Attempting to reconnect...");
         }
 
-        eprintln!("Invoice subscription stream ended. Attempting to reconnect...");
-        tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(retry_ms)).await;
     }
 }
 
 pub async fn lnd_poller(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sender<WebSocketEvent>>) {
     let db_filepath = helipad_config.database_file_path.clone();
 
-    println!("\nConnecting to LND node address...");
-    let mut lightning = lightning::connect_lnd_or_exit(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await;
+    println!("\nConnecting to lightning node address...");
+    let mut lightning = lightning::connect_or_exit(&helipad_config.lightning).await;
 
-    if let Err(e) = poll_node_info(&mut lightning, &db_filepath).await {
+    if let Err(e) = poll_node_info(&mut *lightning, &db_filepath).await {
         eprintln!("Error updating node info: {:#?}", e);
     }
 
@@ -250,10 +255,10 @@ pub async fn lnd_poller(helipad_config: HelipadConfig, ws_tx: Arc<broadcast::Sen
     let mut catchup = true;
 
     loop {
-        if let Err(e) = poll_balance(&mut lightning, &db_filepath, &mut current_balance, &ws_tx).await {
+        if let Err(e) = poll_balance(&mut *lightning, &db_filepath, &mut current_balance, &ws_tx).await {
             eprintln!("Error polling balance: {:#?}", e);
             if let BalanceError::TransportError = e {
-                if let Some(conn) = lightning::connect_to_lnd(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await {
+                if let Some(conn) = lightning::connect(&helipad_config.lightning).await {
                     println!(" - Reconnected.");
                     lightning = conn;
                 }
