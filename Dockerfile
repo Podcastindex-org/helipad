@@ -2,7 +2,7 @@
 ##: Set up native compile
 ###
 FROM rust:bookworm AS build-native
-RUN apt-get update && apt-get install -y ca-certificates openssl sqlite3
+RUN apt-get update && apt-get install -y ca-certificates openssl sqlite3 protobuf-compiler
 RUN echo $(arch)-unknown-linux-gnu > /tmp/rust-target
 
 ###

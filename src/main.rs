@@ -66,41 +66,171 @@ pub struct AppState {
 }
 
 #[derive(Clone, Debug)]
+pub struct LndConfig {
+    pub node_address: String,
+    pub macaroon_path: String,
+    pub cert_path: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ClnConfig {
+    pub node_address: String,
+    pub cert_path: String,
+    pub key_path: String,
+    pub cacert_path: String,
+}
+
+#[derive(Clone, Debug)]
+pub enum LightningConfig {
+    Lnd(LndConfig),
+    Cln(ClnConfig),
+}
+
+#[derive(Clone, Debug)]
 pub struct HelipadConfig {
     pub database_file_path: String,
     pub sound_path: String,
     pub listen_port: String,
-    pub macaroon_path: String,
-    pub cert_path: String,
-    pub node_address: String,
     pub password: String,
     pub secret: String,
+    pub lightning: LightningConfig,
 }
 
 
 //Configure_me
 include_config!();
 
+fn get_lnd_config(server_config: &Config) -> LightningConfig {
+    let mut lnd_config = LndConfig {
+        node_address: "".to_string(),
+        macaroon_path: "".to_string(),
+        cert_path: "".to_string(),
+    };
+
+    //Get the macaroon and cert files.  Look in the local directory first as an override.
+    //If the files are not found in the currect working directory, look for them at their
+    //normal LND directory locations
+    println!("\nDiscovering LND macaroon file path...");
+    let env_macaroon_path = std::env::var("LND_ADMINMACAROON");
+    //First try from the environment
+    if env_macaroon_path.is_ok() {
+        lnd_config.macaroon_path = env_macaroon_path.unwrap();
+        println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", lnd_config.macaroon_path);
+    } else if server_config.lnd_macaroon.is_some() || server_config.macaroon.is_some() {
+        lnd_config.macaroon_path = server_config.lnd_macaroon.clone().or(server_config.macaroon.clone()).unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, lnd_config.macaroon_path);
+    } else {
+        lnd_config.macaroon_path = String::from(LND_STANDARD_MACAROON_LOCATION);
+        println!(" - Trying LND default: [{}]", lnd_config.macaroon_path);
+    }
+
+    println!("\nDiscovering LND certificate file path...");
+    let env_cert_path = std::env::var("LND_TLSCERT");
+    if env_cert_path.is_ok() {
+        lnd_config.cert_path = env_cert_path.unwrap();
+        println!(" - Trying environment var(LND_TLSCERT): [{}]", lnd_config.cert_path);
+    } else if server_config.lnd_cert.is_some() || server_config.cert.is_some() {
+        lnd_config.cert_path = server_config.lnd_cert.clone().or(server_config.cert.clone()).unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, lnd_config.cert_path);
+    } else {
+        lnd_config.cert_path = String::from(LND_STANDARD_TLSCERT_LOCATION);
+        println!(" - Trying LND default: [{}]", lnd_config.cert_path);
+    }
+
+    //Get the url connection string of the lnd node
+    println!("\nDiscovering LND node address...");
+    let env_lnd_url = std::env::var("LND_URL");
+    if env_lnd_url.is_ok() {
+        lnd_config.node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
+        println!(" - Trying environment var(LND_URL): [{}]", lnd_config.node_address);
+    } else if server_config.lnd_url.is_some() {
+        lnd_config.node_address = server_config.lnd_url.clone().unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, lnd_config.node_address);
+    } else {
+        lnd_config.node_address = String::from(LND_STANDARD_GRPC_URL);
+        println!(" - Trying localhost default: [{}].", lnd_config.node_address);
+    }
+
+    LightningConfig::Lnd(lnd_config)
+}
+
+fn get_cln_config(server_config: &Config) -> LightningConfig {
+    let mut cln_config = ClnConfig {
+        node_address: "".to_string(),
+        cert_path: "".to_string(),
+        key_path: "".to_string(),
+        cacert_path: "".to_string(),
+    };
+
+    //Get the url connection string of the cln node
+    println!("\nDiscovering CLN node address...");
+    let env_cln_url = std::env::var("CLN_URL");
+    if env_cln_url.is_ok() {
+        cln_config.node_address = env_cln_url.unwrap();
+        println!(" - Trying environment var(CLN_URL): [{}]", cln_config.node_address);
+    } else if server_config.cln_url.is_some() {
+        cln_config.node_address = server_config.cln_url.clone().unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cln_config.node_address);
+    }
+
+    println!("\nDiscovering CLN certificate file path...");
+    let env_cert_path = std::env::var("CLN_CERT");
+    //First try from the environment
+    if env_cert_path.is_ok() {
+        cln_config.cert_path = env_cert_path.unwrap();
+        println!(" - Trying environment var(CLN_CERT): [{}]", cln_config.cert_path);
+    } else if server_config.cln_cert.is_some() {
+        cln_config.cert_path = server_config.cln_cert.clone().unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cln_config.cert_path);
+    }
+
+    println!("\nDiscovering CLN key file path...");
+    let env_key_path = std::env::var("CLN_KEY");
+    if env_key_path.is_ok() {
+        cln_config.key_path = env_key_path.unwrap();
+        println!(" - Trying environment var(CLN_KEY): [{}]", cln_config.key_path);
+    } else if server_config.cln_key.is_some() {
+        cln_config.key_path = server_config.cln_key.clone().unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cln_config.key_path);
+    }
+
+    //Get the url connection string of the lnd node
+    println!("\nDiscovering CLN cacert file path...");
+    let env_cacert_path = std::env::var("CLN_CACERT");
+    if env_cacert_path.is_ok() {
+        cln_config.cacert_path = env_cacert_path.unwrap();
+        println!(" - Trying environment var(CLN_CACERT): [{}]", cln_config.cacert_path);
+    } else if server_config.cln_cacert.is_some() {
+        cln_config.cacert_path = server_config.cln_cacert.clone().unwrap();
+        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, cln_config.cacert_path);
+    }
+
+    LightningConfig::Cln(cln_config)
+}
+
+
+fn get_lightning_config(server_config: &Config) -> LightningConfig {
+    let lightning_type = server_config.lightning_type.clone().unwrap_or_else(|| "LND".to_string());
+    let lightning_type = lightning_type.to_uppercase();
+
+    match lightning_type.as_str() {
+        "CLN" => get_cln_config(server_config),
+        "LND" | _ => get_lnd_config(server_config), // default to LND
+    }
+}
+
 //Main -------------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------------------
 #[tokio::main]
 async fn main() {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Failed to install rustls crypto provider");
+
     //Get what version we are
     let version = env!("CARGO_PKG_VERSION");
     println!("Version: {}", version);
     println!("--------------------");
-
-    //Configuration
-    let mut helipad_config = HelipadConfig {
-        database_file_path: "".to_string(),
-        sound_path: "".to_string(),
-        listen_port: "".to_string(),
-        macaroon_path: "".to_string(),
-        cert_path: "".to_string(),
-        node_address: "".to_string(),
-        password: "".to_string(),
-        secret: "".to_string(),
-    };
 
     //Bring in the configuration info
     let (server_config, _remaining_args) = Config::including_optional_config_files(&[HELIPAD_CONFIG_FILE]).unwrap_or_exit();
@@ -109,8 +239,16 @@ async fn main() {
     println!("Config file(database_dir): {:#?}", server_config.database_dir);
     println!("Config file(sound_dir): {:#?}", server_config.sound_dir);
     println!("Config file(listen_port): {:#?}", server_config.listen_port);
-    println!("Config file(macaroon): {:#?}", server_config.macaroon);
-    println!("Config file(cert): {:#?}", server_config.cert);
+
+    //Configuration
+    let mut helipad_config = HelipadConfig {
+        database_file_path: "".to_string(),
+        sound_path: "".to_string(),
+        listen_port: "".to_string(),
+        password: "".to_string(),
+        secret: "".to_string(),
+        lightning: get_lightning_config(&server_config),
+    };
 
     //LISTEN PORT -----
     println!("\nDiscovering listen port...");
@@ -208,56 +346,6 @@ async fn main() {
         };
     }
 
-    //Get the macaroon and cert files.  Look in the local directory first as an override.
-    //If the files are not found in the currect working directory, look for them at their
-    //normal LND directory locations
-    println!("\nDiscovering macaroon file path...");
-    let env_macaroon_path = std::env::var("LND_ADMINMACAROON");
-    //First try from the environment
-    if env_macaroon_path.is_ok() {
-        helipad_config.macaroon_path = env_macaroon_path.unwrap();
-        println!(" - Trying environment var(LND_ADMINMACAROON): [{}]", helipad_config.macaroon_path);
-    } else if server_config.macaroon.is_some() {
-        helipad_config.macaroon_path = server_config.macaroon.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.macaroon_path);
-    } else if Path::new("admin.macaroon").is_file() {
-        helipad_config.macaroon_path = "admin.macaroon".to_string();
-        println!(" - Trying current directory: [{}]", helipad_config.macaroon_path);
-    } else {
-        helipad_config.macaroon_path = String::from(LND_STANDARD_MACAROON_LOCATION);
-        println!(" - Trying LND default: [{}]", helipad_config.macaroon_path);
-    }
-
-    println!("\nDiscovering certificate file path...");
-    let env_cert_path = std::env::var("LND_TLSCERT");
-    if env_cert_path.is_ok() {
-        helipad_config.cert_path = env_cert_path.unwrap();
-        println!(" - Trying environment var(LND_TLSCERT): [{}]", helipad_config.cert_path);
-    } else if server_config.cert.is_some() {
-        helipad_config.cert_path = server_config.cert.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.cert_path);
-    } else if Path::new("tls.cert").is_file() {
-        helipad_config.cert_path = "tls.cert".to_string();
-        println!(" - Trying current directory: [{}]", helipad_config.cert_path);
-    } else {
-        helipad_config.cert_path = String::from(LND_STANDARD_TLSCERT_LOCATION);
-        println!(" - Trying LND default: [{}]", helipad_config.cert_path);
-    }
-
-    //Get the url connection string of the lnd node
-    println!("\nDiscovering LND node address...");
-    let env_lnd_url = std::env::var("LND_URL");
-    if env_lnd_url.is_ok() {
-        helipad_config.node_address = "https://".to_owned() + env_lnd_url.unwrap().as_str();
-        println!(" - Trying environment var(LND_URL): [{}]", helipad_config.node_address);
-    } else if server_config.lnd_url.is_some() {
-        helipad_config.node_address = server_config.lnd_url.unwrap();
-        println!(" - Trying config file({}): [{}]", HELIPAD_CONFIG_FILE, helipad_config.node_address);
-    } else {
-        helipad_config.node_address = String::from(LND_STANDARD_GRPC_URL);
-        println!(" - Trying localhost default: [{}].", helipad_config.node_address);
-    }
-
     //Load initial settings from database
     let initial_settings = match dbif::load_settings_from_db(&helipad_config.database_file_path) {
         Ok(settings) => settings,
@@ -288,10 +376,10 @@ async fn main() {
         settings: shared_settings.clone(),
     };
 
-    //Start the LND polling thread.  This thread will poll LND every few seconds to
-    //get the latest invoices and store them in the database.
-    tokio::spawn(poller::lnd_poller(helipad_config.clone(), state.ws_tx.clone()));
-    tokio::spawn(poller::lnd_subscribe_invoices(helipad_config.clone(), state.ws_tx.clone(), shared_settings.clone()));
+    //Start the polling thread.  This thread will poll for balance and payments every few seconds
+    //and subscribe to new incoming invoices.
+    tokio::spawn(poller::poller(helipad_config.clone(), state.ws_tx.clone()));
+    tokio::spawn(poller::subscribe_invoices(helipad_config.clone(), state.ws_tx.clone(), shared_settings.clone()));
 
     // Api routes
 
