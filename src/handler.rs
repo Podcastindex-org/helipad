@@ -646,14 +646,14 @@ pub async fn api_v1_reply(
     });
 
     let helipad_config = state.helipad_config.clone();
-    let lightning = match lightning::connect_to_lnd(&helipad_config.node_address, &helipad_config.cert_path, &helipad_config.macaroon_path).await {
-        Some(lndconn) => lndconn,
+    let mut lightning = match lightning::connect(&helipad_config.lightning).await {
+        Some(lnclient) => lnclient,
         None => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error connecting to LND.").into_response();
+            return (StatusCode::INTERNAL_SERVER_ERROR, "** Error connecting to lightning node.").into_response();
         }
     };
 
-    let payment = match lightning::send_boost(lightning, pub_key, custom_key, custom_value, sats, reply_tlv.clone()).await {
+    let payment = match lightning::send_boost(lightning.as_mut(), pub_key, custom_key, custom_value, sats, reply_tlv.clone()).await {
         Ok(payment) => payment,
         Err(e) => {
             eprintln!("** Error sending boost: {}", e);
