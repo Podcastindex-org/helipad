@@ -1,0 +1,19 @@
+[package]
+name = "helipad-lnclient"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "helipad_lnclient"
+
+[dependencies]
+async-trait = "0.1"
+futures = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+data-encoding = "2.4"
+rand = { version = "0.10", features = ["thread_rng"] }
+tonic = { version = "0.12.1", features = ["tls"] }
+lnd-rs = { path = "lnd-rs" }
+cln-rs = { path = "cln-rs" }
