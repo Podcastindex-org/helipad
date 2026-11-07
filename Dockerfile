@@ -10,9 +10,12 @@ RUN echo $(arch)-unknown-linux-gnu > /tmp/rust-target
 ###
 FROM --platform=$BUILDPLATFORM rust:bookworm AS build-cross-arm64
 
-ARG CC=aarch64-linux-gnu-gcc
-ARG CXX=aarch64-linux-gnu-g++
-ARG PKG_CONFIG_SYSROOT_DIR=/usr/lib/aarch64-linux-gnu/
+ARG CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ARG CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ARG AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar
+ARG AR_aarch64-linux-gnu=aarch64-linux-gnu-ar
+ARG PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+ARG PKG_CONFIG_SYSROOT_DIR_aarch64_unknown_linux_gnu=/usr
 ARG CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 
 RUN dpkg --add-architecture arm64
