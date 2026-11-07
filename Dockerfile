@@ -38,7 +38,7 @@ FROM build-cross-arm64 AS build-arm64-on-amd64
 ###
 ##: Build stage
 ###
-FROM build-$TARGETARCH-on-$BUILDARCH as builder
+FROM build-$TARGETARCH-on-$BUILDARCH AS builder
 
 WORKDIR /opt/helipad
 
@@ -49,7 +49,7 @@ RUN cp ./target/$(cat /tmp/rust-target)/release/helipad .
 ###
 ##: Bundle stage
 ###
-FROM --platform=$TARGETPLATFORM debian:bookworm-slim AS runner
+FROM debian:bookworm-slim AS runner
 
 RUN apt-get update && \
     apt-get install -y ca-certificates openssl sqlite3 && \
