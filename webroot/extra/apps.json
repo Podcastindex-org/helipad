@@ -138,5 +138,9 @@
     "boostmebuddy": {
         "icon": "boostmebuddy",
         "url": "https://www.boostmebuddy.com"
+    },
+    "onlyboosts": {
+        "icon": "onlyboosts",
+        "url": "https://onlyboosts.social"
     }
 }
