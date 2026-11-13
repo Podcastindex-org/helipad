@@ -177,26 +177,7 @@ pub fn get_payments_from_db(filepath: &str, index: u64, max: u64, direction: boo
         //Some things like text output don't need to be html entity escaped
         //so only do it if asked for
         if escape_html {
-            let boost_clean = BoostRecord {
-                sender: BoostRecord::escape_for_html(boost.sender),
-                app: BoostRecord::escape_for_html(boost.app),
-                message: BoostRecord::escape_for_html(boost.message),
-                podcast: BoostRecord::escape_for_html(boost.podcast),
-                episode: BoostRecord::escape_for_html(boost.episode),
-                tlv: BoostRecord::escape_for_html(boost.tlv),
-                remote_podcast: boost.remote_podcast.map(BoostRecord::escape_for_html),
-                remote_episode: boost.remote_episode.map(BoostRecord::escape_for_html),
-                payment_info: match boost.payment_info {
-                    Some(info) => Some(PaymentRecord {
-                        pubkey: BoostRecord::escape_for_html(info.pubkey),
-                        custom_value: BoostRecord::escape_for_html(info.custom_value),
-                        ..info
-                    }),
-                    None => None,
-                },
-                ..boost
-            };
-            boosts.push(boost_clean);
+            boosts.push(boost.escaped());
         } else {
             boosts.push(boost);
         }

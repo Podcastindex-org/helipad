@@ -38,6 +38,26 @@ impl BoostRecord {
         field.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
     }
 
+    //Returns a copy with all displayable strings html entity escaped
+    pub fn escaped(self) -> BoostRecord {
+        BoostRecord {
+            sender: BoostRecord::escape_for_html(self.sender),
+            app: BoostRecord::escape_for_html(self.app),
+            message: BoostRecord::escape_for_html(self.message),
+            podcast: BoostRecord::escape_for_html(self.podcast),
+            episode: BoostRecord::escape_for_html(self.episode),
+            tlv: BoostRecord::escape_for_html(self.tlv),
+            remote_podcast: self.remote_podcast.map(BoostRecord::escape_for_html),
+            remote_episode: self.remote_episode.map(BoostRecord::escape_for_html),
+            payment_info: self.payment_info.map(|info| PaymentRecord {
+                pubkey: BoostRecord::escape_for_html(info.pubkey),
+                custom_value: BoostRecord::escape_for_html(info.custom_value),
+                ..info
+            }),
+            ..self
+        }
+    }
+
     //Removes unsafe html interpretable characters from displayable strings
     pub fn escape_for_csv( field: String) -> String {
         field.replace('"', "\"\"").replace('\n', " ")
@@ -500,18 +520,7 @@ pub fn get_invoices_from_db(filepath: &str, invtype: &str, index: u64, max: u64,
         //Some things like text output don't need to be html entity escaped
         //so only do it if asked for
         if escape_html {
-            let boost_clean = BoostRecord {
-                sender: BoostRecord::escape_for_html(boost.sender),
-                app: BoostRecord::escape_for_html(boost.app),
-                message: BoostRecord::escape_for_html(boost.message),
-                podcast: BoostRecord::escape_for_html(boost.podcast),
-                episode: BoostRecord::escape_for_html(boost.episode),
-                tlv: BoostRecord::escape_for_html(boost.tlv),
-                remote_podcast: boost.remote_podcast.map(BoostRecord::escape_for_html),
-                remote_episode: boost.remote_episode.map(BoostRecord::escape_for_html),
-                ..boost
-            };
-            boosts.push(boost_clean);
+            boosts.push(boost.escaped());
         } else {
             boosts.push(boost);
         }

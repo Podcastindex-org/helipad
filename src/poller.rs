@@ -157,7 +157,7 @@ async fn handle_boost(
         }
     }
 
-    let boost_with_effects = if add_triggers {
+    let mut boost_with_effects = if add_triggers {
         triggers::process_triggers(db_filepath, boost).await.unwrap_or_else(|e| {
             eprintln!("Error processing triggers: {:#?}", e);
             triggers::BoostWithEffects { boost: boost.clone(), effects: Vec::new(), server_effects: Vec::new() }
@@ -165,6 +165,9 @@ async fn handle_boost(
     } else {
         triggers::BoostWithEffects { boost: boost.clone(), effects: Vec::new(), server_effects: Vec::new() }
     };
+
+    //The web UI renders boost fields as HTML
+    boost_with_effects.boost = boost_with_effects.boost.escaped();
 
     match ws_tx.send(WebSocketEvent(ws_type, serde_json::to_value(&boost_with_effects).unwrap())) {
         Ok(_) => println!("WebSocket event sent."),

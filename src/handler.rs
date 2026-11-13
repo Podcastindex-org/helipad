@@ -1330,13 +1330,15 @@ pub async fn trigger_settings_test(
 
     println!("** Test trigger {}: Executing actions...", index);
 
-    let boost_with_effects = match triggers::test_trigger(&state.helipad_config.database_file_path, &trigger).await {
+    let mut boost_with_effects = match triggers::test_trigger(&state.helipad_config.database_file_path, &trigger).await {
         Ok(boost_with_effects) => boost_with_effects,
         Err(e) => {
             eprintln!("** Error testing trigger: {}.\n", e);
             return (StatusCode::INTERNAL_SERVER_ERROR, "Error testing trigger").into_response();
         }
     };
+
+    boost_with_effects.boost = boost_with_effects.boost.escaped();
 
     match state.ws_tx.send(WebSocketEvent(
         "boost".to_string(),
