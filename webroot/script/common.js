@@ -48,10 +48,34 @@ class MidiPew {
 
 // Plays and queues the pews
 class SoundPew {
+    static volumeKey = 'helipad_pew_volume';
+
+    //Get the saved volume percentage (0-100), defaulting to 100
+    static getVolume() {
+        try {
+            const saved = parseInt(localStorage.getItem(SoundPew.volumeKey), 10);
+            return Number.isInteger(saved) ? Math.min(100, Math.max(0, saved)) : 100;
+        } catch {
+            return 100;
+        }
+    }
+
+    //Clamp and save the volume percentage (0-100)
+    static setVolume(volume) {
+        const clamped = Math.min(100, Math.max(0, parseInt(volume, 10) || 0));
+
+        try {
+            localStorage.setItem(SoundPew.volumeKey, String(clamped));
+        } catch {}
+
+        return clamped;
+    }
+
     play(sound) {
         return new Promise((resolve, reject) => {
             const ts = new Date().getTime();
             const audio = new Audio(sound.sound_file + '?h=' + ts);
+            audio.volume = SoundPew.getVolume() / 100;
             audio.addEventListener('ended', resolve);
             audio.play().catch(reject);
         });
@@ -228,3 +252,53 @@ class HelipadWebsocket {
         this.ws?.close();
     }
 }
+
+//Volume button and slider for the pew sound effects
+function renderVolumeControl() {
+    const $volume = $('span.volume');
+
+    if (!$volume.length || typeof SoundPew === 'undefined') {
+        return; // no volume button on this page
+    }
+
+    const $button = $('#volume-button');
+    const $popover = $('#volume-popover');
+    const $slider = $('#volume-slider');
+    const $value = $('#volume-value');
+
+    //Show the icon that matches the given volume percentage
+    function setVolumeIcon(volume) {
+        const level = (volume === 0) ? 'off' : ((volume <= 50) ? 'down' : 'up');
+        $volume.attr('data-level', level);
+        $button.attr('title', `Pew volume: ${volume}%`);
+    }
+
+    //Show the previously saved volume
+    const savedVolume = SoundPew.getVolume();
+    $slider.val(savedVolume);
+    $value.text(`${savedVolume}%`);
+    setVolumeIcon(savedVolume);
+
+    //Toggle the volume slider
+    $button.on('click', (ev) => {
+        ev.preventDefault();
+        $popover.toggleClass('d-none');
+    });
+
+    //Save the volume as the slider moves
+    $slider.on('input', () => {
+        const volume = SoundPew.setVolume($slider.val());
+        $value.text(`${volume}%`);
+        setVolumeIcon(volume);
+    });
+
+    //Close the slider when clicking anywhere outside of it
+    $(document).on('click', (ev) => {
+        if (!$(ev.target).closest('span.volume').length) {
+            $popover.addClass('d-none');
+        }
+    });
+}
+
+//Initialize the volume control on any page that has the button
+document.addEventListener('DOMContentLoaded', renderVolumeControl);
