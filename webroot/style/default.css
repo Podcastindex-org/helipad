@@ -491,6 +491,44 @@ a.clear-filters:hover {
     }
 }
 
+/* Pew volume control */
+span.volume {
+    position: relative;
+}
+span.volume svg g {
+    display: none;
+}
+span.volume[data-level="up"] .volume-level-up,
+span.volume[data-level="down"] .volume-level-down,
+span.volume[data-level="off"] .volume-level-off {
+    display: block;
+}
+#volume-popover {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 1000;
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    display: flex;
+    align-items: center;
+    column-gap: 0.5rem;
+    background-color: #1b1e21;
+    border: 1px solid #4c4c4c;
+    border-radius: 0.25rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+}
+#volume-slider {
+    width: 7.5rem;
+    accent-color: white;
+}
+#volume-value {
+    min-width: 2.5rem;
+    text-align: right;
+    color: #ccc;
+}
+
 /* Small screens */
 @media only screen and (max-width: 640px) {
     h5, ul.navButtons {
