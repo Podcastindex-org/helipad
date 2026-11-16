@@ -32,6 +32,21 @@ use uuid::Uuid;
 const JWT_SESSION_HOURS: i64 = 1;             // 1 hour for normal login
 const JWT_LONG_SESSION_HOURS: i64 = 30 * 24;  // 30 days for "stay logged in"
 
+//Compare two byte strings in time independent of where they differ, so login
+//timing doesn't leak how much of the password matched
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false; // length is not secret
+    }
+
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+
+    diff == 0
+}
+
 //Structs and Enums ------------------------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
 struct JwtClaims {
@@ -210,9 +225,7 @@ pub async fn handle_login(
     jar: CookieJar,
     Form(post_vars): Form<LoginForm>,
 ) -> Response {
-
-    if state.helipad_config.password == *post_vars.password {
-        // valid password: set cookie and redirect
+    if constant_time_eq(state.helipad_config.password.as_bytes(), post_vars.password.as_bytes()) {
         let stay_logged_in = post_vars.stay_logged_in.is_some();
         let cookie = new_jwt_cookie(state.helipad_config.secret, stay_logged_in);
         let jar = jar.add(cookie);
@@ -240,8 +253,7 @@ pub async fn api_v1_login(
         return (StatusCode::OK, Json(resp)).into_response();
     }
 
-    if state.helipad_config.password == *post_vars.password {
-        // valid password: set cookie and redirect
+    if constant_time_eq(state.helipad_config.password.as_bytes(), post_vars.password.as_bytes()) {
         let stay_logged_in = post_vars.stay_logged_in.is_some();
         let cookie = new_jwt_cookie(state.helipad_config.secret, stay_logged_in);
         let resp = json!({
