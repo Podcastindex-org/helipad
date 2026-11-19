@@ -53,7 +53,8 @@ This call returns the current channel balance that LND is reporting.
 This call returns the node name, pubkey, and version that LND is reporting.
 
 #### /api/v1/settings
-This call returns the current settings that the user has set.
+This call returns the current settings that the user has set. It also includes a `node_replies_enabled` flag, which is `true` only
+when a Helipad password is configured.
 
 #### /api/v1/index
 This call returns the most recent invoice index number that Helipad has reconciled with LND.
@@ -72,6 +73,11 @@ This call returns the most recent payment index number that Helipad has reconcil
 #### /api/v1/sent
 This call returns `count` sent boosts starting at `index`.  If the `old` parameter is present, the sent boosts returned start from `index` and
 descend by `count`, showing older sent boosts.  Otherwise, they start at `index` and ascend by `count`, showing newer sent boosts.
+
+#### /api/v1/reply
+This call sends a reply boost from the node to the `reply_address` of the boost at `index`. Because it spends the node's funds, it
+returns `403 Forbidden` unless a password is configured (`HELIPAD_PASSWORD` or `password` in the config file). Without a password,
+replies can still be sent from a WebLN browser wallet.
 
 <br><br>
 ## Webhooks

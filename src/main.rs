@@ -335,6 +335,10 @@ async fn main() {
         println!("Found password in config file({})", HELIPAD_CONFIG_FILE);
     }
 
+    if helipad_config.password.is_empty() {
+        println!("No password set: replying to boosts from the node is disabled");
+    }
+
     //Get or generate secret for JWT if password set
     if !helipad_config.password.is_empty() {
         helipad_config.secret = match dbif::get_or_create_jwt_secret(&helipad_config.database_file_path) {

@@ -279,7 +279,7 @@ $(document).ready(function () {
             }
 
             // Show reply button for boosts/streams if reply address received
-            if (boostReplyAddress && (config.pluralName == 'boosts' || config.pluralName == 'streams')) {
+            if (boostReplyAddress && canReply() && (config.pluralName == 'boosts' || config.pluralName == 'streams')) {
                 // Attach reply data to the message
                 $('div.outgoing_msg[data-msgid=' + boostIndex + ']').data({
                     'index': boostIndex,
@@ -446,6 +446,11 @@ $(document).ready(function () {
     //Get configured settings
     async function getSettings() {
         settings = await $.get(`/api/v1/settings`);
+    }
+
+    //Replies need either the node (password set) or a WebLN browser wallet
+    function canReply() {
+        return (settings && settings.node_replies_enabled) || !!window.webln;
     }
 
     //Refresh the timestatmps of all the boosts on the list
@@ -772,7 +777,7 @@ $(document).ready(function () {
                   <div class="form-group row ${window.webln ? '' : 'd-none'}">
                     <label for="send-from" class="col-sm-2 col-form-label pt-0">Send from:</label>
                     <div class="col-sm-10">
-                      <div class="form-check form-check-inline">
+                      <div class="form-check form-check-inline send-from-node-option">
                         <input class="form-check-input" type="radio" name="send-from" id="send-from-node" value="node" checked required>
                         <label class="form-check-label" for="send-from-node">Node</label>
                       </div>
@@ -828,8 +833,15 @@ $(document).ready(function () {
             $('#sender-name').val(window.localStorage.getItem('lastSender') || '');
 
             const lastWallet = window.localStorage.getItem('lastWallet');
+            const nodeRepliesEnabled = !!(settings && settings.node_replies_enabled);
 
-            if (lastWallet && window.webln) {
+            $('.send-from-node-option').toggleClass('d-none', !nodeRepliesEnabled);
+
+            if (!nodeRepliesEnabled) {
+                $('#send-from-node').prop('checked', false);
+                $('#send-from-browser').prop('checked', true);
+            }
+            else if (lastWallet && window.webln) {
                 $('#send-from-node').prop('checked', lastWallet == 'node')
                 $('#send-from-browser').prop('checked', lastWallet == 'browser')
             }

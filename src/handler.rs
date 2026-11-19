@@ -343,7 +343,19 @@ pub async fn api_v1_node_info(State(state): State<AppState>) -> Response {
 pub async fn api_v1_settings(State(state): State<AppState>) -> Response {
     match dbif::load_settings_from_db(&state.helipad_config.database_file_path) {
         Ok(settings) => {
-            Json(settings).into_response()
+            let mut value = match serde_json::to_value(&settings) {
+                Ok(value) => value,
+                Err(e) => {
+                    eprintln!("** Error serializing settings: {}.\n", e);
+                    return (StatusCode::INTERNAL_SERVER_ERROR, "** Error getting settings.").into_response();
+                }
+            };
+
+            if let Some(obj) = value.as_object_mut() {
+                obj.insert("node_replies_enabled".into(), serde_json::Value::Bool(!state.helipad_config.password.is_empty()));
+            }
+
+            Json(value).into_response()
         }
         Err(e) => {
             eprintln!("** Error getting settings: {}.\n", e);
@@ -601,6 +613,10 @@ pub async fn api_v1_reply(
     State(state): State<AppState>,
     Form(params): Form<ReplyForm>,
 ) -> Response {
+    if state.helipad_config.password.is_empty() {
+        return (StatusCode::FORBIDDEN, "** Replying from the node requires HELIPAD_PASSWORD to be set").into_response();
+    }
+
     let index = params.index;
     let sats = params.sats;
     let sender = params.sender.unwrap_or("Anonymous".into());
