@@ -14,7 +14,7 @@ use axum_extra::{
 use axum_typed_multipart::{FieldData, TryFromMultipart, TypedMultipart};
 
 use chrono::{DateTime, TimeDelta, Utc};
-use crate::{AppState, lightning, podcastindex, boost, triggers, WebSocketEvent};
+use crate::{AppState, lightning, podcastindex, boost, metadata, triggers, WebSocketEvent};
 use dbif::{BoostRecord, BoostFilters, NumerologyRecord, TriggerRecord, ActionType};
 use handlebars::Handlebars;
 use jsonwebtoken::{Algorithm, Header, DecodingKey, EncodingKey, Validation};
@@ -778,11 +778,28 @@ pub async fn api_v1_fetch_metadata(
         }
     };
 
+    let settings = match dbif::load_settings_from_db(&state.helipad_config.database_file_path) {
+        Ok(settings) => settings,
+        Err(e) => {
+            eprintln!("** Error getting settings: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(FetchMetadataResponse {
+                success: false,
+                boost: None,
+                message: "Error getting settings".to_string(),
+            })).into_response();
+        }
+    };
+
     // Fetch payment metadata
     let mut remote_cache = podcastindex::GuidCache::new(1);
     let comment = boost.message.clone();
 
-    if !boost::fetch_boost_metadata(&mut boost, &comment, &mut remote_cache).await {
+    let fetched = match metadata::find_payment_url(&comment, &settings.metadata_whitelist) {
+        Some(payment_url) => boost::fetch_boost_metadata(&mut boost, &payment_url, &settings.metadata_whitelist, &mut remote_cache).await,
+        None => false,
+    };
+
+    if !fetched {
         return (StatusCode::BAD_REQUEST, Json(FetchMetadataResponse {
             success: false,
             boost: None,

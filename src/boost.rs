@@ -1,4 +1,3 @@
-use regex::Regex;
 use serde::Deserialize;
 use std::error::Error;
 use std::collections::HashMap;
@@ -13,15 +12,6 @@ pub const TLV_WALLET_KEY: u64 = 696969;
 pub const TLV_WALLET_ID: u64 = 112111100;
 pub const TLV_HIVE_ACCOUNT: u64 = 818818;
 pub const TLV_FOUNTAIN_KEY: u64 = 906608;
-
-const METADATA_PAYMENT_DOMAINS: &[&str] = &[
-    "fountain.fm",
-    "castamatic.com",
-    "tardbox.com",
-    "podfans.fm",
-    "truefans.fm",
-    "v4vmusic.com",
-];
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
@@ -120,12 +110,12 @@ pub async fn parse_boost_from_invoice(invoice: Invoice, remote_cache: &mut podca
     }
 
     // Fetch any RSS payment or Podcast Guru payment metadata from the invoice memo
-    if fetch_metadata &&
-       !memo.is_empty() &&
-       should_fetch_metadata(&memo, metadata_whitelist) &&
-       fetch_boost_metadata(&mut boost, &memo, remote_cache).await
-    {
-        return Some(boost);
+    if fetch_metadata && !memo.is_empty() {
+        if let Some(payment_url) = metadata::find_payment_url(&memo, metadata_whitelist) {
+            if fetch_boost_metadata(&mut boost, &payment_url, metadata_whitelist, remote_cache).await {
+                return Some(boost);
+            }
+        }
     }
 
     // Else use what we have for a "Lightning Invoice" boost
@@ -225,30 +215,8 @@ async fn parse_keysend_memo(boost: &mut dbif::BoostRecord, memo: &str, remote_ca
     true
 }
 
-fn should_fetch_metadata(comment: &str, additional_domains: &str) -> bool {
-    let mut domains = METADATA_PAYMENT_DOMAINS.to_vec();
-
-    let extra: Vec<&str> = additional_domains
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .collect();
-
-    domains.extend(extra);
-
-    let domain_match = domains.iter().any(|d| {
-        Regex::new(&format!(r"rss::payment::\w+ https://{}/", d))
-            .map(|re| re.is_match(comment))
-            .unwrap_or(false)
-    });
-
-    domain_match || Regex::new(r"V4V: https://boost\.podcastguru\.io/")
-        .map(|re| re.is_match(comment))
-        .unwrap_or(false)
-}
-
-pub async fn fetch_boost_metadata(boost: &mut dbif::BoostRecord, comment: &str, remote_cache: &mut podcastindex::GuidCache) -> bool {
-    let metadata = match metadata::fetch_payment_metadata(comment).await {
+pub async fn fetch_boost_metadata(boost: &mut dbif::BoostRecord, payment_url: &metadata::PaymentUrl, metadata_whitelist: &str, remote_cache: &mut podcastindex::GuidCache) -> bool {
+    let metadata = match metadata::fetch_payment_metadata(payment_url, metadata_whitelist).await {
         Ok(Some(metadata)) => metadata,
         Ok(None) => {
             eprintln!("** No payment metadata found for boost: {}", boost.index);
