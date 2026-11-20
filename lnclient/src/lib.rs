@@ -74,7 +74,7 @@ pub trait LNClient: Send {
     /// Invoices after `start_index`. LND resumes on add index. CLN resumes on pay index. `0` starts at the beginning.
     async fn subscribe_invoices(&mut self, start_index: u64) -> Result<InvoiceStream, Box<dyn Error + Send + Sync>>;
     async fn send_keysend(&mut self, dest: String, sats: u64, custom_records: HashMap<u64, Vec<u8>>) -> Result<Payment, Box<dyn Error + Send + Sync>>;
-    async fn send_bolt11(&mut self, payment_request: String, custom_records: HashMap<u64, Vec<u8>>) -> Result<Payment, Box<dyn Error + Send + Sync>>;
+    async fn send_bolt11(&mut self, payment_request: String, sats: u64, custom_records: HashMap<u64, Vec<u8>>) -> Result<Payment, Box<dyn Error + Send + Sync>>;
 }
 
 pub async fn connect_lnd(url: String, cert_path: String, macaroon_path: String) -> Result<LNDClient, Box<dyn Error + Send + Sync>> {

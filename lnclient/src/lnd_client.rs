@@ -18,7 +18,7 @@ use std::vec::Vec;
 
 use crate::proto::lnd::lnrpc::{
     ChannelBalanceRequest, GetInfoRequest, Invoice as LndInvoice, InvoiceSubscription,
-    ListInvoiceRequest, ListPaymentsRequest, Payment as LndPayment,
+    ListInvoiceRequest, ListPaymentsRequest, Payment as LndPayment, PayReqString,
     lightning_client::LightningClient,
 };
 
@@ -243,7 +243,21 @@ impl LNClient for LNDClient {
         send_payment(&mut self.router, req).await
     }
 
-    async fn send_bolt11(&mut self, payment_request: String, custom_records: HashMap<u64, Vec<u8>>) -> Result<Payment, Box<dyn Error + Send + Sync>> {
+    async fn send_bolt11(&mut self, payment_request: String, sats: u64, custom_records: HashMap<u64, Vec<u8>>) -> Result<Payment, Box<dyn Error + Send + Sync>> {
+        let decoded = self.client
+            .decode_pay_req(PayReqString { pay_req: payment_request.clone() })
+            .await?
+            .into_inner();
+
+        let expected_msat = sats.checked_mul(1000).ok_or("Amount overflow")?;
+
+        if decoded.num_msat <= 0 || decoded.num_msat as u64 != expected_msat {
+            return Err(Box::new(LNClientError(format!(
+                "Invoice amount {} msat does not match requested amount {} msat",
+                decoded.num_msat, expected_msat
+            ))));
+        }
+
         let req = SendPaymentRequest {
             payment_request,
             dest_custom_records: custom_records,

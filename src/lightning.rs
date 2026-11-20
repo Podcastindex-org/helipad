@@ -120,7 +120,7 @@ async fn send_bolt11(lnclient: &mut dyn LNClient, addr: LnurlpAddress, sats: u64
 
     dest_custom_records.insert(TLV_PODCASTING20, tlv_json.as_bytes().to_vec());
 
-    Ok(lnclient.send_bolt11(payment_request, dest_custom_records).await?)
+    Ok(lnclient.send_bolt11(payment_request, sats, dest_custom_records).await?)
 }
 
 pub async fn send_boost(lnclient: &mut dyn LNClient, address: String, custom_key: Option<u64>, custom_value: Option<String>, sats: u64, tlv: Value) -> Result<Payment, Box<dyn Error + Send + Sync>> {

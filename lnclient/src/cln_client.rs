@@ -214,9 +214,27 @@ impl LNClient for CLNClient {
         Err("Unable to find keysend payment".into())
     }
 
-    async fn send_bolt11(&mut self, payment_request: String, custom_records: HashMap<u64, Vec<u8>>) -> Result<Payment, Box<dyn Error + Send + Sync>> {
+    async fn send_bolt11(&mut self, payment_request: String, sats: u64, custom_records: HashMap<u64, Vec<u8>>) -> Result<Payment, Box<dyn Error + Send + Sync>> {
         if !custom_records.is_empty() {
             eprintln!("Warning: CLN does not support attaching custom records to bolt11 payments, ignoring {} records", custom_records.len());
+        }
+
+        let decoded = self.client
+            .decode_pay(cln::DecodepayRequest {
+                bolt11: payment_request.clone(),
+                description: None,
+            })
+            .await?
+            .into_inner();
+
+        let expected_msat = sats.checked_mul(1000).ok_or("Amount overflow")?;
+        let invoice_msat = decoded.amount_msat.map(|amount| amount.msat);
+
+        if invoice_msat != Some(expected_msat) {
+            return Err(format!(
+                "Invoice amount {:?} msat does not match requested amount {} msat",
+                invoice_msat, expected_msat
+            ).into());
         }
 
         // send bolt11 payment
