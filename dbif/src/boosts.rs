@@ -35,7 +35,12 @@ pub struct BoostRecord {
 impl BoostRecord {
     //Removes unsafe html interpretable characters from displayable strings
     pub fn escape_for_html( field: String) -> String {
-        field.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+        field
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&#39;")
     }
 
     //Returns a copy with all displayable strings html entity escaped
@@ -46,7 +51,6 @@ impl BoostRecord {
             message: BoostRecord::escape_for_html(self.message),
             podcast: BoostRecord::escape_for_html(self.podcast),
             episode: BoostRecord::escape_for_html(self.episode),
-            tlv: BoostRecord::escape_for_html(self.tlv),
             remote_podcast: self.remote_podcast.map(BoostRecord::escape_for_html),
             remote_episode: self.remote_episode.map(BoostRecord::escape_for_html),
             payment_info: self.payment_info.map(|info| PaymentRecord {

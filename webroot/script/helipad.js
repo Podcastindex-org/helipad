@@ -128,14 +128,14 @@ $(document).ready(function () {
             catch {}
 
             //Icon
-            let appIcon = appList[boostApp.toLowerCase()] || {};
+            let appIcon = appList[unescapeHTML(boostApp).toLowerCase()] || {};
             let appIconUrl = appIconUrlBase + (appIcon.icon || 'unknown') + '.png';
             let appIconHref = appIcon.url || '#';
 
             //Person
             let boostPerson = "";
             if (config.pluralName == 'sent boosts' && boostTlv.name) {
-                boostPerson = `to ${boostTlv.name}`;
+                boostPerson = `to ${escapeHTML(boostTlv.name)}`;
             }
             else if (element.sender.trim() != "") {
                 boostPerson = `from ${element.sender}`;
@@ -192,11 +192,18 @@ $(document).ready(function () {
             if (boostRemoteEpisode) {
                 boostRemoteInfo = boostRemotePodcast + ' - ' + boostRemoteEpisode;
 
-                if (boostTlv && boostTlv.remote_feed_guid) {
-                    boostRemoteInfo = `
-                    - <a href="https://podcastindex.org/podcast/${boostTlv.remote_feed_guid}" target="_blank" style="color: blue;">
-                        ${boostRemoteInfo}
-                    </a>`;
+                if (boostTlv && typeof boostTlv.remote_feed_guid === 'string' && boostTlv.remote_feed_guid) {
+                    let remoteFeedGuid = '';
+                    try {
+                        remoteFeedGuid = escapeHTML(encodeURIComponent(boostTlv.remote_feed_guid));
+                    } catch (err) {}
+
+                    if (remoteFeedGuid) {
+                        boostRemoteInfo = `
+                        - <a href="https://podcastindex.org/podcast/${remoteFeedGuid}" target="_blank" style="color: blue;">
+                            ${boostRemoteInfo}
+                        </a>`;
+                    }
                 }
             }
 
@@ -283,10 +290,10 @@ $(document).ready(function () {
                 // Attach reply data to the message
                 $('div.outgoing_msg[data-msgid=' + boostIndex + ']').data({
                     'index': boostIndex,
-                    'podcast': boostPodcast,
-                    'episode': boostEpisode,
+                    'podcast': unescapeHTML(boostPodcast),
+                    'episode': unescapeHTML(boostEpisode),
                     'replyAddress': boostReplyAddress,
-                    'replySender': element.sender,
+                    'replySender': unescapeHTML(element.sender),
                     'replyCustomKey': boostReplyCustomKey,
                     'replyCustomValue': boostReplyCustomValue,
                 });
@@ -419,8 +426,8 @@ $(document).ready(function () {
     //Get the emojis that correspond to the donation amount
     function gatherNumerology(value) {
         const matches = parseNumerology(value);
-        const emojis = matches.map(num => num.emoji);
-        const descriptions = matches.map(num => num.description);
+        const emojis = matches.map(num => escapeHTML(num.emoji));
+        const descriptions = matches.map(num => escapeHTML(num.description));
 
         // show meaning in mouse hover
         if (emojis) {
@@ -483,12 +490,12 @@ $(document).ready(function () {
         const expanded = !!settings.auto_expand_boost_gifs;
         const open = expanded ? ' open' : '';
         const label = expanded ? 'Hide image' : 'Show image';
-        const urlPattern = /https?:\/\/(?:(?!&lt;|&gt;)[^\s<>"'])+/gi;
+        const urlPattern = /https?:\/\/(?:&#39;|&amp;|[^\s<>"'&])+/gi;
 
         let id = 0;
 
         return (message || '').replace(urlPattern, (match) => {
-            const url = match.replace(/[),.;:!?]+$/, '');
+            const url = match.replace(/(?:&#39;s|&#39;|[),.;:!?])+$/i, '');
             if (!isGifUrl(url)) return match;
 
             const gifId = id++;
@@ -509,7 +516,7 @@ $(document).ready(function () {
     // Check if a URL is a valid GIF URL
     function isGifUrl(url) {
         try {
-            const parsed = new URL(url.replace(/&amp;/g, '&'));
+            const parsed = new URL(unescapeHTML(url));
 
             // Browsers block http images on https pages (mixed content)
             if (parsed.protocol === 'http:' && window.location.protocol === 'https:') {

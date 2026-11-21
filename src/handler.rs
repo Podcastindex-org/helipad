@@ -829,7 +829,7 @@ pub async fn api_v1_fetch_metadata(
             println!("** Successfully fetched and updated payment metadata for boost {}", index);
             (StatusCode::OK, Json(FetchMetadataResponse {
                 success: true,
-                boost: Some(boost),
+                boost: Some(boost.escaped()),
                 message: "Payment metadata fetched successfully".to_string(),
             })).into_response()
         }

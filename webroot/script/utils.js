@@ -179,11 +179,24 @@ const numberFormat = (num) => {
     return new Intl.NumberFormat().format(num);
 }
 
-// Escape text
+// Escape text into HTML entities
 const escapeHTML = (text) => {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return String(text ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Unescape text from HTML entities
+const unescapeHTML = (text) => {
+    return String(text ?? '')
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&gt;/g, '>')
+        .replace(/&lt;/g, '<')
+        .replace(/&amp;/g, '&');
 }
 
 // Capitalize the first letter of each word in a string
