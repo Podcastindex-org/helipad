@@ -611,6 +611,11 @@ $(document).ready(function () {
                 (event == "boost" && config.singularName == "boost") ||
                 (event == "stream" && config.singularName == "stream")
             ) {
+                //Skip live events that don't match the active podcast filter
+                if (filters.podcast && unescapeHTML(args[0].podcast) !== filters.podcast) {
+                    return;
+                }
+
                 renderBoosts([args[0]], 0, true, true);
             }
         });
