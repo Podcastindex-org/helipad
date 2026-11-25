@@ -73,6 +73,7 @@ async fn poll_invoices(
     current_index: &mut u64,
     remote_cache: &mut podcastindex::GuidCache,
     ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>,
+    catchup: bool,
 ) {
     loop {
         let invoices = match lightning.list_invoices(*current_index, 1000).await {
@@ -89,7 +90,7 @@ async fn poll_invoices(
 
             if let Some(boost) = boost::parse_boost_from_invoice(invoice, remote_cache, false, "").await {
                 println!("Boost: {:#?}", &boost);
-                handle_boost(&boost, &db_filepath, &ws_tx, true).await;
+                handle_boost(&boost, &db_filepath, &ws_tx, !catchup).await;
             }
             else if settled {
                 println!("No boost found for invoice: {}", invoice_index);
@@ -195,7 +196,7 @@ pub async fn subscribe_invoices(
     let mut current_index = dbif::get_last_boost_index_from_db(&db_filepath).unwrap();
 
     println!("Getting existing invoices from node...");
-    poll_invoices(&mut *lightning, &db_filepath, &mut current_index, &mut remote_cache, &ws_tx).await;
+    poll_invoices(&mut *lightning, &db_filepath, &mut current_index, &mut remote_cache, &ws_tx, true).await;
 
     println!("Current invoice index: {}", current_index);
 
