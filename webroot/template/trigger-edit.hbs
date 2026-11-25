@@ -145,7 +145,12 @@
                 </select>
               </div>
               <div class="col">
-                <input name="podcast" type="text" class="form-control form-control-sm" value="{{ trigger.podcast }}" placeholder="Podcast name">
+                <input name="podcast" type="text" class="form-control form-control-sm" value="{{ trigger.podcast }}" placeholder="Podcast name" list="trigger-podcasts" autocomplete="off">
+                <datalist id="trigger-podcasts">
+                  {{#each podcasts}}
+                  <option value="{{ this }}">
+                  {{/each}}
+                </datalist>
               </div>
             </div>
           </div>
