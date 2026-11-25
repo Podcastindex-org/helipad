@@ -1,0 +1,7 @@
+<option value="">All podcasts</option>
+{{#if error}}
+<option value="" disabled>Unable to load podcasts: {{ error }}</option>
+{{/if}}
+{{#each podcasts}}
+<option value="{{ this }}">{{ this }}</option>
+{{/each}}
