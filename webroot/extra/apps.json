@@ -37,19 +37,19 @@
     },
     "n2n2": {
         "icon": "zion",
-        "url": "https://getzion.com"
+        "url": "https://web.archive.org/web/20220530081953/https://www.getzion.com/"
     },
     "zion": {
         "icon": "zion",
-        "url": "https://getzion.com"
+        "url": "https://web.archive.org/web/20220530081953/https://www.getzion.com/"
     },
     "usocial": {
         "icon": "usocial",
-        "url": "https://usocial.me"
+        "url": "https://github.com/ibz/usocial"
     },
     "usocial.me": {
         "icon": "usocial",
-        "url": "https://usocial.me"
+        "url": "https://github.com/ibz/usocial"
     },
     "lncli": {
         "icon": "terminal",
@@ -69,7 +69,7 @@
     },
     "v4vapp": {
         "icon": "v4vapp",
-        "url": "https://lnd.v4v.app/"
+        "url": "https://v4v.app/"
     },
     "ipfspodcasting": {
         "icon": "ipfspodcasting",
@@ -142,5 +142,13 @@
     "onlyboosts": {
         "icon": "onlyboosts",
         "url": "https://onlyboosts.social"
+    },
+    "podtunes": {
+        "icon": "podtunes",
+        "url": "https://podtunes.app"
+    },
+    "pod monster": {
+        "icon": "podmonster",
+        "url": "https://pod.monster"
     }
 }
