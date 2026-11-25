@@ -471,7 +471,15 @@ async fn main() {
 
         .nest_service("/pew.mp3", ServeFile::new("webroot/extra/pew.mp3"))
         .nest_service("/favicon.ico", ServeFile::new("webroot/extra/favicon.ico"))
-        .nest_service("/apps.json", ServeFile::new("webroot/extra/apps.json"))
+        .nest_service(
+            "/apps.json",
+            ServiceBuilder::new()
+                .layer(SetResponseHeaderLayer::overriding(
+                    header::CACHE_CONTROL,
+                    AxumHeaderValue::from_static("no-cache")
+                ))
+                .service(ServeFile::new("webroot/extra/apps.json"))
+        )
 
         .with_state(state);
 
