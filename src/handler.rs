@@ -1126,8 +1126,16 @@ pub async fn trigger_settings_load(
         None => "".to_string(),
     };
 
+    //Podcasts from received and sent boosts for the podcast filter suggestions
+    let db_filepath = &state.helipad_config.database_file_path;
+    let mut podcasts = dbif::get_podcasts_from_db(db_filepath).unwrap_or_default();
+    podcasts.extend(dbif::get_sent_podcasts_from_db(db_filepath).unwrap_or_default());
+    podcasts.sort();
+    podcasts.dedup();
+
     let params = json!({
         "trigger": result,
+        "podcasts": podcasts,
         "equality": json!({
             "eq": amount_equality == "=",
             "in": amount_equality == "=~",
