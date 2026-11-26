@@ -106,12 +106,10 @@ impl TriggerPolicy {
     pub const LIVE: Self = Self { client_effects: true, webhooks: true, osc: true };
 
     /// Startup invoice backfill: send webhooks, skip pew/MIDI and OSC.
-    /// Flip `osc` to true if catch-up should also send OSC.
     pub const INVOICE_CATCHUP: Self = Self { client_effects: false, webhooks: true, osc: false };
 
     /// Outgoing payment catch-up: skip pew, webhooks, and OSC, same as today.
-    /// Flip these if payment catch-up should match invoice catch-up.
-    pub const PAYMENT_CATCHUP: Self = Self { client_effects: false, webhooks: false, osc: false };
+    pub const PAYMENT_CATCHUP: Self = Self { client_effects: false, webhooks: true, osc: false };
 
     pub fn any(self) -> bool {
         self.client_effects || self.webhooks || self.osc
