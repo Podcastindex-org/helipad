@@ -4,6 +4,7 @@ use crate::boost;
 use lnclient::LNClient;
 use crate::lightning;
 use crate::triggers;
+use crate::triggers::TriggerPolicy;
 use crate::WebSocketEvent;
 use tokio::sync::broadcast;
 use std::sync::Arc;
@@ -90,7 +91,8 @@ async fn poll_invoices(
 
             if let Some(boost) = boost::parse_boost_from_invoice(invoice, remote_cache, false, "").await {
                 println!("Boost: {:#?}", &boost);
-                handle_boost(&boost, &db_filepath, &ws_tx, !catchup).await;
+                let policy = if catchup { TriggerPolicy::INVOICE_CATCHUP } else { TriggerPolicy::LIVE };
+                handle_boost(&boost, &db_filepath, &ws_tx, policy).await;
             }
             else if settled {
                 println!("No boost found for invoice: {}", invoice_index);
@@ -125,7 +127,8 @@ async fn poll_payments(
 
         if let Some(boost) = boost::parse_boost_from_payment(payment.clone(), remote_cache).await {
             println!("Sent Boost: {:#?}", boost);
-            handle_boost(&boost, db_filepath, ws_tx, !catchup).await;
+            let policy = if catchup { TriggerPolicy::PAYMENT_CATCHUP } else { TriggerPolicy::LIVE };
+            handle_boost(&boost, db_filepath, ws_tx, policy).await;
         }
 
         *current_index = payment_index;
@@ -138,7 +141,7 @@ async fn handle_boost(
     boost: &dbif::BoostRecord,
     db_filepath: &str,
     ws_tx: &Arc<broadcast::Sender<WebSocketEvent>>,
-    add_triggers: bool,
+    policy: TriggerPolicy,
 ) {
     let ws_type = if boost.payment_info.is_some() {
         "payment".to_string()
@@ -158,8 +161,8 @@ async fn handle_boost(
         }
     }
 
-    let mut boost_with_effects = if add_triggers {
-        triggers::process_triggers(db_filepath, boost).await.unwrap_or_else(|e| {
+    let mut boost_with_effects = if policy.any() {
+        triggers::process_triggers(db_filepath, boost, policy).await.unwrap_or_else(|e| {
             eprintln!("Error processing triggers: {:#?}", e);
             triggers::BoostWithEffects { boost: boost.clone(), effects: Vec::new(), server_effects: Vec::new() }
         })
@@ -230,7 +233,7 @@ pub async fn subscribe_invoices(
 
                 if let Some(boost) = boost::parse_boost_from_invoice(invoice.clone(), &mut remote_cache, fetch_metadata, &metadata_whitelist).await {
                     println!("Boost: {:#?}", &boost);
-                    handle_boost(&boost, &db_filepath, &ws_tx, true).await;
+                    handle_boost(&boost, &db_filepath, &ws_tx, TriggerPolicy::LIVE).await;
                 }
                 else if settled {
                     println!("No boost found for invoice: {:#?}", &invoice);

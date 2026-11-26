@@ -93,14 +93,62 @@ impl Default for ServerEffect {
     }
 }
 
-/// Processes triggers for a boost, finding matching triggers and running server-side effects
+/// Which trigger effects to run for a boost.
+/// Flip the catch-up constants to change backfill behavior.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TriggerPolicy {
+    pub client_effects: bool, // pew / custom sound / MIDI on the websocket payload
+    pub webhooks: bool,
+    pub osc: bool,
+}
+
+impl TriggerPolicy {
+    pub const LIVE: Self = Self { client_effects: true, webhooks: true, osc: true };
+
+    /// Startup invoice backfill: send webhooks, skip pew/MIDI and OSC.
+    /// Flip `osc` to true if catch-up should also send OSC.
+    pub const INVOICE_CATCHUP: Self = Self { client_effects: false, webhooks: true, osc: false };
+
+    /// Outgoing payment catch-up: skip pew, webhooks, and OSC, same as today.
+    /// Flip these if payment catch-up should match invoice catch-up.
+    pub const PAYMENT_CATCHUP: Self = Self { client_effects: false, webhooks: false, osc: false };
+
+    pub fn any(self) -> bool {
+        self.client_effects || self.webhooks || self.osc
+    }
+}
+
+/// Removes the effects that the policy does not allow
+pub fn apply_trigger_policy(mut bwe: BoostWithEffects, policy: TriggerPolicy) -> BoostWithEffects {
+    if !policy.client_effects {
+        bwe.effects.clear();
+    }
+
+    for effect in &mut bwe.server_effects {
+        if !policy.webhooks {
+            effect.webhook = None;
+        }
+
+        if !policy.osc {
+            effect.osc = None;
+        }
+    }
+
+    bwe.server_effects.retain(|e| e.webhook.is_some() || e.osc.is_some());
+    bwe
+}
+
+/// Processes triggers for a boost, finding matching triggers and running the server-side effects the policy allows
 pub async fn process_triggers(
     db_filepath: &str,
     boost: &dbif::BoostRecord,
+    policy: TriggerPolicy,
 ) -> Result<BoostWithEffects> {
     let boost_with_effects = get_boost_with_effects(db_filepath, boost.clone())
         .await
         .context("Unable to get boost with triggers")?;
+
+    let boost_with_effects = apply_trigger_policy(boost_with_effects, policy);
 
     run_server_effects(db_filepath, &boost_with_effects)
         .await
@@ -587,4 +635,111 @@ fn parse_osc_args(args: &str) -> Vec<OscType> {
             OscType::String(cleaned.to_string())
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn boost() -> dbif::BoostRecord {
+        dbif::BoostRecord {
+            index: 1,
+            time: 0,
+            value_msat: 1000,
+            value_msat_total: 1000,
+            action: dbif::ActionType::Boost,
+            list_type: dbif::ListType::Boost,
+            sender: "Sender".to_string(),
+            app: "App".to_string(),
+            message: String::new(),
+            podcast: "Podcast".to_string(),
+            episode: "Episode".to_string(),
+            tlv: String::new(),
+            remote_podcast: None,
+            remote_episode: None,
+            reply_sent: false,
+            custom_key: None,
+            custom_value: None,
+            memo: None,
+            payment_info: None,
+        }
+    }
+
+    fn sound(name: &str) -> ClientEffect {
+        ClientEffect {
+            midi: None,
+            sound: Some(SoundEffect { sound_file: name.to_string(), sound_name: name.to_string() }),
+        }
+    }
+
+    fn webhook() -> WebhookEffect {
+        WebhookEffect { index: 1, url: "http://localhost/hook".to_string(), token: String::new() }
+    }
+
+    fn osc() -> OscEffect {
+        OscEffect { index: 2, address: "127.0.0.1".to_string(), port: 9000, path: "/pew".to_string(), args: String::new() }
+    }
+
+    fn fixture() -> BoostWithEffects {
+        BoostWithEffects {
+            boost: boost(),
+            effects: vec![sound("sound/custom.mp3")],
+            server_effects: vec![
+                ServerEffect { webhook: Some(webhook()), osc: None },
+                ServerEffect { webhook: None, osc: Some(osc()) },
+            ],
+        }
+    }
+
+    #[test]
+    fn live_keeps_everything() {
+        let result = apply_trigger_policy(fixture(), TriggerPolicy::LIVE);
+
+        assert_eq!(result.effects.len(), 1);
+        assert!(result.effects[0].sound.is_some());
+        assert_eq!(result.server_effects.len(), 2);
+        assert!(result.server_effects[0].webhook.is_some());
+        assert!(result.server_effects[1].osc.is_some());
+    }
+
+    #[test]
+    fn invoice_catchup_keeps_webhook_only() {
+        let result = apply_trigger_policy(fixture(), TriggerPolicy::INVOICE_CATCHUP);
+
+        assert!(result.effects.is_empty());
+        assert_eq!(result.server_effects.len(), 1);
+        assert!(result.server_effects[0].webhook.is_some());
+        assert!(result.server_effects[0].osc.is_none());
+    }
+
+    #[test]
+    fn payment_catchup_clears_everything() {
+        let result = apply_trigger_policy(fixture(), TriggerPolicy::PAYMENT_CATCHUP);
+
+        assert!(result.effects.is_empty());
+        assert!(result.server_effects.is_empty());
+    }
+
+    #[test]
+    fn invoice_catchup_drops_osc_from_combined_effect() {
+        let mut bwe = fixture();
+        bwe.server_effects = vec![ServerEffect { webhook: Some(webhook()), osc: Some(osc()) }];
+
+        let result = apply_trigger_policy(bwe, TriggerPolicy::INVOICE_CATCHUP);
+
+        assert_eq!(result.server_effects.len(), 1);
+        assert!(result.server_effects[0].webhook.is_some());
+        assert!(result.server_effects[0].osc.is_none());
+    }
+
+    #[test]
+    fn invoice_catchup_clears_default_pew() {
+        let mut bwe = fixture();
+        bwe.effects = vec![sound("pew.mp3")];
+        bwe.server_effects = Vec::new();
+
+        let result = apply_trigger_policy(bwe, TriggerPolicy::INVOICE_CATCHUP);
+
+        assert!(result.effects.is_empty());
+    }
 }
